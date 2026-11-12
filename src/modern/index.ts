@@ -1117,6 +1117,10 @@ bot.on("callback_query", async (ctx) => {
     const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
       text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
     }]));
+    therapistButtons.push([
+      { text: "⬅️ Cambiar Especialidad", callback_data: "nav_back_specialty" },
+      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+    ]);
 
     await ctx.reply(
       `✅ Excelente, elegiste *${spec.icon} ${spec.name}*.\n\n👨‍⚕️ *¿Con qué profesional prefieres atenderte?*\nSelecciona a tu terapeuta:`,
@@ -1135,7 +1139,79 @@ bot.on("callback_query", async (ctx) => {
 
     await ctx.reply(
       `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 ¿Qué día y horario prefieres para tu consulta?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_`,
-      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
+  // Navegación hacia atrás (Volver a pasos anteriores)
+  if (data === "nav_back_name") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_name" });
+    await ctx.reply("⬅️ Vamos a corregir tu nombre.\n\nPor favor escribe tu nombre y apellido reales 😊:", {
+      reply_markup: { force_reply: true }
+    });
+    return;
+  }
+
+  if (data === "nav_back_specialty") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_specialty" });
+    const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
+      text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
+    }]));
+    keyboard.push([
+      { text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" },
+      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+    ]);
+    await ctx.reply("⬅️ Selecciona nuevamente una especialidad:", {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+    return;
+  }
+
+  if (data === "nav_back_therapist") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_therapist" });
+    const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+      text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
+    }]));
+    therapistButtons.push([
+      { text: "⬅️ Cambiar Especialidad", callback_data: "nav_back_specialty" },
+      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+    ]);
+    await ctx.reply("⬅️ Selecciona nuevamente a tu profesional de preferencia:", {
+      reply_markup: { inline_keyboard: therapistButtons }
+    });
+    return;
+  }
+
+  if (data === "nav_back_date" || data === "ask_date_retry") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_date", pendingDate: undefined });
+    await ctx.reply(
+      "📅 ¿Qué día y horario prefieres para tu consulta?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_",
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
+          ]
+        }
+      }
     );
     return;
   }
@@ -1152,7 +1228,17 @@ bot.on("callback_query", async (ctx) => {
     if (hasPsyAppointmentConflict(therapist, combinedDate)) {
       await ctx.reply(
         `⚠️ *Conflicto de horario:* ${therapist} ya cuenta con una cita en el horario "${combinedDate}".\n\nPor favor escribe otro horario o día para tu consulta:`,
-        { parse_mode: "Markdown" }
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "📅 Elegir otro horario", callback_data: "ask_date_retry" },
+                { text: "❌ Cancelar", callback_data: "cancel_booking" }
+              ]
+            ]
+          }
+        }
       );
       return;
     }
@@ -1173,7 +1259,17 @@ bot.on("callback_query", async (ctx) => {
           const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
           const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
           await ctx.reply(
-            `⚠️ El horario ${combinedDate} ya pasó el día de hoy (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor escribe un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`
+            `⚠️ El horario ${combinedDate} ya pasó el día de hoy (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor escribe un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "📅 Elegir otro horario", callback_data: "ask_date_retry" },
+                    { text: "❌ Cancelar", callback_data: "cancel_booking" }
+                  ]
+                ]
+              }
+            }
           );
           return;
         }
@@ -1183,7 +1279,17 @@ bot.on("callback_query", async (ctx) => {
     setBookingState(userId, { ...state, step: "ask_motive", date: combinedDate, pendingDate: undefined });
     await ctx.reply(
       `📌 Perfecto, horario confirmado: *${combinedDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve, ej: 'Estrés laboral y ansiedad') 🌿:`,
-      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
+          ]
+        }
+      }
     );
     return;
   }
@@ -1603,11 +1709,56 @@ bot.on("text", async (ctx) => {
     return false;
   }
 
-  // Opción de cancelar en cualquier momento
-  if (bookingState.step && (lowerText === "cancelar" || text === "/cancelar")) {
-    clearBookingState(userId);
-    await ctx.reply("❌ Agendamiento cancelado. Cuando desees retomar el proceso, escribe /citas. 💙");
-    return;
+  // Opción de cancelar o volver en cualquier momento por texto
+  if (bookingState.step && bookingState.step !== "idle") {
+    if (lowerText === "cancelar" || text === "/cancelar" || lowerText === "menu" || lowerText === "menú" || text === "/menu" || text === "/start") {
+      clearBookingState(userId);
+      await ctx.reply("❌ Agendamiento cancelado. Puedes escribir /menu para ver las opciones disponibles o /cita para agendar cuando quieras. 💙");
+      return;
+    }
+
+    if (lowerText === "volver" || text === "/volver" || lowerText === "atras" || lowerText === "atrás" || text === "/atras" || lowerText === "anterior") {
+      if (bookingState.step === "ask_motive") {
+        setBookingState(userId, { ...bookingState, step: "ask_date" });
+        await ctx.reply("⬅️ ¿Qué día y horario prefieres para tu consulta? (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            ]
+          }
+        });
+        return;
+      }
+      if (bookingState.step === "ask_date") {
+        setBookingState(userId, { ...bookingState, step: "ask_therapist" });
+        const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+          text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
+        }]));
+        therapistButtons.push([{ text: "⬅️ Cambiar Especialidad", callback_data: "nav_back_specialty" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]);
+        await ctx.reply("⬅️ ¿Con qué profesional prefieres atenderte?", {
+          reply_markup: { inline_keyboard: therapistButtons }
+        });
+        return;
+      }
+      if (bookingState.step === "ask_therapist") {
+        setBookingState(userId, { ...bookingState, step: "ask_specialty" });
+        const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
+          text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
+        }]));
+        keyboard.push([{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]);
+        await ctx.reply("⬅️ Selecciona una especialidad:", {
+          reply_markup: { inline_keyboard: keyboard }
+        });
+        return;
+      }
+      if (bookingState.step === "ask_specialty") {
+        setBookingState(userId, { ...bookingState, step: "ask_name" });
+        await ctx.reply("⬅️ ¿Cuál es tu nombre y apellido completos?", {
+          reply_markup: { force_reply: true }
+        });
+        return;
+      }
+    }
   }
 
   if (bookingState.step === "ask_name" && !text.startsWith("!") && !text.startsWith("/")) {
@@ -1639,6 +1790,10 @@ bot.on("text", async (ctx) => {
     const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
       text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
     }]));
+    keyboard.push([
+      { text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" },
+      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+    ]);
 
     await ctx.reply(
       `Gracias, *${cleanName}* 😊\n\n¿Sobre qué área necesitas apoyo? Selecciona una especialidad:`,
@@ -1651,9 +1806,9 @@ bot.on("text", async (ctx) => {
     let cleanDate = text.trim();
     let lowerDate = cleanDate.toLowerCase();
 
-    // 0. Si el usuario ya tenía una fecha ambigua registrada (ej: dijo "hoy a las 2" y ahora dice "en la tarde", "tarde" o "pm")
+    // 0. Si el usuario ya tenía una fecha ambigua registrada (ej: dijo "hoy a las 2" y ahora dice "en la tarde", "tarde", "pm", "si", "sí")
     if (bookingState.pendingDate) {
-      if (/(tarde|pm|noche|p\.m\.)/i.test(lowerDate)) {
+      if (/(tarde|pm|noche|p\.m\.|s[ií]|claro|de una|dale|listo)/i.test(lowerDate)) {
         cleanDate = `${bookingState.pendingDate} PM`;
         lowerDate = cleanDate.toLowerCase();
       } else if (/(ma[ñn]ana|am|madrugada|a\.m\.)/i.test(lowerDate)) {
@@ -1689,10 +1844,65 @@ bot.on("text", async (ctx) => {
     // Validación de ambigüedad AM / PM en horas numéricas sin formato 24h
     const hasAmPm = /(am|pm|a\.m\.|p\.m\.)/i.test(lowerDate);
     const has24h = /\b([0-2]?[0-9]):[0-5][0-9]\b/.test(lowerDate);
-    const hourOnlyMatch = lowerDate.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::\d{2})?\b/i);
+    const hourOnlyMatch = lowerDate.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\b/i);
+
     if (!hasAmPm && !has24h && hourOnlyMatch) {
       const h = parseInt(hourOnlyMatch[1], 10);
+      const min = hourOnlyMatch[2] ? parseInt(hourOnlyMatch[2], 10) : 0;
       if (h >= 1 && h <= 12) {
+        const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+        const currentHour24 = nowBogota.getHours();
+        const currentMinute = nowBogota.getMinutes();
+        const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${currentHour24 >= 12 ? "PM" : "AM"}`;
+
+        const isMentioningToday = lowerDate.includes("hoy") || (!lowerDate.includes("mañana") && !/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)/i.test(lowerDate));
+
+        if (isMentioningToday) {
+          const amHour24 = h === 12 ? 0 : h;
+          const pmHour24 = h === 12 ? 12 : h + 12;
+          const amPassed = (amHour24 < currentHour24) || (amHour24 === currentHour24 && min <= currentMinute);
+          const pmPassed = (pmHour24 < currentHour24) || (pmHour24 === currentHour24 && min <= currentMinute);
+
+          if (amPassed && pmPassed) {
+            await ctx.reply(
+              `⚠️ Las ${h}:00 de hoy ya pasaron tanto en la mañana (${h} AM) como en la tarde (${h} PM) (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor elige un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las ${Math.min(currentHour24 + 1, 23)}:00', 'Mañana a las ${h} PM') 📅:`,
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+                  ]
+                }
+              }
+            );
+            return;
+          }
+
+          if (amPassed && !pmPassed) {
+            // AM ya pasó, el único turno viable para hoy es PM!
+            setBookingState(userId, { ...bookingState, pendingDate: cleanDate });
+            await ctx.reply(
+              `⏰ Detecté que las *${h}:00 AM* de hoy ya pasaron.\n¿Te refieres a las *${h}:00 PM (de la tarde)* hoy? 🌤️`,
+              {
+                parse_mode: "Markdown",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: `✅ Sí, hoy a las ${h}:00 PM`, callback_data: "time_meridiem_pm" },
+                      { text: "📅 No, otro horario", callback_data: "ask_date_retry" }
+                    ],
+                    [
+                      { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+                      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+                    ]
+                  ]
+                }
+              }
+            );
+            return;
+          }
+        }
+
+        // Si AM aún no ha pasado o es en otra fecha futura
         setBookingState(userId, { ...bookingState, pendingDate: cleanDate });
         await ctx.reply(
           `⚠️ Anoté *"${cleanDate}"*, pero por favor especifica si te refieres a la mañana o a la tarde (AM o PM):\n\nSelecciona un botón o responde *"tarde"* / *"mañana"*:`,
@@ -1703,6 +1913,10 @@ bot.on("text", async (ctx) => {
                 [
                   { text: `☀️ ${h}:00 AM (Mañana)`, callback_data: `time_meridiem_am` },
                   { text: `🌤️ ${h}:00 PM (Tarde)`, callback_data: `time_meridiem_pm` }
+                ],
+                [
+                  { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+                  { text: "❌ Cancelar", callback_data: "cancel_booking" }
                 ]
               ]
             }
@@ -1737,7 +1951,14 @@ bot.on("text", async (ctx) => {
           const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
           const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
           await ctx.reply(
-            `⚠️ La hora indicada en el día de hoy ya pasó (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor elige un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`
+            `⚠️ La hora indicada en el día de hoy ya pasó (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor elige un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📅 Elegir otro horario", callback_data: "ask_date_retry" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+                ]
+              }
+            }
           );
           return;
         }
@@ -1745,13 +1966,25 @@ bot.on("text", async (ctx) => {
     }
 
     if (cleanDate.length < 4 || ["nunca", "jamas", "jamás", "despues", "después", "cualquiera"].some(v => lowerDate.includes(v))) {
-      await ctx.reply("⚠️ Por favor escribe un día y horario específico, por ejemplo: 'Mañana a las 10 AM', 'Viernes a las 4 PM' o 'Lunes 3:00 PM' 📅:");
+      await ctx.reply("⚠️ Por favor escribe un día y horario específico, por ejemplo: 'Mañana a las 10 AM', 'Viernes a las 4 PM' o 'Lunes 3:00 PM' 📅:", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+          ]
+        }
+      });
       return;
     }
 
     // Si solo escribió "en la tarde" o "mañana" sin hora previa
     if (!hourOnlyMatch && !has24h && !/(?:a\s+las?|\b\d{1,2}\b)/.test(cleanDate)) {
-      await ctx.reply("⚠️ Por favor incluye también la hora de tu consulta (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM' o 'Viernes a las 2 PM') 📅:");
+      await ctx.reply("⚠️ Por favor incluye también la hora de tu consulta (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM' o 'Viernes a las 2 PM') 📅:", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+          ]
+        }
+      });
       return;
     }
 
@@ -1759,7 +1992,14 @@ bot.on("text", async (ctx) => {
     if (hasPsyAppointmentConflict(therapist, cleanDate)) {
       await ctx.reply(
         `⚠️ *Conflicto de horario:* ${therapist} ya cuenta con una cita en el horario "${cleanDate}".\n\nPor favor escribe otro horario o día para tu consulta (ej: 1 hora más tarde o al día siguiente):`,
-        { parse_mode: "Markdown" }
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📅 Elegir otro horario", callback_data: "ask_date_retry" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            ]
+          }
+        }
       );
       return;
     }
@@ -1768,7 +2008,14 @@ bot.on("text", async (ctx) => {
 
     await ctx.reply(
       `📌 Perfecto, anotado: *${cleanDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve)`,
-      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+          ]
+        }
+      }
     );
     return;
   }
@@ -1842,7 +2089,11 @@ Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
       parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
-          [{ text: "✅ Confirmar Cita", callback_data: "confirm_booking" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+          [{ text: "✅ Confirmar Cita", callback_data: "confirm_booking" }],
+          [
+            { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
+            { text: "❌ Cancelar", callback_data: "cancel_booking" }
+          ]
         ]
       }
     });
