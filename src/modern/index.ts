@@ -1523,7 +1523,7 @@ bot.on("text", async (ctx) => {
   const bookingState = getBookingState(userId);
 
   // Constantes de Validación Clínica para Agendamiento
-  const PROFANITY_PATTERN = /\b(perra|perro|mierda|hp|hdp|puta|puto|hijueputa|malparido|gonorrea|pirobo|carechimba|chimba|verga|estupido|estúpido|imbecil|imbécil|pendejo|idiota|culiado|coño|maldito)\b/i;
+  const PROFANITY_PATTERN = /\b(perra|perro|mierda|hp|hdp|puta|puto|hijueputa|malparido|gonorrea|pirobo|carechimba|chimba|verga|estupido|estúpido|imbecil|imbécil|pendejo|idiota|culiado|coño|maldito|maldita|malagradecido|malagradecida|desgraciado|desgraciada|incompetente|inutil|inútil|fea|feo|loca|loco|bruja|brujo|payaso|payasa|tarado|tarada)\b/i;
   const TROLL_NAMES = ["epstein", "hitler", "stalin", "peppa pig", "goku", "vegeta", "naruto", "shrek", "anonymous", "nadie", "alguien", "tu papa", "tu papá", "tu mama", "tu mamá"];
   const PAST_TIME_KEYWORDS = ["ayer", "antier", "anteayer", "el mes pasado", "la semana pasada", "el año pasado", "hace un", "hace 2", "hace 3", "hace días", "hace dias", "ya paso", "ya pasó"];
   const EVASIVE_MOTIVES = [
@@ -1531,6 +1531,16 @@ bot.on("text", async (ctx) => {
     "no se", "no sé", "porque si", "porque sí", "porque quise", "nada", "ninguno", 
     "asdf", "jaja", "jajaja", "xd", "xdd", "nose", "cualquiera", "me da igual"
   ];
+
+  function isGibberishOrGarbage(input: string): boolean {
+    const trimmed = input.trim();
+    if (/^[\.\,\;\:\-\_\!\?\¿\¡\@\#\$\%\^\&\*\(\)\=\+\/\\\|<>\s]{2,}$/.test(trimmed)) return true;
+    if (/(.)\1{3,}/i.test(trimmed)) return true;
+    const lettersOnly = trimmed.replace(/[^a-záéíóúñA-ZÁÉÍÓÚÑ]/g, "");
+    if (lettersOnly.length < 3) return true;
+    if (!/[aeiouáéíóú]/i.test(lettersOnly)) return true;
+    return false;
+  }
 
   // Opción de cancelar en cualquier momento
   if (bookingState.step && (lowerText === "cancelar" || text === "/cancelar")) {
@@ -1542,6 +1552,11 @@ bot.on("text", async (ctx) => {
   if (bookingState.step === "ask_name" && !text.startsWith("!") && !text.startsWith("/")) {
     const cleanName = text.trim();
     const lowerName = cleanName.toLowerCase();
+
+    if (isGibberishOrGarbage(cleanName)) {
+      await ctx.reply("⚠️ El nombre ingresado contiene caracteres repetidos o símbolos sin sentido. Por favor escribe tu nombre y apellido reales 😊:");
+      return;
+    }
 
     if (PROFANITY_PATTERN.test(cleanName)) {
       await ctx.reply("⚠️ Por favor utiliza un lenguaje respetuoso y adecuado para un entorno clínico profesional. ¿Cuál es tu nombre y apellido reales? 😊:");
@@ -1575,6 +1590,11 @@ bot.on("text", async (ctx) => {
     const cleanDate = text.trim();
     const lowerDate = cleanDate.toLowerCase();
 
+    if (isGibberishOrGarbage(cleanDate)) {
+      await ctx.reply("⚠️ El formato de fecha ingresado no es válido. Por favor escribe un día y hora claro (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:");
+      return;
+    }
+
     if (PROFANITY_PATTERN.test(cleanDate)) {
       await ctx.reply("⚠️ Por favor mantengamos un lenguaje respetuoso. ¿Qué día y horario prefieres para tu consulta? (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:");
       return;
@@ -1583,6 +1603,20 @@ bot.on("text", async (ctx) => {
     if (PAST_TIME_KEYWORDS.some(p => lowerDate.includes(p))) {
       await ctx.reply("⚠️ No es posible agendar una cita en el pasado ('ayer'). Por favor indícanos un día y horario futuro a partir de hoy o mañana (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM' o 'Lunes a las 9 AM') 📅:");
       return;
+    }
+
+    // Validación de ambigüedad AM / PM en horas numéricas sin formato 24h
+    const hasAmPm = /(am|pm|a\.m\.|p\.m\.)/i.test(lowerDate);
+    const has24h = /\b([0-2]?[0-9]):[0-5][0-9]\b/.test(lowerDate);
+    const hourOnlyMatch = lowerDate.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::\d{2})?\b/i);
+    if (!hasAmPm && !has24h && hourOnlyMatch) {
+      const h = parseInt(hourOnlyMatch[1], 10);
+      if (h >= 1 && h <= 12) {
+        await ctx.reply(
+          `⚠️ Por favor especifica si te refieres a la mañana o a la tarde (AM o PM), por ejemplo:\n• "${cleanDate} PM" (Tarde)\n• "${cleanDate} AM" (Mañana)\n\n¿En qué jornada prefieres tu consulta? 📅:`
+        );
+        return;
+      }
     }
 
     // Chequeo de hora pasada en tiempo real si el usuario menciona "hoy"
@@ -1644,6 +1678,11 @@ bot.on("text", async (ctx) => {
     const cleanMotive = text.trim();
     const lowerMotive = cleanMotive.toLowerCase();
 
+    if (isGibberishOrGarbage(cleanMotive)) {
+      await ctx.reply("⚠️ El motivo ingresado contiene caracteres sin sentido o puntos repetidos. Por favor describe brevemente qué deseas abordar en tu sesión 😊:");
+      return;
+    }
+
     if (PROFANITY_PATTERN.test(cleanMotive)) {
       await ctx.reply("⚠️ En un espacio de salud mental cuidamos la comunicación con respeto. Por favor describe con respeto el motivo principal de tu consulta 🌿:");
       return;
@@ -1666,6 +1705,25 @@ bot.on("text", async (ctx) => {
       await ctx.reply("⚠️ Para asignarte el enfoque terapéutico adecuado y que el psicólogo prepare tu sesión, requerimos un motivo de consulta genuino (ej: 'Manejo de ansiedad y estrés', 'Insomnio frecuente', 'Dificultades de pareja' o 'Baja autoestima').\n\n¿Cuál es el motivo por el cual solicitas la cita? 🌿:");
       return;
     }
+
+    // Validación inteligente con IA de Dra. PsiBot
+    await ctx.sendChatAction("typing");
+    try {
+      const aiVerdictRaw = await askAI(
+        `Evalúa si este texto es un motivo válido y genuino de consulta psicológica o salud mental: "${cleanMotive}".
+Si es un insulto, queja agresiva ("malagradecida", etc.), saludo, troleo, texto incoherente o no tiene relación con salud mental, responde: INVALIDO: <breve razón>.
+Si es un motivo aceptable de consulta (ej: ansiedad, insomnio, problemas de pareja, orientación, estrés, tristeza, problemas familiares, etc.), responde: VALIDO.
+Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
+        "Eres un clasificador estricto de triaje clínico de salud mental. Evalúa con ética y rigor."
+      );
+      if (aiVerdictRaw.toUpperCase().includes("INVALIDO")) {
+        const reason = aiVerdictRaw.replace(/^INVALIDO:?\s*/i, "").trim();
+        await ctx.reply(
+          `⚠️ El texto ingresado no es un motivo de consulta psicológica válido${reason ? ` (${reason})` : ""}.\n\nPara que tu terapeuta prepare tu sesión, por favor describe brevemente qué deseas tratar (ej: 'Ansiedad ante exámenes', 'Insomnio y estrés', 'Dificultades de pareja' o 'Duelo reciente') 🌿:`
+        );
+        return;
+      }
+    } catch (e) {}
 
     const updated = { ...bookingState, step: "confirm" as const, motive: cleanMotive };
     setBookingState(userId, updated);
