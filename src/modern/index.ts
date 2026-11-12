@@ -1689,8 +1689,8 @@ bot.catch((err) => {
   console.error("Error del bot:", err);
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Portal Web listo y disponible en http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Portal Web listo y disponible en http://0.0.0.0:${PORT}`);
 });
 
 if (BOT_TOKEN && !BOT_TOKEN.includes("dummy") && !BOT_TOKEN.includes("pega_aqui")) {
