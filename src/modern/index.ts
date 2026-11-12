@@ -1503,10 +1503,39 @@ bot.on("text", async (ctx) => {
   // ================================================================
   const bookingState = getBookingState(userId);
 
+  // Constantes de Validación Clínica para Agendamiento
+  const PROFANITY_PATTERN = /\b(perra|perro|mierda|hp|hdp|puta|puto|hijueputa|malparido|gonorrea|pirobo|carechimba|chimba|verga|estupido|estúpido|imbecil|imbécil|pendejo|idiota|culiado|coño|maldito)\b/i;
+  const TROLL_NAMES = ["epstein", "hitler", "stalin", "peppa pig", "goku", "vegeta", "naruto", "shrek", "anonymous", "nadie", "alguien", "tu papa", "tu papá", "tu mama", "tu mamá"];
+  const PAST_TIME_KEYWORDS = ["ayer", "antier", "anteayer", "el mes pasado", "la semana pasada", "el año pasado", "hace un", "hace 2", "hace 3", "hace días", "hace dias", "ya paso", "ya pasó"];
+  const EVASIVE_MOTIVES = [
+    "que te importa", "qué te importa", "que le importa", "no te importa", "no te interesa", 
+    "no se", "no sé", "porque si", "porque sí", "porque quise", "nada", "ninguno", 
+    "asdf", "jaja", "jajaja", "xd", "xdd", "nose", "cualquiera", "me da igual"
+  ];
+
+  // Opción de cancelar en cualquier momento
+  if (bookingState.step && (lowerText === "cancelar" || text === "/cancelar")) {
+    clearBookingState(userId);
+    await ctx.reply("❌ Agendamiento cancelado. Cuando desees retomar el proceso, escribe /citas. 💙");
+    return;
+  }
+
   if (bookingState.step === "ask_name" && !text.startsWith("!") && !text.startsWith("/")) {
     const cleanName = text.trim();
-    if (cleanName.length < 3 || /^\d+$/.test(cleanName)) {
-      await ctx.reply("⚠️ Por favor escribe tu nombre y apellido reales (mínimo 3 letras, sin números) para registrarte adecuadamente en la ficha clínica 😊:");
+    const lowerName = cleanName.toLowerCase();
+
+    if (PROFANITY_PATTERN.test(cleanName)) {
+      await ctx.reply("⚠️ Por favor utiliza un lenguaje respetuoso y adecuado para un entorno clínico profesional. ¿Cuál es tu nombre y apellido reales? 😊:");
+      return;
+    }
+
+    if (TROLL_NAMES.some(t => lowerName.includes(t))) {
+      await ctx.reply("⚠️ Por favor ingresa tu nombre y apellido reales (ej: Carlos Gómez) para poder generar tu ficha clínica legal reglamentaria 📋:");
+      return;
+    }
+
+    if (cleanName.length < 3 || /^\d+$/.test(cleanName) || cleanName.split(/\s+/).length < 2) {
+      await ctx.reply("⚠️ Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido, ej: 'Andrés López') para registrarte en la ficha clínica 😊:");
       return;
     }
 
@@ -1525,8 +1554,20 @@ bot.on("text", async (ctx) => {
 
   if (bookingState.step === "ask_date" && !text.startsWith("!") && !text.startsWith("/")) {
     const cleanDate = text.trim();
-    if (cleanDate.length < 4) {
-      await ctx.reply("⚠️ Por favor escribe un día y horario válido, por ejemplo: 'Mañana a las 10 AM', 'Viernes 4 PM' o 'Lunes 3:00 PM' 📅:");
+    const lowerDate = cleanDate.toLowerCase();
+
+    if (PROFANITY_PATTERN.test(cleanDate)) {
+      await ctx.reply("⚠️ Por favor mantengamos un lenguaje respetuoso. ¿Qué día y horario prefieres para tu consulta? (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:");
+      return;
+    }
+
+    if (PAST_TIME_KEYWORDS.some(p => lowerDate.includes(p))) {
+      await ctx.reply("⚠️ No es posible agendar una cita en el pasado ('ayer'). Por favor indícanos un día y horario futuro a partir de hoy o mañana (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM' o 'Lunes a las 9 AM') 📅:");
+      return;
+    }
+
+    if (cleanDate.length < 4 || ["nunca", "jamas", "jamás", "despues", "después", "cualquiera"].some(v => lowerDate.includes(v))) {
+      await ctx.reply("⚠️ Por favor escribe un día y horario específico, por ejemplo: 'Mañana a las 10 AM', 'Viernes a las 4 PM' o 'Lunes 3:00 PM' 📅:");
       return;
     }
 
@@ -1550,8 +1591,15 @@ bot.on("text", async (ctx) => {
 
   if (bookingState.step === "ask_motive" && !text.startsWith("!") && !text.startsWith("/")) {
     const cleanMotive = text.trim();
-    if (cleanMotive.length < 4) {
-      await ctx.reply("⚠️ Por favor describe brevemente qué te gustaría abordar en la sesión (ej: 'Ansiedad ante exámenes', 'Insomnio y estrés', 'Dificultades de pareja') 🌿:");
+    const lowerMotive = cleanMotive.toLowerCase();
+
+    if (PROFANITY_PATTERN.test(cleanMotive)) {
+      await ctx.reply("⚠️ En un espacio de salud mental cuidamos la comunicación con respeto. Por favor describe con respeto el motivo principal de tu consulta 🌿:");
+      return;
+    }
+
+    if (EVASIVE_MOTIVES.some(e => lowerMotive.includes(e)) || cleanMotive.length < 5) {
+      await ctx.reply("⚠️ Para asignarte el enfoque terapéutico adecuado y que el psicólogo prepare tu sesión, requerimos un motivo de consulta genuino (ej: 'Manejo de ansiedad y estrés', 'Insomnio frecuente', 'Dificultades de pareja' o 'Baja autoestima').\n\n¿Cuál es el motivo por el cual solicitas la cita? 🌿:");
       return;
     }
 
