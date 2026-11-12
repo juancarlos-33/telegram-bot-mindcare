@@ -74,7 +74,7 @@ app.use(portalRouter);
 
 // Interceptor de Comandos (Estadísticas y Comandos Personalizados desde Web)
 bot.use(async (ctx, next) => {
-  const text = "text" in ctx.message! ? ctx.message.text : "";
+  const text = ctx.message && "text" in ctx.message ? ctx.message.text : "";
   if (text?.startsWith("/")) {
     const parts = text.split(" ");
     const cmd = parts[0].toLowerCase();
@@ -1835,12 +1835,12 @@ function page(title: string, body: string) {
 }
 
 function commandArg(ctx: Context) {
-  const text = "text" in ctx.message! ? ctx.message.text : "";
+  const text = ctx.message && "text" in ctx.message ? ctx.message.text : "";
   return text.replace(/^\/\w+(@\w+)?\s*/i, "").trim();
 }
 
 function getStartPayload(ctx: Context) {
-  const text = "text" in ctx.message! ? ctx.message.text : "";
+  const text = ctx.message && "text" in ctx.message ? ctx.message.text : "";
   return text.replace(/^\/start(@\w+)?\s*/i, "").trim();
 }
 
