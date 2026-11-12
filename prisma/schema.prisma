@@ -1,0 +1,284 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  telegramId           String                @unique @map("telegram_id")
+  username             String?
+  firstName            String?               @map("nombre_visible")
+  rol                  String                @default("usuario")
+  estadoVerificacion   String                @default("pendiente") @map("estado_verificacion")
+  karma                Int                   @default(0)
+  money                Int                   @default(0)
+  xp                   Int                   @default(0)
+  level                Int                   @default(1)
+  banned               Boolean               @default(false)
+  vip                  Boolean               @default(false)
+  customTitle          String?               @map("custom_title")
+  afkReason            String?               @map("afk_reason")
+  afkSince             DateTime?             @map("afk_since")
+  fechaRegistro        DateTime              @default(now()) @map("fecha_registro")
+  fechaUltimaActividad DateTime              @default(now()) @map("fecha_ultima_actividad")
+  createdAt            DateTime              @default(now()) @map("creado_en")
+  updatedAt            DateTime              @default(now()) @updatedAt @map("actualizado_en")
+
+  integrations         Integration[]
+  tokens               Token[]
+  preferencias         Preferencia?
+  memorias             Memoria[]
+  scores               GameScore[]
+  events               CalendarEvent[]
+  warnings             Warning[]
+  marriages1           Marriage[]            @relation("MarriageUser1")
+  marriages2           Marriage[]            @relation("MarriageUser2")
+  githubChecks         GithubCheck[]
+  youtubeSearches      YoutubeSearch[]
+  comandos             Comando[]
+  logs                 Log[]
+  sesionesVerificacion SesionVerificacion[]
+  configuraciones      Configuracion[]
+
+  @@map("usuarios")
+}
+
+model Group {
+  id          String    @id @default(cuid())
+  telegramId  String    @unique @map("telegram_id")
+  title       String?
+  botDisabled Boolean   @default(false) @map("bot_disabled")
+  antiLink    Boolean   @default(false) @map("anti_link")
+  antiPorno   Boolean   @default(false) @map("anti_porno")
+  welcomeMode String    @default("off") @map("welcome_mode")
+  createdAt   DateTime  @default(now()) @map("creado_en")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("actualizado_en")
+  warnings    Warning[]
+
+  @@map("grupos")
+}
+
+model Warning {
+  id        String   @id @default(cuid())
+  userId    String   @map("usuario_id")
+  groupId   String   @map("grupo_id")
+  reason    String?
+  createdAt DateTime @default(now()) @map("creado_en")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("advertencias")
+}
+
+model Marriage {
+  id        String   @id @default(cuid())
+  user1Id   String   @map("user1_id")
+  user2Id   String   @map("user2_id")
+  groupId   String?  @map("grupo_id")
+  createdAt DateTime @default(now()) @map("creado_en")
+  user1     User     @relation("MarriageUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User     @relation("MarriageUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@map("matrimonios")
+}
+
+model Integration {
+  id                String    @id @default(cuid())
+  userId            String    @map("usuario_id")
+  provider          String    @map("aplicacion")
+  status            String    @default("desconectado") @map("estado_conexion")
+  fechaAutorizacion DateTime? @map("fecha_autorizacion")
+  fechaExpiracion   DateTime? @map("fecha_expiracion")
+  scopes            String?   @map("permisos_concedidos")
+  accessToken       String?   @map("access_token")
+  createdAt         DateTime  @default(now()) @map("creado_en")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("actualizado_en")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("integraciones")
+}
+
+model Token {
+  id                  String   @id @default(cuid())
+  userId              String   @map("usuario_id")
+  servicio            String
+  tokenCifrado        String   @map("token_cifrado")
+  refreshTokenCifrado String?  @map("refresh_token_cifrado")
+  ivCifrado           String?  @map("iv_cifrado")
+  tipoToken           String?  @default("Bearer") @map("tipo_token")
+  fechaActualizacion  DateTime @default(now()) @updatedAt @map("fecha_actualizacion")
+  createdAt           DateTime @default(now()) @map("creado_en")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, servicio])
+  @@map("tokens")
+}
+
+model Preferencia {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique @map("usuario_id")
+  idioma                    String   @default("es")
+  zonaHoraria               String   @default("America/Bogota") @map("zona_horaria")
+  repositorioPredeterminado  String?  @map("repositorio_predeterminado")
+  calendarioPredeterminado  String?  @default("primary") @map("calendario_predeterminado")
+  preferenciasRespuesta     Json     @default("{\"modo\": \"breve\", \"tono\": \"amigable\", \"formato\": \"markdown\"}") @map("preferencias_respuesta")
+  opcionesPrivacidad        Json     @default("{\"guardar_memoria\": true, \"permitir_logs\": true}") @map("opciones_privacidad")
+  createdAt                 DateTime @default(now()) @map("creado_en")
+  updatedAt                 DateTime @default(now()) @updatedAt @map("actualizado_en")
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("preferencias")
+}
+
+model Memoria {
+  id                  String   @id @default(cuid())
+  userId              String   @map("usuario_id")
+  chatId              String   @map("chat_id")
+  resumenConversacion String   @map("resumen_conversacion")
+  ultimosTemas        Json     @default("[]") @map("ultimos_temas")
+  totalInteracciones  Int      @default(1) @map("total_interacciones")
+  fechaActualizacion  DateTime @default(now()) @updatedAt @map("fecha_actualizacion")
+  createdAt           DateTime @default(now()) @map("creado_en")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
+  @@map("memoria")
+}
+
+model CalendarEvent {
+  id              String    @id @default(cuid())
+  userId          String    @map("usuario_id")
+  idEventoExterno String?   @map("id_evento_externo")
+  title           String    @map("titulo")
+  startsAt        String    @map("fecha_hora_texto")
+  fecha           DateTime? @map("fecha")
+  hora            DateTime? @map("hora")
+  descripcion     String?   @map("descripcion")
+  status          String    @default("creado") @map("estado")
+  enlaceEvento    String?   @map("enlace_evento")
+  createdAt       DateTime  @default(now()) @map("creado_en")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("actualizado_en")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("eventos")
+}
+
+model GithubCheck {
+  id             String   @id @default(cuid())
+  userId         String?  @map("usuario_id")
+  chatId         String   @map("chat_id")
+  repo           String   @map("repositorio")
+  tipoConsulta   String   @default("issues") @map("tipo_consulta")
+  result         String   @map("resultado_resumido")
+  estadoConsulta String   @default("exitosa") @map("estado_consulta")
+  createdAt      DateTime @default(now()) @map("fecha_consulta")
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("github")
+}
+
+model YoutubeSearch {
+  id             String   @id @default(cuid())
+  userId         String?  @map("usuario_id")
+  chatId         String   @map("chat_id")
+  tipoSolicitud  String   @default("busqueda") @map("tipo_solicitud")
+  query          String   @map("termino_busqueda")
+  urlVideo       String?  @map("url_video")
+  titulo         String?  @map("titulo")
+  canal          String?  @map("canal")
+  result         String   @map("resultado_resumido")
+  estadoConsulta String   @default("exitosa") @map("estado_consulta")
+  createdAt      DateTime @default(now()) @map("fecha_consulta")
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("youtube")
+}
+
+model Comando {
+  id           String   @id @default(cuid())
+  userId       String?  @map("usuario_id")
+  chatId       String   @map("chat_id")
+  comando      String
+  parametros   String?
+  resultado    String   @default("exito")
+  mensajeError String?  @map("mensaje_error")
+  createdAt    DateTime @default(now()) @map("fecha_ejecucion")
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("comandos")
+}
+
+model GameScore {
+  id              String   @id @default(cuid())
+  userId          String   @map("usuario_id")
+  game            String   @map("juego")
+  points          Int      @default(0) @map("puntaje_acumulado")
+  partidasJugadas Int      @default(0) @map("partidas_jugadas")
+  aciertos        Int      @default(0)
+  updatedAt       DateTime @updatedAt @map("ultima_participacion")
+  createdAt       DateTime @default(now()) @map("creado_en")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, game])
+  @@map("puntajes")
+}
+
+model GameEvent {
+  id        String   @id @default(cuid())
+  chatId    String   @map("chat_id")
+  userId    String?  @map("usuario_id")
+  game      String
+  detail    String
+  points    Int      @default(0)
+  createdAt DateTime @default(now()) @map("creado_en")
+
+  @@map("eventos_juegos")
+}
+
+model Log {
+  id              String   @id @default(cuid())
+  chatId          String?  @map("chat_id")
+  type            String   @map("tipo_evento")
+  modulo          String   @default("bot_telegram")
+  detail          String   @map("descripcion_error")
+  nivelSeveridad  String   @default("INFO") @map("nivel_severidad")
+  userId          String?  @map("usuario_id")
+  createdAt       DateTime @default(now()) @map("fecha")
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("logs")
+}
+
+model Configuracion {
+  id                     String   @id @default(cuid())
+  nombreBot              String   @default("BotsitoDeJuan_bot") @map("nombre_bot")
+  urlPublica             String   @default("https://telegram-bot-production.up.railway.app") @map("url_publica")
+  serviciosActivos       Json     @default("{\"ia\": true, \"calendar\": true, \"github\": true, \"youtube\": true, \"juegos\": true}") @map("servicios_activos")
+  limitesUso             Json     @default("{\"max_comandos_minuto\": 30, \"max_consultas_ia_dia\": 100, \"cuota_youtube_diaria\": 1000}") @map("limites_uso")
+  repositoriosPorDefecto Json     @default("[\"torvalds/linux\", \"facebook/react\", \"vercel/next.js\"]") @map("repositorios_por_defecto")
+  parametrosGenerales    Json     @default("{\"version\": \"2.0.0\", \"mantenimiento\": false, \"zona_horaria\": \"America/Bogota\"}") @map("parametros_generales")
+  actualizadoEn          DateTime @default(now()) @updatedAt @map("actualizado_en")
+  actualizadoPor         String?  @map("actualizado_por")
+  user                   User?    @relation(fields: [actualizadoPor], references: [id], onDelete: SetNull)
+
+  @@map("configuracion")
+}
+
+model SesionVerificacion {
+  id                    String   @id @default(cuid())
+  userId                String?  @map("usuario_id")
+  codigoVerificacion    String   @unique @map("codigo_verificacion")
+  tokenSesion           String?  @unique @map("token_sesion")
+  telegramIdProvisional String?  @map("telegram_id_provisional")
+  completado            Boolean  @default(false)
+  expiracion            DateTime
+  createdAt             DateTime @default(now()) @map("creado_en")
+  user                  User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sesiones_verificacion")
+}
