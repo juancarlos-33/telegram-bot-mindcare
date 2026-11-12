@@ -1140,6 +1140,54 @@ bot.on("callback_query", async (ctx) => {
     return;
   }
 
+  // Selección rápida de jornada AM / PM en horario ambiguo
+  if (data === "time_meridiem_am" || data === "time_meridiem_pm") {
+    const state = getBookingState(userId);
+    const meridiem = data === "time_meridiem_am" ? "AM" : "PM";
+    const base = state.pendingDate ?? state.date ?? "Mañana a las 10";
+    const combinedDate = `${base} ${meridiem}`;
+
+    // Validar conflicto de horario
+    const therapist = state.therapist ?? "Dra. Valentina Ríos";
+    if (hasPsyAppointmentConflict(therapist, combinedDate)) {
+      await ctx.reply(
+        `⚠️ *Conflicto de horario:* ${therapist} ya cuenta con una cita en el horario "${combinedDate}".\n\nPor favor escribe otro horario o día para tu consulta:`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Chequeo de hora pasada en tiempo real si el usuario menciona "hoy"
+    if (combinedDate.toLowerCase().includes("hoy")) {
+      const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+      const currentHour24 = nowBogota.getHours();
+      const currentMinute = nowBogota.getMinutes();
+      const timeMatch = combinedDate.toLowerCase().match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1], 10);
+        const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+        const m = timeMatch[3]?.toLowerCase().replace(/\./g, "");
+        if (m === "pm" && hour < 12) hour += 12;
+        else if (m === "am" && hour === 12) hour = 0;
+        if (hour < currentHour24 || (hour === currentHour24 && minute <= currentMinute)) {
+          const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
+          const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
+          await ctx.reply(
+            `⚠️ El horario ${combinedDate} ya pasó el día de hoy (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor escribe un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`
+          );
+          return;
+        }
+      }
+    }
+
+    setBookingState(userId, { ...state, step: "ask_motive", date: combinedDate, pendingDate: undefined });
+    await ctx.reply(
+      `📌 Perfecto, horario confirmado: *${combinedDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve, ej: 'Estrés laboral y ansiedad') 🌿:`,
+      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
+    );
+    return;
+  }
+
   // Confirmación final
   if (data === "confirm_booking") {
     const state = getBookingState(userId);
@@ -1600,8 +1648,19 @@ bot.on("text", async (ctx) => {
   }
 
   if (bookingState.step === "ask_date" && !text.startsWith("!") && !text.startsWith("/")) {
-    const cleanDate = text.trim();
-    const lowerDate = cleanDate.toLowerCase();
+    let cleanDate = text.trim();
+    let lowerDate = cleanDate.toLowerCase();
+
+    // 0. Si el usuario ya tenía una fecha ambigua registrada (ej: dijo "hoy a las 2" y ahora dice "en la tarde", "tarde" o "pm")
+    if (bookingState.pendingDate) {
+      if (/(tarde|pm|noche|p\.m\.)/i.test(lowerDate)) {
+        cleanDate = `${bookingState.pendingDate} PM`;
+        lowerDate = cleanDate.toLowerCase();
+      } else if (/(ma[ñn]ana|am|madrugada|a\.m\.)/i.test(lowerDate)) {
+        cleanDate = `${bookingState.pendingDate} AM`;
+        lowerDate = cleanDate.toLowerCase();
+      }
+    }
 
     if (isGibberishOrGarbage(cleanDate)) {
       await ctx.reply("⚠️ El formato de fecha ingresado no es válido. Por favor escribe un día y hora claro (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:");
@@ -1618,6 +1677,15 @@ bot.on("text", async (ctx) => {
       return;
     }
 
+    // Normalizar expresiones coloquiales con jornada (ej: "hoy a las 2 de la tarde" -> "hoy a las 2 PM")
+    if (/(de la tarde|en la tarde|por la tarde|de la noche|en la noche)/i.test(lowerDate) && !/(am|pm)/i.test(lowerDate)) {
+      cleanDate = cleanDate.replace(/(de la tarde|en la tarde|por la tarde|de la noche|en la noche)/gi, "PM").trim();
+      lowerDate = cleanDate.toLowerCase();
+    } else if (/(de la ma[ñn]ana|en la ma[ñn]ana|por la ma[ñn]ana|de la madrugada)/i.test(lowerDate) && !/(am|pm)/i.test(lowerDate)) {
+      cleanDate = cleanDate.replace(/(de la ma[ñn]ana|en la ma[ñn]ana|por la ma[ñn]ana|de la madrugada)/gi, "AM").trim();
+      lowerDate = cleanDate.toLowerCase();
+    }
+
     // Validación de ambigüedad AM / PM en horas numéricas sin formato 24h
     const hasAmPm = /(am|pm|a\.m\.|p\.m\.)/i.test(lowerDate);
     const has24h = /\b([0-2]?[0-9]):[0-5][0-9]\b/.test(lowerDate);
@@ -1625,8 +1693,20 @@ bot.on("text", async (ctx) => {
     if (!hasAmPm && !has24h && hourOnlyMatch) {
       const h = parseInt(hourOnlyMatch[1], 10);
       if (h >= 1 && h <= 12) {
+        setBookingState(userId, { ...bookingState, pendingDate: cleanDate });
         await ctx.reply(
-          `⚠️ Por favor especifica si te refieres a la mañana o a la tarde (AM o PM), por ejemplo:\n• "${cleanDate} PM" (Tarde)\n• "${cleanDate} AM" (Mañana)\n\n¿En qué jornada prefieres tu consulta? 📅:`
+          `⚠️ Anoté *"${cleanDate}"*, pero por favor especifica si te refieres a la mañana o a la tarde (AM o PM):\n\nSelecciona un botón o responde *"tarde"* / *"mañana"*:`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `☀️ ${h}:00 AM (Mañana)`, callback_data: `time_meridiem_am` },
+                  { text: `🌤️ ${h}:00 PM (Tarde)`, callback_data: `time_meridiem_pm` }
+                ]
+              ]
+            }
+          }
         );
         return;
       }
@@ -1669,6 +1749,12 @@ bot.on("text", async (ctx) => {
       return;
     }
 
+    // Si solo escribió "en la tarde" o "mañana" sin hora previa
+    if (!hourOnlyMatch && !has24h && !/(?:a\s+las?|\b\d{1,2}\b)/.test(cleanDate)) {
+      await ctx.reply("⚠️ Por favor incluye también la hora de tu consulta (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM' o 'Viernes a las 2 PM') 📅:");
+      return;
+    }
+
     const therapist = bookingState.therapist ?? "Dra. Valentina Ríos";
     if (hasPsyAppointmentConflict(therapist, cleanDate)) {
       await ctx.reply(
@@ -1678,7 +1764,7 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    setBookingState(userId, { ...bookingState, step: "ask_motive", date: cleanDate });
+    setBookingState(userId, { ...bookingState, step: "ask_motive", date: cleanDate, pendingDate: undefined });
 
     await ctx.reply(
       `📌 Perfecto, anotado: *${cleanDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve)`,

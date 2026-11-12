@@ -714,6 +714,7 @@ export interface BookingState {
   specialty?: string;
   therapist?: string;
   date?: string;
+  pendingDate?: string;
   motive?: string;
 }
 
