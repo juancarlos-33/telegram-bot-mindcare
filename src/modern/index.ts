@@ -1476,12 +1476,6 @@ bot.on("text", async (ctx) => {
 
   await checkAfkStatus(ctx).catch(() => {});
 
-  // Auto-respuestas básicas
-  if (lowerText === "ping") { await ctx.reply("pong 🏓"); return; }
-  if (lowerText.includes("buenos dias") || lowerText.includes("buenos días")) {
-    await ctx.reply(`¡Buenos días, ${ctx.from.first_name}! ☀️ ¿Cómo amaneciste hoy?`); return;
-  }
-  if (lowerText === "bot") { await ctx.reply("Dime, ¿cómo estás hoy? 💙 Estoy aquí para escucharte."); return; }
 
   // Anti-link en grupos
   if (ctx.chat && (ctx.chat.type === "group" || ctx.chat.type === "supergroup")) {
