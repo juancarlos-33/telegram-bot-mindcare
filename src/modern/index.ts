@@ -8,7 +8,7 @@ import {
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments,
-  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES,
+  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
   saveTestResult, getUserTestResults, getAllTestResults,
@@ -1101,17 +1101,36 @@ bot.on("callback_query", async (ctx) => {
     return;
   }
 
-  // Selección de especialidad desde botones
+  // Selección de especialidad desde botones -> Paso a Selección de Terapeuta
   if (data.startsWith("spec_")) {
     const specId = data.replace("spec_", "");
     const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.id === specId);
     if (!spec) return;
 
     const state = getBookingState(userId);
-    setBookingState(userId, { ...state, step: "ask_date", specialty: spec.name, therapist: spec.therapist });
+    setBookingState(userId, { ...state, step: "ask_therapist", specialty: spec.name });
+
+    const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+      text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
+    }]));
 
     await ctx.reply(
-      `✅ Excelente, seleccionaste *${spec.icon} ${spec.name}* con ${spec.therapist}.\n\n📅 ¿Qué día y horario prefieres para tu cita?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_`,
+      `✅ Excelente, elegiste *${spec.icon} ${spec.name}*.\n\n👨‍⚕️ *¿Con qué profesional prefieres atenderte?*\nSelecciona a tu terapeuta:`,
+      { parse_mode: "Markdown", reply_markup: { inline_keyboard: therapistButtons } }
+    );
+    return;
+  }
+
+  // Selección de Terapeuta desde botones -> Paso a Fecha y Horario
+  if (data.startsWith("therapist_")) {
+    const therapistId = data.replace("therapist_", "");
+    const th = PSYCHOLOGY_THERAPISTS.find(t => t.id === therapistId) ?? PSYCHOLOGY_THERAPISTS[0];
+
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_date", therapist: th.name });
+
+    await ctx.reply(
+      `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 ¿Qué día y horario prefieres para tu consulta?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_`,
       { parse_mode: "Markdown", reply_markup: { force_reply: true } }
     );
     return;
@@ -1566,6 +1585,38 @@ bot.on("text", async (ctx) => {
       return;
     }
 
+    // Chequeo de hora pasada en tiempo real si el usuario menciona "hoy"
+    if (lowerDate.includes("hoy")) {
+      const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+      const currentHour24 = nowBogota.getHours();
+      const currentMinute = nowBogota.getMinutes();
+
+      // Buscar patrones de hora: "6 am", "6:30 am", "6 pm", "a las 6"
+      const timeMatch = lowerDate.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
+      if (timeMatch) {
+        let hour = parseInt(timeMatch[1], 10);
+        const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+        const meridiem = timeMatch[3]?.toLowerCase().replace(/\./g, "");
+
+        if (meridiem === "pm" && hour < 12) {
+          hour += 12;
+        } else if (meridiem === "am" && hour === 12) {
+          hour = 0;
+        } else if (!meridiem && hour < 8) {
+          hour += 12;
+        }
+
+        if (hour < currentHour24 || (hour === currentHour24 && minute <= currentMinute)) {
+          const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
+          const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
+          await ctx.reply(
+            `⚠️ La hora indicada en el día de hoy ya pasó (en este momento son las ${formattedHourNow} en Colombia).\n\nPor favor elige un horario más tarde para hoy o una fecha a partir de mañana (ej: 'Hoy a las 4 PM', 'Mañana a las 10 AM') 📅:`
+          );
+          return;
+        }
+      }
+    }
+
     if (cleanDate.length < 4 || ["nunca", "jamas", "jamás", "despues", "después", "cualquiera"].some(v => lowerDate.includes(v))) {
       await ctx.reply("⚠️ Por favor escribe un día y horario específico, por ejemplo: 'Mañana a las 10 AM', 'Viernes a las 4 PM' o 'Lunes 3:00 PM' 📅:");
       return;
@@ -1595,6 +1646,19 @@ bot.on("text", async (ctx) => {
 
     if (PROFANITY_PATTERN.test(cleanMotive)) {
       await ctx.reply("⚠️ En un espacio de salud mental cuidamos la comunicación con respeto. Por favor describe con respeto el motivo principal de tu consulta 🌿:");
+      return;
+    }
+
+    // Detección de saludos cordiales que no constituyen un motivo de consulta
+    const GREETINGS_LIST = [
+      "hola", "hola como estas", "hola cómo estás", "hola como esta", "hola que tal", "buenas", 
+      "buenos dias", "buenos días", "buenas tardes", "buenas noches", "saludos", "que tal", 
+      "¿cómo estás?", "como estas", "cómo estás", "como estas?", "hola bot", "hey", "oe", "oli"
+    ];
+    if (GREETINGS_LIST.some(g => lowerMotive === g || lowerMotive.startsWith(g + " ") || lowerMotive.startsWith(g + ","))) {
+      await ctx.reply(
+        "⚠️ Tu mensaje parece un saludo cordial, pero para coordinar tu cita necesitamos que nos indiques brevemente el motivo clínico o emocional (ej: 'Ansiedad ante exámenes', 'Insomnio y estrés', 'Dificultades de pareja' o 'Duelo reciente') 🌿:"
+      );
       return;
     }
 

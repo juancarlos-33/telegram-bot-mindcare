@@ -248,6 +248,15 @@ export const PSYCHOLOGY_SPECIALTIES = [
   { id: "deporte", name: "Psicología del Deporte", therapist: "Dr. Felipe Ramos", office: "Consultorio 206", waitTime: "15 min", icon: "🏅", description: "Rendimiento, motivación, ansiedad competitiva" }
 ];
 
+export const PSYCHOLOGY_THERAPISTS = [
+  { id: "valentina", name: "Dra. Valentina Ríos", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201" },
+  { id: "torres", name: "Dr. Sebastián Torres", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203" },
+  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Juvenil", icon: "👩‍⚕️", office: "Consultorio 202" },
+  { id: "castillo", name: "Dr. Andrés Castillo", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204" },
+  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Duelo y Crisis Vitales", icon: "👩‍⚕️", office: "Consultorio 205" },
+  { id: "ramos", name: "Dr. Felipe Ramos", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206" }
+];
+
 export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "createdAt">): PsyAppointment {
   const newApp: PsyAppointment = {
     ...appointment,
@@ -628,7 +637,7 @@ export function getCRMMetrics() {
 // =============================================================================
 // ESTADO CONVERSACIONAL DEL BOT (Flujo de agendamiento paso a paso)
 // =============================================================================
-export type BookingStep = "idle" | "ask_name" | "ask_specialty" | "ask_date" | "ask_motive" | "confirm";
+export type BookingStep = "idle" | "ask_name" | "ask_specialty" | "ask_therapist" | "ask_date" | "ask_motive" | "confirm";
 export interface BookingState {
   step: BookingStep;
   name?: string;
