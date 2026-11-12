@@ -1,4 +1,37 @@
 import { PrismaClient } from "@prisma/client";
+import fs from "fs";
+import path from "path";
+
+const DATA_DIR = path.resolve(process.cwd(), "data");
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.error("Error creando directorio data:", err);
+  }
+}
+
+function loadJsonFile<T>(filename: string, fallback: T): T {
+  try {
+    const fullPath = path.join(DATA_DIR, filename);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, "utf-8");
+      return JSON.parse(content);
+    }
+  } catch (e) {
+    console.warn(`[DB] Error al cargar ${filename}, usando fallback:`, e);
+  }
+  return fallback;
+}
+
+function saveJsonFile<T>(filename: string, data: T): void {
+  try {
+    const fullPath = path.join(DATA_DIR, filename);
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), "utf-8");
+  } catch (e) {
+    console.error(`[DB] Error guardando ${filename}:`, e);
+  }
+}
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 export const prisma = hasDatabase ? new PrismaClient() : null;
@@ -185,11 +218,19 @@ export async function disconnectDb() {
   await prisma?.$disconnect();
 }
 
-// Fallback en memoria si la BD está temporalmente desconectada
-const mockUsers: any[] = [
+// Fallback en memoria y persistente si la BD está temporalmente desconectada
+const INITIAL_USERS: any[] = [
   { id: "usr-demo-1", telegramId: "123456789", username: "juan_dev", firstName: "Juan Pérez", rol: "administrador", estadoVerificacion: "verificado", fechaRegistro: new Date(), fechaUltimaActividad: new Date(), createdAt: new Date(), updatedAt: new Date() },
   { id: "usr-demo-2", telegramId: "987654321", username: "maria_code", firstName: "María López", rol: "usuario", estadoVerificacion: "verificado", fechaRegistro: new Date(), fechaUltimaActividad: new Date(), createdAt: new Date(), updatedAt: new Date() }
 ];
+
+const mockUsers: any[] = loadJsonFile<any[]>("users.json", INITIAL_USERS).map((u: any) => ({
+  ...u,
+  fechaRegistro: new Date(u.fechaRegistro),
+  fechaUltimaActividad: new Date(u.fechaUltimaActividad),
+  createdAt: new Date(u.createdAt),
+  updatedAt: new Date(u.updatedAt)
+}));
 
 const mockIntegrations: any[] = [
   { id: "int-1", userId: "usr-demo-1", provider: "google_calendar", status: "conectado", scopes: "calendar.events", fechaAutorizacion: new Date() },
@@ -212,7 +253,7 @@ export interface PsyAppointment {
   createdAt: Date;
 }
 
-const psyAppointments: PsyAppointment[] = [
+const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [
   {
     id: "psi-101",
     patientId: "usr-demo-1",
@@ -239,6 +280,11 @@ const psyAppointments: PsyAppointment[] = [
   }
 ];
 
+const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json", INITIAL_PSY_APPOINTMENTS).map((a: any) => ({
+  ...a,
+  createdAt: new Date(a.createdAt)
+}));
+
 export const PSYCHOLOGY_SPECIALTIES = [
   { id: "clinica", name: "Psicología Clínica Adultos", therapist: "Dra. Valentina Ríos", office: "Consultorio 201", waitTime: "10-15 min", icon: "🧠", description: "Ansiedad, depresión, estrés, fobias, TOC" },
   { id: "infantil", name: "Psicología Infantil y Adolescente", therapist: "Dra. Sofía Mendoza", office: "Consultorio 202", waitTime: "15 min", icon: "👦", description: "Dificultades conductuales, TDA/H, bullying, aprendizaje" },
@@ -264,6 +310,7 @@ export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "c
     createdAt: new Date()
   };
   psyAppointments.unshift(newApp);
+  saveJsonFile("appointments.json", psyAppointments);
   return newApp;
 }
 
@@ -282,7 +329,11 @@ export function getPatientPsyAppointments(patientId: string): PsyAppointment[] {
 
 export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "Pendiente" | "Completada" | "Cancelada"): boolean {
   const app = psyAppointments.find(a => a.id === id);
-  if (app) { app.status = status; return true; }
+  if (app) { 
+    app.status = status; 
+    saveJsonFile("appointments.json", psyAppointments);
+    return true; 
+  }
   return false;
 }
 
@@ -354,7 +405,7 @@ export interface ClinicalPatient {
   updatedAt: Date;
 }
 
-const mockPatients: ClinicalPatient[] = [
+const INITIAL_PATIENTS: ClinicalPatient[] = [
   {
     id: "HC-1001",
     fullName: "Juan Carlos Gutiérrez",
@@ -521,12 +572,26 @@ const mockPatients: ClinicalPatient[] = [
   }
 ];
 
+const mockPatients: ClinicalPatient[] = loadJsonFile<any[]>("patients.json", INITIAL_PATIENTS).map((p: any) => ({
+  ...p,
+  createdAt: new Date(p.createdAt),
+  updatedAt: new Date(p.updatedAt),
+  notesHistory: (p.notesHistory || []).map((n: any) => ({ ...n, createdAt: new Date(n.createdAt) })),
+  payments: p.payments || []
+}));
+
 export function getAllPatients(): ClinicalPatient[] {
   return mockPatients;
 }
 
 export function getPatientById(id: string): ClinicalPatient | undefined {
-  return mockPatients.find(p => p.id === id || p.fullName.toLowerCase().includes(id.toLowerCase()));
+  if (!id) return undefined;
+  const clean = id.trim().toLowerCase();
+  return mockPatients.find(p =>
+    p.id.toLowerCase() === clean ||
+    p.fullName.toLowerCase().includes(clean) ||
+    clean.includes(p.fullName.toLowerCase())
+  );
 }
 
 export function normalizeDocument(doc: string): string {
@@ -545,6 +610,7 @@ export function flagPatientRisk(patientIdOrName: string, reason = "Alerta de cri
       p.tags.unshift("⚠️ ALERTA_RIESGO");
     }
     p.updatedAt = new Date();
+    saveJsonFile("patients.json", mockPatients);
     return true;
   }
   return false;
@@ -561,6 +627,7 @@ export function createPatient(data: Omit<ClinicalPatient, "id" | "totalSessions"
     updatedAt: new Date()
   };
   mockPatients.unshift(newPatient);
+  saveJsonFile("patients.json", mockPatients);
   return newPatient;
 }
 
@@ -569,6 +636,7 @@ export function updatePatientStage(patientId: string, stage: PipelineStage): boo
   if (patient) {
     patient.pipelineStage = stage;
     patient.updatedAt = new Date();
+    saveJsonFile("patients.json", mockPatients);
     return true;
   }
   return false;
@@ -586,6 +654,7 @@ export function addClinicalNote(patientId: string, note: Omit<ClinicalNote, "id"
   patient.notesHistory.unshift(newNote);
   patient.totalSessions += 1;
   patient.updatedAt = new Date();
+  saveJsonFile("patients.json", mockPatients);
   return newNote;
 }
 
@@ -598,6 +667,7 @@ export function recordPatientPayment(payment: Omit<PatientPayment, "id">): Patie
   if (patient) {
     patient.payments.unshift(newPay);
     patient.updatedAt = new Date();
+    saveJsonFile("patients.json", mockPatients);
   }
   return newPay;
 }

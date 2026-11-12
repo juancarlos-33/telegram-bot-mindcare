@@ -35,8 +35,12 @@ import { handleSnapCommand } from "./snap.js";
 import { handleQrCommand } from "./qr.js";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const BOT_USERNAME = process.env.BOT_USERNAME ?? "BotsitoDeJuan_bot";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+const BOT_USERNAME = process.env.BOT_USERNAME ?? "juancarlos_project_bot";
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) ||
+  (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null) ||
+  (process.env.NODE_ENV === "production" ? "https://telegram-bot-mindcare-production.up.railway.app" : `http://localhost:${process.env.PORT ?? 3000}`);
 const PORT = Number(process.env.PORT ?? 3000);
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
@@ -1188,8 +1192,17 @@ bot.on("callback_query", async (ctx) => {
       "📁 Expediente clínico activado en el CRM.",
       "",
       "Recuerda llegar 10 minutos antes. ¡Fue un placer acompañarte! 🌿",
-      `🌐 Ver citas: ${APP_BASE_URL}/citas`
-    ].filter(Boolean).join("\n"));
+      `🌐 Panel Web: ${APP_BASE_URL}/citas`
+    ].filter(Boolean).join("\n"), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "📅 Ver Cita en Panel Web ↗", url: `${APP_BASE_URL}/citas` },
+            { text: "💼 Ver en CRM Clínico ↗", url: `${APP_BASE_URL}/crm` }
+          ]
+        ]
+      }
+    });
     return;
   }
 

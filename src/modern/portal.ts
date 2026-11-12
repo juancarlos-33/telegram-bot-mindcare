@@ -39,7 +39,11 @@ import {
 export const portalRouter = Router();
 
 const BOT_USERNAME = process.env.BOT_USERNAME ?? "juancarlos_project_bot";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) ||
+  (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null) ||
+  (process.env.NODE_ENV === "production" ? "https://telegram-bot-mindcare-production.up.railway.app" : `http://localhost:${process.env.PORT ?? 3000}`);
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -780,6 +784,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
   const users = await getAllUsers();
   const chats = getAllChats();
   const customCommands = getCustomCommands();
+  const appointments = getAllPsyAppointments();
 
   const content = `
     <div class="hero-banner">
@@ -857,43 +862,112 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         </form>
       </div>
 
-      <!-- Tarjeta 2: Atajos y Estado del Bot -->
+      <!-- Tarjeta 2: Atajos y Estado del Bot MindCare -->
       <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
         <div>
           <div class="card-header-styled">
             <div class="card-title">
-              <span>🩺</span>
-              Servicios Clínicos & Dr. MediBot
+              <span>🧠</span>
+              MindCare & Dra. PsiBot
             </div>
-            <span class="badge badge-success">Hospital Activo</span>
+            <span class="badge badge-success">Centro Activo</span>
           </div>
           <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
             <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(16,185,129,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">🩺</span>
-              <span><strong>Triaje Clínico IA (<code>!</code>):</strong> Orientación médica y evaluación de síntomas.</span>
+              <span style="background:rgba(99,102,241,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">🧠</span>
+              <span><strong>Apoyo Clínico IA (<code>!</code>):</strong> Triaje psicológico y escucha terapéutica.</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
               <span style="background:rgba(66,133,244,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">📅</span>
-              <span><strong>Citas Médicas (<code>/cita</code>):</strong> Agendamiento y sincronización con Google Calendar.</span>
+              <span><strong>Citas de Psicología (<code>/cita</code>):</strong> Agendamiento en tiempo real sincronizado.</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(168,85,247,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">👨‍⚕️</span>
-              <span><strong>Directorio (<code>/medicos</code>):</strong> 6 especialidades médicas y consultorios.</span>
+              <span style="background:rgba(168,85,247,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">💼</span>
+              <span><strong>CRM Clínico (<code>/crm</code>):</strong> Expedientes digitales, SOAP y libro de pagos.</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(239,68,68,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">🚨</span>
-              <span><strong>Urgencias (<code>/urgencias</code>):</strong> Protocolo hospitalario y líneas de emergencia 24/7.</span>
+              <span style="background:rgba(16,185,129,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">📊</span>
+              <span><strong>Tamizajes & Ánimo (<code>/test</code>):</strong> Escalas PHQ-9, GAD-2 y diario emocional.</span>
             </div>
           </div>
         </div>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <a href="/citas" class="btn btn-secondary" style="flex:1; text-align:center;">
-            🏥 Panel de Citas Médicas
+            📅 Ver Citas (${appointments.length})
           </a>
-          <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="background:linear-gradient(135deg, #229ED9 0%, #0088cc 100%); flex:1; text-align:center;">
-            Abrir Telegram Web 💬
+          <a href="/crm" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
+            💼 CRM Clínico
+          </a>
+          <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); flex:1; text-align:center;">
+            Abrir Bot 💬
           </a>
         </div>
+      </div>
+    </div>
+
+    <!-- TABLA EN VIVO: CITAS DE PSICOLOGÍA AGENDADAS -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.25) 0%, rgba(15, 23, 42, 0.8) 100%);">
+      <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
+        <div>
+          <div class="card-title" style="color: #a5b4fc; font-size: 1.25rem;">
+            <span>📅</span>
+            Citas de Psicología Agendadas (${appointments.length})
+          </div>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Sincronización en tiempo real desde Telegram Bot @${BOT_USERNAME} y Portal Web</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px; background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+            Gestionar Citas Completas ↗
+          </a>
+          <a href="/crm" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
+            Ver en CRM Clínico ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Paciente</th>
+              <th>Especialidad</th>
+              <th>Terapeuta</th>
+              <th>Horario</th>
+              <th>Motivo</th>
+              <th>Estado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${appointments.length === 0 ? `
+              <tr>
+                <td colspan="8" style="text-align:center; padding:24px; color:var(--text-muted);">
+                  Aún no hay citas registradas. ¡Agenda una desde el bot con <code>/cita</code>!
+                </td>
+              </tr>
+            ` : appointments.map(a => `
+              <tr>
+                <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
+                <td><strong style="color:#fff;">${a.patientName}</strong></td>
+                <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
+                <td>${a.therapist}</td>
+                <td><strong style="color:#38bdf8;">${a.dateTime}</strong></td>
+                <td style="color:var(--text-muted); font-size:0.82rem; max-width:220px;">${a.motive ?? '—'}</td>
+                <td>
+                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                    ● ${a.status}
+                  </span>
+                </td>
+                <td>
+                  <a href="/citas" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;">
+                    Ver / Modificar ↗
+                  </a>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -1455,6 +1529,16 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       </div>
 
     </div>
+
+    <script>
+      setInterval(function() {
+        const activeEl = document.activeElement;
+        const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
+        if (!isTyping) {
+          window.location.reload();
+        }
+      }, 20000);
+    </script>
   `;
 
   res.send(layout("Citas & Salud Mental — MindCare", content, "citas", isAdmin));
@@ -1512,6 +1596,7 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
   const patients = getAllPatients();
   const metrics = getCRMMetrics();
   const payments = getAllPayments();
+  const appointments = getAllPsyAppointments();
 
   let banner = "";
   if (req.query.error) {
@@ -1604,6 +1689,53 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
           <div style="font-size:1.8rem; font-weight:800; color:#fff; margin:4px 0;">${metrics.discharges}</div>
           <span style="font-size:0.72rem; color:var(--text-dim);">Objetivos logrados</span>
         </div>
+      </div>
+    <!-- Citas Sincronizadas en CRM -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.35);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="font-size: 1.2rem; font-weight: 700; color: #fff; display:flex; align-items:center; gap:8px;">
+            <span>📅</span> Citas de Psicología Sincronizadas (${appointments.length})
+          </h2>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Citas registradas vía Telegram Bot @${BOT_USERNAME} conectadas al expediente clínico</span>
+        </div>
+        <a href="/citas" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 14px;">
+          Abrir Módulo de Citas ↗
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Paciente</th>
+              <th>Especialidad</th>
+              <th>Terapeuta</th>
+              <th>Horario</th>
+              <th>Motivo Clínico</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${appointments.length === 0 ? `
+              <tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-dim);">No hay citas registradas en el sistema.</td></tr>
+            ` : appointments.slice(0, 8).map(a => `
+              <tr>
+                <td><code>${a.id}</code></td>
+                <td><strong style="color:#fff;">${a.patientName}</strong></td>
+                <td><span style="color:#a5b4fc;">${a.specialty}</span></td>
+                <td>${a.therapist}</td>
+                <td><strong style="color:#38bdf8;">${a.dateTime}</strong></td>
+                <td style="color:var(--text-muted); font-size:0.82rem; max-width:200px;">${a.motive ?? '—'}</td>
+                <td>
+                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                    ● ${a.status}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     </div>
 
