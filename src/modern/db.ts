@@ -72,26 +72,30 @@ export async function ensureUser(user?: TelegramUser) {
   }
 
   if (!prisma) return existing ?? mockUsers[0];
-  return prisma.user.upsert({
-    where: { telegramId: String(user.id) },
-    update: {
-      username: user.username,
-      firstName: user.first_name,
-      fechaUltimaActividad: new Date(),
-      estadoVerificacion: "verificado"
-    },
-    create: {
-      telegramId: String(user.id),
-      username: user.username,
-      firstName: user.first_name,
-      karma: 0,
-      money: 100, // Starting bonus
-      xp: 0,
-      level: 1,
-      estadoVerificacion: "verificado",
-      rol: "usuario"
-    }
-  });
+  try {
+    return await prisma.user.upsert({
+      where: { telegramId: String(user.id) },
+      update: {
+        username: user.username,
+        firstName: user.first_name,
+        fechaUltimaActividad: new Date(),
+        estadoVerificacion: "verificado"
+      },
+      create: {
+        telegramId: String(user.id),
+        username: user.username,
+        firstName: user.first_name,
+        karma: 0,
+        money: 100, // Starting bonus
+        xp: 0,
+        level: 1,
+        estadoVerificacion: "verificado",
+        rol: "usuario"
+      }
+    });
+  } catch {
+    return existing ?? mockUsers[0];
+  }
 }
 
 export async function addXp(user: TelegramUser | undefined, amount: number) {
@@ -103,30 +107,37 @@ export async function addXp(user: TelegramUser | undefined, amount: number) {
   
   const leveledUp = newLevel > dbUser.level;
 
-  const updatedUser = await prisma.user.update({
-    where: { id: dbUser.id },
-    data: { 
-      xp: newXp,
-      level: newLevel,
-      money: leveledUp ? dbUser.money + 500 : dbUser.money // Bonus money on level up
-    }
-  });
-
-  return { user: updatedUser, leveledUp };
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: dbUser.id },
+      data: { 
+        xp: newXp,
+        level: newLevel,
+        money: leveledUp ? dbUser.money + 500 : dbUser.money // Bonus money on level up
+      }
+    });
+    return { user: updatedUser, leveledUp };
+  } catch {
+    return null;
+  }
 }
 
 export async function ensureGroup(chat?: TelegramChat) {
   if (!chat || !prisma || (chat.type !== "group" && chat.type !== "supergroup")) return null;
-  return prisma.group.upsert({
-    where: { telegramId: String(chat.id) },
-    update: {
-      title: chat.title
-    },
-    create: {
-      telegramId: String(chat.id),
-      title: chat.title
-    }
-  });
+  try {
+    return await prisma.group.upsert({
+      where: { telegramId: String(chat.id) },
+      update: {
+        title: chat.title
+      },
+      create: {
+        telegramId: String(chat.id),
+        title: chat.title
+      }
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function addKarma(user: TelegramUser | undefined, amount: number) {
@@ -201,17 +212,23 @@ export async function saveCalendarEvent(user: TelegramUser | undefined, title: s
 
 export async function saveGithubCheck(chatId: number | string, repo: string, result: string) {
   if (!prisma) return;
-  await prisma.githubCheck.create({ data: { chatId: String(chatId), repo, result } });
+  try {
+    await prisma.githubCheck.create({ data: { chatId: String(chatId), repo, result } });
+  } catch {}
 }
 
 export async function saveYoutubeSearch(chatId: number | string, query: string, result: string) {
   if (!prisma) return;
-  await prisma.youtubeSearch.create({ data: { chatId: String(chatId), query, result } });
+  try {
+    await prisma.youtubeSearch.create({ data: { chatId: String(chatId), query, result } });
+  } catch {}
 }
 
 export async function saveLog(chatId: number | string, type: string, detail: string) {
   if (!prisma) return;
-  await prisma.log.create({ data: { chatId: String(chatId), type, detail } });
+  try {
+    await prisma.log.create({ data: { chatId: String(chatId), type, detail } });
+  } catch {}
 }
 
 export async function disconnectDb() {
@@ -297,11 +314,16 @@ export const PSYCHOLOGY_SPECIALTIES = [
 export const PSYCHOLOGY_THERAPISTS = [
   { id: "valentina", name: "Dra. Valentina Ríos", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201" },
   { id: "torres", name: "Dr. Sebastián Torres", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203" },
-  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Juvenil", icon: "👩‍⚕️", office: "Consultorio 202" },
+  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Adolescente", icon: "👩‍⚕️", office: "Consultorio 202" },
   { id: "castillo", name: "Dr. Andrés Castillo", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204" },
-  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Duelo y Crisis Vitales", icon: "👩‍⚕️", office: "Consultorio 205" },
+  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Psicología del Duelo y Crisis", icon: "👩‍⚕️", office: "Consultorio 205" },
   { id: "ramos", name: "Dr. Felipe Ramos", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206" }
 ];
+
+/** Returns only the professionals qualified for the selected specialty. */
+export function getTherapistsBySpecialty(specialty: string) {
+  return PSYCHOLOGY_THERAPISTS.filter(therapist => therapist.specialty === specialty);
+}
 
 export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "createdAt">): PsyAppointment {
   const newApp: PsyAppointment = {

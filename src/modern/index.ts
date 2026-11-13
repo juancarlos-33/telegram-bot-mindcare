@@ -8,7 +8,7 @@ import {
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments,
-  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS,
+  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getTherapistsBySpecialty,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
   saveTestResult, getUserTestResults, getAllTestResults,
@@ -68,7 +68,7 @@ bot.use(async (ctx, next) => {
       memberCount = await ctx.getChatMembersCount().catch(() => 1);
       await ensureGroup(ctx.chat as any).catch(() => {});
     }
-    await updateChatInfo(String(ctx.chat.id), title ?? "Chat", type, memberCount, ctx.from?.username);
+    await updateChatInfo(String(ctx.chat.id), title ?? "Chat", type, memberCount, ctx.from?.username).catch(() => {});
   }
   return next();
 });
@@ -96,68 +96,77 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-bot.start(async (ctx) => {
-  const payload = getStartPayload(ctx);
+async function handleStartFlow(ctx: Context) {
+  try {
+    const payload = getStartPayload(ctx);
 
-  // Verificación de identidad desde el Portal Web (RF-02, RF-12, RF-15)
-  if (payload?.startsWith("verify_") || payload?.startsWith("v_")) {
-    const code = payload.startsWith("verify_") ? payload.replace("verify_", "") : payload;
-    const res = await confirmVerification(code, String(ctx.from.id), ctx.from.username, ctx.from.first_name);
-    if (res.success) {
-      await saveLog(ctx.chat.id, "VERIFICACION", `Usuario @${ctx.from.username ?? ctx.from.first_name} verificado exitosamente`);
-      await ctx.reply([
-        `🎉 ¡Identidad verificada exitosamente!`,
-        "",
-        `Hola ${ctx.from.first_name}, tu cuenta de Telegram (@${ctx.from.username ?? 'amigo'}) ha sido vinculada y activada en el sistema.`,
-        "",
-        "✨ A partir de ahora puedes interactuar conmigo libremente sin necesidad de volver a la página web.",
-        "",
-        "💡 Puedes probar ahora mismo:",
-        "• !hola, ¿qué puedes hacer? (Para hablar con la IA amable)",
-        "• /menu (Para ver todos los comandos)",
-        "",
-        `Portal Web de Autorizaciones: ${APP_BASE_URL}/autorizar`
-      ].join("\n"));
+    // Verificación de identidad desde el Portal Web
+    if (payload?.startsWith("verify_") || payload?.startsWith("v_")) {
+      const code = payload.startsWith("verify_") ? payload.replace("verify_", "") : payload;
+      const res = await confirmVerification(code, String(ctx.from?.id ?? "0"), ctx.from?.username, ctx.from?.first_name).catch(() => ({ success: false }));
+      if (res.success) {
+        if (ctx.chat?.id) await saveLog(ctx.chat.id, "VERIFICACION", `Usuario @${ctx.from?.username ?? ctx.from?.first_name} verificado exitosamente`).catch(() => {});
+        await ctx.reply([
+          `🎉 ¡Identidad verificada exitosamente!`,
+          "",
+          `Hola ${ctx.from?.first_name ?? 'amigo/a'}, tu cuenta de Telegram (@${ctx.from?.username ?? 'sin_usuario'}) ha sido vinculada y activada en el sistema.`,
+          "",
+          "✨ A partir de ahora puedes interactuar conmigo libremente sin necesidad de volver a la página web.",
+          "",
+          "💡 Puedes probar ahora mismo:",
+          "• !hola, ¿qué puedes hacer? (Para hablar con la IA de apoyo emocional)",
+          "• /menu (Para ver todos los comandos)",
+          "• /cita (Para agendar cita con especialista)",
+          "",
+          `Portal Web: ${APP_BASE_URL}/citas`
+        ].join("\n"));
+        return;
+      }
+    }
+
+    if (payload?.startsWith("auth_")) {
+      const provider = payload.replace("auth_", "");
+      if (ctx.from) await saveIntegration(ctx.from, provider).catch(() => {});
+      await ctx.reply(`✅ Permiso registrado para ${provider}.\nBD: users + integrations + logs.`);
       return;
     }
+
+    if (ctx.from) await ensureUser(ctx.from).catch(() => {});
+    if (ctx.chat?.id) await saveLog(ctx.chat.id, "start", `Usuario @${ctx.from?.username ?? ctx.from?.first_name} inició PsiBot MindCare`).catch(() => {});
+
+    await ctx.reply([
+      `🧠 ¡Hola, ${displayName(ctx)}! Bienvenido/a a MindCare — Centro Clínico de Psicología. 💙`,
+      "",
+      "Soy Dra. PsiBot, tu Asistente Clínica de Salud Mental y Bienestar.",
+      "Estoy aquí para escucharte, orientarte y acompañarte en tu proceso emocional. 🌿",
+      "",
+      "✨ ¿QUÉ PODEMOS HACER HOY?",
+      "• 📅 /cita — Agendar cita con especialista paso a paso",
+      "• 📝 /test — Evaluación rápida de ansiedad (Escala GAD-2)",
+      "• 💭 /diario — Registrar cómo te sientes hoy",
+      "• 🌬️ /respirar — Ejercicio interactivo de relajación guiada",
+      "• 🚨 /sos — Técnica para momentos de crisis o pánico",
+      "• 💡 /tip — Consejo de salud mental basado en ciencia",
+      "• 💬 !<mensaje> — Habla conmigo libremente sobre lo que sientes",
+      "",
+      `🌐 Portal Web Clínico: ${APP_BASE_URL}/citas`
+    ].join("\n"), {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📅 Agendar Cita", callback_data: "book_start" }, { text: "📝 Test de Ansiedad", callback_data: "test_start" }],
+          [{ text: "💭 ¿Cómo te sientes hoy?", callback_data: "mood_check" }, { text: "🌬️ Respirar", callback_data: "breath_guide" }],
+          [{ text: "👥 Terapeutas", callback_data: "show_therapists" }, { text: "🆘 Auxilio Emocional", callback_data: "sos_guide" }]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error("Error en bot.start:", err);
+    await ctx.reply("🧠 ¡Hola! Bienvenido a MindCare Psicología. Usa /menu o /cita para comenzar.");
   }
+}
 
-  if (payload?.startsWith("auth_")) {
-    const provider = payload.replace("auth_", "");
-    await saveIntegration(ctx.from, provider);
-    await ctx.reply(`✅ Permiso registrado para ${provider}.\nBD: users + integrations + logs.`);
-    return;
-  }
-
-  await ensureUser(ctx.from);
-  await saveLog(ctx.chat.id, "start", `Usuario @${ctx.from.username ?? ctx.from.first_name} inició PsiBot MindCare`);
-
-  await ctx.reply([
-    `🧠 ¡Hola, ${displayName(ctx)}! Bienvenido/a a MindCare — Centro de Psicología. 💙`,
-    "",
-    "Soy Dra. PsiBot, tu Asistente de Salud Mental y Bienestar.",
-    "Estoy aquí para escucharte, orientarte y acompañarte en tu proceso emocional. 🌿",
-    "",
-    "✨ ¿QUÉ PODEMOS HACER HOY?",
-    "• 📅 /cita — Agendar cita con especialista",
-    "• 📝 /test — Evaluación rápida de ansiedad (Escala GAD-2)",
-    "• 💭 /diario — Registrar cómo te sientes hoy",
-    "• 🌬️ /respirar — Ejercicio interactivo de relajación",
-    "• 🚨 /sos — Técnica para momentos de crisis o pánico",
-    "• 💡 /tip — Consejo de salud mental basado en ciencia",
-    "• 💬 !<mensaje> — Habla conmigo libremente sobre lo que sientes",
-    "",
-    `🌐 Portal Web: ${APP_BASE_URL}/citas`
-  ].join("\n"), {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "📅 Agendar Cita", callback_data: "book_start" }, { text: "📝 Test de Ansiedad", callback_data: "test_start" }],
-        [{ text: "💭 ¿Cómo te sientes hoy?", callback_data: "mood_check" }, { text: "🌬️ Respirar", callback_data: "breath_guide" }],
-        [{ text: "👥 Terapeutas", callback_data: "show_therapists" }, { text: "🆘 Auxilio Emocional", callback_data: "sos_guide" }]
-      ]
-    }
-  });
-});
+bot.start(handleStartFlow);
+bot.command("start", handleStartFlow);
 
 bot.command(["menu", "ayuda", "help"], async (ctx) => {
   await ctx.reply([
@@ -1114,7 +1123,7 @@ bot.on("callback_query", async (ctx) => {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_therapist", specialty: spec.name });
 
-    const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+    const therapistButtons = getTherapistsBySpecialty(spec.name).map(t => ([{
       text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
     }]));
     therapistButtons.push([
@@ -1131,10 +1140,13 @@ bot.on("callback_query", async (ctx) => {
 
   // Selección de Terapeuta desde botones -> Paso a Fecha y Horario
   if (data.startsWith("therapist_")) {
-    const therapistId = data.replace("therapist_", "");
-    const th = PSYCHOLOGY_THERAPISTS.find(t => t.id === therapistId) ?? PSYCHOLOGY_THERAPISTS[0];
-
     const state = getBookingState(userId);
+    const therapistId = data.replace("therapist_", "");
+    const th = getTherapistsBySpecialty(state.specialty ?? "").find(t => t.id === therapistId);
+    if (!th) {
+      await ctx.reply("⚠️ Ese profesional no corresponde a la especialidad seleccionada. Elige una opción de la lista.");
+      return;
+    }
     setBookingState(userId, { ...state, step: "ask_date", therapist: th.name });
 
     await ctx.reply(
@@ -1183,7 +1195,7 @@ bot.on("callback_query", async (ctx) => {
   if (data === "nav_back_therapist") {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_therapist" });
-    const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+    const therapistButtons = getTherapistsBySpecialty(state.specialty ?? "").map(t => ([{
       text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
     }]));
     therapistButtons.push([
@@ -1299,18 +1311,29 @@ bot.on("callback_query", async (ctx) => {
     const state = getBookingState(userId);
     const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === state.specialty) ?? PSYCHOLOGY_SPECIALTIES[0];
 
+    if (state.step !== "confirm" || !state.name || !state.specialty || !state.therapist || !state.date || !state.motive) {
+      await ctx.reply("⚠️ La reserva está incompleta o ya venció. Inicia de nuevo con /cita.");
+      clearBookingState(userId);
+      return;
+    }
+    if (hasPsyAppointmentConflict(state.therapist, state.date)) {
+      await ctx.reply("⚠️ Ese horario acaba de ser reservado. Elige otro horario para continuar.");
+      setBookingState(userId, { ...state, step: "ask_date" });
+      return;
+    }
+
     const appt = createPsyAppointment({
       patientId: userId,
-      patientName: state.name ?? displayName(ctx),
-      therapist: state.therapist ?? spec.therapist,
-      specialty: state.specialty ?? spec.name,
-      dateTime: state.date ?? "Próximo turno disponible",
+      patientName: state.name,
+      therapist: state.therapist,
+      specialty: state.specialty,
+      dateTime: state.date,
       motive: state.motive,
       status: "Confirmada",
       notes: "Agendada vía Telegram Bot"
     });
 
-    await saveCalendarEvent(ctx.from, `Cita Psicología: ${spec.name} — ${state.name}`, state.date ?? "2026-11-12 10:00");
+    await saveCalendarEvent(ctx.from, `Cita Psicología: ${spec.name} — ${state.name}`, state.date);
     await saveLog(ctx.chat!.id, "CITA_PSI", `Cita ${appt.id} agendada para ${state.name} con ${state.therapist}`);
 
     // Auto-registro en CRM Clínico si no existe
@@ -1467,7 +1490,8 @@ bot.command("cancelarcita", async (ctx) => {
     await ctx.reply("Uso: /cancelarcita <ID_CITA>\nEjemplo: /cancelarcita psi-101");
     return;
   }
-  const ok = cancelPsyAppointment(id);
+  const appointment = getPatientPsyAppointments(String(ctx.from?.id ?? "")).find(a => a.id === id);
+  const ok = appointment ? cancelPsyAppointment(id) : false;
   await ctx.reply(ok
     ? `✅ Cita ${id} cancelada. Si necesitas reagendar, usa /cita. 💙`
     : `❌ No encontré la cita ${id}. Revisa con /miscitas.`
@@ -1731,7 +1755,7 @@ bot.on("text", async (ctx) => {
       }
       if (bookingState.step === "ask_date") {
         setBookingState(userId, { ...bookingState, step: "ask_therapist" });
-        const therapistButtons = PSYCHOLOGY_THERAPISTS.map(t => ([{
+        const therapistButtons = getTherapistsBySpecialty(bookingState.specialty ?? "").map(t => ([{
           text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
         }]));
         therapistButtons.push([{ text: "⬅️ Cambiar Especialidad", callback_data: "nav_back_specialty" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]);

@@ -19,6 +19,7 @@ import {
   updatePsyAppointmentStatus,
   cancelPsyAppointment,
   PSYCHOLOGY_SPECIALTIES,
+  PSYCHOLOGY_THERAPISTS,
   getAllMoodEntries,
   getAllTestResults,
   getAllPatients,
@@ -67,22 +68,27 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${title} | Telegram Bot Cloud Hub</title>
+  <title>${title} | MindCare — Centro Clínico & Salud Mental Integrada</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-main: #090d16;
-      --bg-card: rgba(17, 24, 39, 0.75);
-      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --bg-canvas: #060913;
+      --bg-card: rgba(13, 20, 36, 0.78);
+      --bg-card-hover: rgba(20, 30, 52, 0.88);
+      --bg-surface: rgba(15, 23, 42, 0.65);
       --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-hover: rgba(56, 189, 248, 0.3);
+      --border-accent: rgba(56, 189, 248, 0.35);
+      --border-emerald: rgba(16, 185, 129, 0.35);
       --primary: #0284c7;
       --primary-light: #38bdf8;
-      --primary-glow: rgba(56, 189, 248, 0.25);
+      --primary-glow: rgba(56, 189, 248, 0.22);
       --accent: #6366f1;
+      --accent-light: #a5b4fc;
       --accent-glow: rgba(99, 102, 241, 0.25);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.25);
       --tg-blue: #229ED9;
       --success: #10b981;
       --success-bg: rgba(16, 185, 129, 0.12);
@@ -98,42 +104,46 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: var(--bg-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-canvas);
       background-image: 
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.12), transparent 70%),
-        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(99, 102, 241, 0.08), transparent 70%);
+        radial-gradient(ellipse 90% 55% at 50% -25%, rgba(14, 165, 233, 0.15), transparent 75%),
+        radial-gradient(ellipse 70% 45% at 90% 85%, rgba(99, 102, 241, 0.09), transparent 75%),
+        radial-gradient(ellipse 50% 35% at 10% 45%, rgba(16, 185, 129, 0.07), transparent 70%);
+      background-attachment: fixed;
       color: var(--text-main);
       line-height: 1.6;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: var(--bg-main); }
+    ::-webkit-scrollbar-track { background: var(--bg-canvas); }
     ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
 
     /* Header & Navegación Glassmorphic */
     header {
-      background: rgba(9, 13, 22, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: rgba(6, 10, 20, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border-subtle);
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 1000;
     }
 
     .navbar {
-      max-width: 1280px;
+      max-width: 1320px;
       margin: 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 14px 24px;
+      gap: 16px;
     }
 
     .brand {
@@ -142,54 +152,60 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       gap: 12px;
       text-decoration: none;
       color: #fff;
+      flex-shrink: 0;
     }
 
     .brand-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 14px var(--primary-glow);
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35);
+      position: relative;
     }
 
-    .brand-icon svg { width: 22px; height: 22px; fill: #ffffff; }
+    .brand-icon svg { width: 24px; height: 24px; fill: #ffffff; }
 
     .brand-text h1 {
-      font-size: 1.15rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1.22rem;
       font-weight: 800;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      letter-spacing: -0.025em;
+      background: linear-gradient(135deg, #ffffff 40%, #bae6fd 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      margin: 0;
+      line-height: 1.1;
     }
 
     .brand-text span {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--primary-light);
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       display: block;
-      margin-top: -2px;
+      margin-top: 2px;
     }
 
     .nav-links {
       display: flex;
-      gap: 6px;
+      gap: 5px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .nav-link {
       text-decoration: none;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       font-weight: 600;
       color: var(--text-muted);
-      padding: 8px 14px;
+      padding: 8px 13px;
       border-radius: 10px;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       align-items: center;
       gap: 7px;
@@ -197,35 +213,38 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     .nav-link:hover {
       color: #fff;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .nav-link.active {
       color: #fff;
-      background: rgba(56, 189, 248, 0.15);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      box-shadow: 0 0 16px rgba(14, 165, 233, 0.15);
     }
 
     .nav-btn-tg {
-      background: linear-gradient(135deg, #229ED9 0%, #0088cc 100%);
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
       color: #fff !important;
       font-weight: 700;
       padding: 8px 16px;
       border-radius: 10px;
-      box-shadow: 0 4px 14px rgba(34, 158, 217, 0.35);
-      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .nav-btn-tg:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(34, 158, 217, 0.5);
+      box-shadow: 0 6px 20px rgba(14, 165, 233, 0.45);
     }
 
     .admin-pill {
-      background: rgba(168, 85, 247, 0.15);
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      color: #d8b4fe;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      color: #c7d2fe;
       padding: 6px 12px;
       border-radius: 20px;
       font-size: 0.8rem;
@@ -237,7 +256,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     /* Main Container */
     main {
-      max-width: 1280px;
+      max-width: 1320px;
       margin: 28px auto;
       padding: 0 24px;
       flex: 1;
@@ -246,55 +265,56 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     /* Hero Banner */
     .hero-banner {
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%);
+      background: linear-gradient(135deg, rgba(13, 20, 36, 0.88) 0%, rgba(20, 30, 52, 0.72) 100%);
       border: 1px solid var(--border-subtle);
-      border-radius: 20px;
-      padding: 34px 38px;
+      border-radius: 22px;
+      padding: 38px 42px;
       position: relative;
       overflow: hidden;
-      margin-bottom: 28px;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(12px);
+      margin-bottom: 30px;
+      box-shadow: 0 24px 50px -15px rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(16px);
     }
 
     .hero-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
+      gap: 8px;
+      background: rgba(14, 165, 233, 0.12);
+      border: 1px solid rgba(14, 165, 233, 0.28);
+      padding: 5px 14px;
+      border-radius: 30px;
+      font-size: 0.78rem;
       font-weight: 700;
       color: var(--primary-light);
-      margin-bottom: 12px;
+      margin-bottom: 14px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
     }
 
     .hero-banner h1 {
-      font-size: 2.1rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 2.35rem;
       font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 10px;
-      line-height: 1.25;
+      letter-spacing: -0.035em;
+      margin-bottom: 12px;
+      line-height: 1.2;
       background: linear-gradient(135deg, #ffffff 40%, #bae6fd 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .hero-banner p {
-      font-size: 1.02rem;
+      font-size: 1.05rem;
       color: var(--text-muted);
-      max-width: 820px;
-      line-height: 1.6;
+      max-width: 860px;
+      line-height: 1.65;
     }
 
     .hero-metrics {
       display: flex;
-      gap: 16px;
-      margin-top: 22px;
+      gap: 14px;
+      margin-top: 24px;
       flex-wrap: wrap;
     }
 
@@ -306,9 +326,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       font-weight: 600;
       color: #e2e8f0;
       background: rgba(255, 255, 255, 0.04);
-      padding: 6px 14px;
+      padding: 7px 16px;
       border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     .status-dot {
@@ -316,32 +336,33 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       height: 8px;
       border-radius: 50%;
       background: var(--success);
-      box-shadow: 0 0 10px var(--success);
+      box-shadow: 0 0 12px var(--success);
       display: inline-block;
       animation: pulseDot 2s infinite;
     }
 
     @keyframes pulseDot {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
+      50% { opacity: 0.45; transform: scale(0.85); }
     }
 
     /* Cards */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
-      border-radius: 18px;
+      border-radius: 20px;
       padding: 26px;
-      backdrop-filter: blur(12px);
-      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.4);
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       margin-bottom: 24px;
       position: relative;
     }
 
     .card:hover {
-      border-color: var(--border-hover);
-      box-shadow: 0 15px 35px -10px rgba(2, 132, 199, 0.15);
+      border-color: var(--border-accent);
+      box-shadow: 0 18px 40px -12px rgba(14, 165, 233, 0.18);
     }
 
     .card-header-styled {
@@ -354,9 +375,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     }
 
     .card-title {
+      font-family: 'Plus Jakarta Sans', sans-serif;
       font-size: 1.25rem;
       font-weight: 700;
-      letter-spacing: -0.01em;
+      letter-spacing: -0.015em;
       color: #fff;
       display: flex;
       align-items: center;
@@ -369,7 +391,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 10px 20px;
+      padding: 11px 22px;
       border-radius: 12px;
       font-weight: 700;
       font-size: 0.9rem;
@@ -377,32 +399,32 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       cursor: pointer;
       border: none;
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      font-family: inherit;
+      font-family: 'Plus Jakarta Sans', sans-serif;
     }
 
     .btn:active { transform: scale(0.98); }
 
     .btn-primary {
-      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
       color: #fff;
-      box-shadow: 0 4px 16px var(--primary-glow);
+      box-shadow: 0 4px 18px rgba(14, 165, 233, 0.32);
     }
 
     .btn-primary:hover {
-      background: linear-gradient(135deg, #0369a1 0%, #1d4ed8 100%);
-      box-shadow: 0 6px 22px rgba(2, 132, 199, 0.45);
+      background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
+      box-shadow: 0 6px 24px rgba(14, 165, 233, 0.45);
       transform: translateY(-1px);
     }
 
     .btn-google {
       background: #ffffff;
-      color: #1f2937;
+      color: #0f172a;
       font-weight: 700;
-      box-shadow: 0 4px 14px rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
     }
 
     .btn-google:hover {
-      background: #f1f5f9;
+      background: #f8fafc;
       transform: translateY(-1px);
     }
 
@@ -419,7 +441,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     }
 
     .btn-danger {
-      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
       color: #fff;
     }
 
@@ -429,7 +451,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     label {
       display: block;
       font-weight: 600;
-      font-size: 0.88rem;
+      font-size: 0.85rem;
       margin-bottom: 8px;
       color: #cbd5e1;
     }
@@ -449,8 +471,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     input[type="text"], input[type="date"], select, textarea {
       width: 100%;
-      padding: 11px 16px;
-      background: rgba(15, 23, 42, 0.6);
+      padding: 12px 16px;
+      background: rgba(9, 14, 26, 0.7);
       border: 1px solid var(--border-subtle);
       border-radius: 12px;
       font-size: 0.95rem;
@@ -466,11 +488,11 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: var(--primary-light);
-      background: rgba(15, 23, 42, 0.9);
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+      background: rgba(9, 14, 26, 0.9);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.22);
     }
 
-    select option { background: #0f172a; color: #fff; }
+    select option { background: #0b1120; color: #fff; }
 
     .grid-2 {
       display: grid;
@@ -486,44 +508,44 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       gap: 6px;
       padding: 4px 12px;
       border-radius: 20px;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
 
-    .badge-success { background: var(--success-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-warning { background: var(--warning-bg); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .badge-danger { background: var(--danger-bg); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-    .badge-info { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
-    .badge-purple { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .badge-success { background: var(--success-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-warning { background: var(--warning-bg); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .badge-danger { background: var(--danger-bg); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+    .badge-info { background: rgba(14, 165, 233, 0.12); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); }
+    .badge-purple { background: rgba(99, 102, 241, 0.14); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.35); }
 
     /* Tablas */
     .table-responsive {
       overflow-x: auto;
-      border-radius: 14px;
+      border-radius: 16px;
       border: 1px solid var(--border-subtle);
-      background: rgba(15, 23, 42, 0.4);
+      background: rgba(9, 14, 26, 0.45);
     }
 
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.92rem; }
     th {
-      background: rgba(15, 23, 42, 0.8);
-      padding: 14px 18px;
+      background: rgba(13, 20, 36, 0.9);
+      padding: 15px 18px;
       font-weight: 700;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
       color: var(--text-muted);
       border-bottom: 1px solid var(--border-subtle);
     }
     td { padding: 15px 18px; border-bottom: 1px solid var(--border-subtle); color: #cbd5e1; }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255, 255, 255, 0.02); color: #fff; }
+    tr:hover td { background: rgba(255, 255, 255, 0.025); color: #fff; }
 
     code {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       background: rgba(255, 255, 255, 0.06);
       padding: 3px 8px;
       border-radius: 6px;
@@ -531,10 +553,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     }
 
     .avatar {
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       border-radius: 10px;
-      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
       color: #fff;
       font-weight: 700;
       font-size: 0.85rem;
@@ -542,6 +564,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       align-items: center;
       justify-content: center;
       text-transform: uppercase;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
 
     .alert {
@@ -552,27 +575,29 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       display: flex;
       align-items: center;
       gap: 14px;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
     }
 
-    .alert-success { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; }
-    .alert-info { background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #7dd3fc; }
-    .alert-warning { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a; }
+    .alert-success { background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #6ee7b7; }
+    .alert-info { background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); color: #7dd3fc; }
+    .alert-warning { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); color: #fde68a; }
 
     footer {
       border-top: 1px solid var(--border-subtle);
-      padding: 24px;
+      padding: 26px 24px;
       text-align: center;
       font-size: 0.85rem;
       color: var(--text-dim);
       margin-top: auto;
-      background: rgba(9, 13, 22, 0.6);
+      background: rgba(6, 10, 20, 0.75);
     }
 
     @media (max-width: 900px) {
       .navbar { flex-direction: column; gap: 14px; }
       .nav-links { flex-wrap: wrap; justify-content: center; }
       .grid-2 { grid-template-columns: 1fr; }
+      .hero-banner { padding: 26px 22px; }
+      .hero-banner h1 { font-size: 1.8rem; }
     }
   </style>
 </head>
@@ -582,25 +607,22 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     <div class="navbar">
       <a href="/" class="brand">
         <div class="brand-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/></svg>
+          <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         </div>
         <div class="brand-text">
-          <h1>MindCare Psicología</h1>
+          <h1>MindCare</h1>
           <span>Centro Clínico & CRM Pro</span>
         </div>
       </a>
       <nav class="nav-links">
         <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
-          Inicio
+          🏠 Inicio
         </a>
         <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
           📅 Citas & Bienestar
         </a>
         <a href="/crm" class="nav-link ${activeTab === 'crm' ? 'active' : ''}">
           💼 CRM & Historias
-        </a>
-        <a href="/autorizar" class="nav-link ${activeTab === 'autorizar' ? 'active' : ''}">
-          Autorizar Apps
         </a>
         <a href="/grupos" class="nav-link ${activeTab === 'grupos' ? 'active' : ''}">
           💬 Grupos & Chats
@@ -611,18 +633,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
           📊 Reportes
         </a>
+        <a href="/autorizar" class="nav-link ${activeTab === 'autorizar' ? 'active' : ''}">
+          🔐 Apps
+        </a>
         ${isAdmin ? `
           <div class="admin-pill">
-            <span>👑 Juan Carlos (Admin)</span>
+            <span>👑 Juan Carlos</span>
             <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:4px;" title="Cerrar Sesión">✕</a>
           </div>
         ` : `
           <a href="/login" class="btn btn-secondary" style="padding:7px 12px; font-size:0.8rem;">
-            🔐 Admin Login
+            🔐 Admin
           </a>
         `}
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="nav-link nav-btn-tg">
-          Abrir Bot @${BOT_USERNAME} 🚀
+          <span class="status-dot"></span> Abrir Dra. PsiBot 💬
         </a>
       </nav>
     </div>
@@ -633,13 +658,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
   </main>
 
   <footer>
-    <div style="max-width: 1280px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+    <div style="max-width: 1320px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
       <div>
-        <strong>Telegram Bot Hub</strong> • Proyecto de Base de Datos y Backend Académico
+        <strong style="color: #cbd5e1;">MindCare Health Technologies © 2026</strong> • Plataforma Clínica de Telepsicología & CRM Terapéutico
       </div>
       <div>
-        <span>Control de Acceso de Administrador Activo</span> • 
-        <span>Requerimientos del Profesor Cumplidos</span>
+        <span style="color: var(--primary-light);">Confidencialidad Médica & Expedientes SOAP</span> • 
+        <span>Integrado en Tiempo Real con Telegram Bot @${BOT_USERNAME}</span>
       </div>
     </div>
   </footer>
@@ -785,41 +810,57 @@ portalRouter.get("/", async (req: Request, res: Response) => {
   const chats = getAllChats();
   const customCommands = getCustomCommands();
   const appointments = getAllPsyAppointments();
+  const confirmedCount = appointments.filter(a => a.status === "Confirmada").length;
+  const pendingCount = appointments.filter(a => a.status === "Pendiente").length;
 
   const content = `
+    <!-- HERO BANNER CLÍNICO DE ALTO NIVEL -->
     <div class="hero-banner">
       <div class="hero-badge">
-        <span>⚡ SISTEMA ACADÉMICO EN LÍNEA • TELEGRAM BOT ACTIVO</span>
+        <span class="status-dot"></span>
+        <span>Clínica Digital Activa • 6 Especialistas Disponibles 24/7</span>
       </div>
-      <h1>Panel de Control del Bot de Telegram</h1>
+      <h1>MindCare — Centro Clínico & Salud Mental Integrada</h1>
       <p>
-        Verifica identidades de Telegram, supervisa los grupos donde está integrado el bot, administra comandos personalizados y audita integraciones de Google Calendar, GitHub y YouTube.
+        Ecosistema médico digital para reserva inmediata de citas, expedientes clínicos confidenciales (SOAP), tamizajes psicométricos en tiempo real y asistencia terapéutica continua con Dra. PsiBot en Telegram.
       </p>
 
       <div class="hero-metrics">
         <div class="hero-metric-item">
           <span class="status-dot"></span>
-          <span>Bot @${BOT_USERNAME}: Online</span>
+          <span>Dra. PsiBot: <strong>@${BOT_USERNAME}</strong> (Online)</span>
         </div>
         <div class="hero-metric-item">
-          <span>👥 ${users.length} Usuarios Registrados</span>
+          <span>📅 <strong>${appointments.length}</strong> Citas (${confirmedCount} Confirmadas)</span>
         </div>
         <div class="hero-metric-item">
-          <span>💬 ${chats.length} Grupos/Chats Activos</span>
+          <span>👥 <strong>${users.length}</strong> Pacientes Registrados</span>
         </div>
         <div class="hero-metric-item">
-          <span>⚡ ${customCommands.length} Comandos Web</span>
+          <span>🩺 <strong>6</strong> Consultorios Activos (201-206)</span>
         </div>
         <div class="hero-metric-item">
-          <span>👑 Admin: ${isAdmin ? 'Juan Carlos (Conectado)' : 'Público'}</span>
+          <span>👑 Acceso: <strong>${isAdmin ? 'Director Médico (Admin)' : 'Público'}</strong></span>
         </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:26px; flex-wrap:wrap;">
+        <a href="#agendar" class="btn btn-primary">
+          📅 Agendar Cita de Psicología
+        </a>
+        <a href="/crm" class="btn btn-secondary" style="border:1px solid rgba(99,102,241,0.4);">
+          💼 Expedientes & CRM Clínico
+        </a>
+        <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8;">
+          <span class="status-dot"></span> Abrir Chat en Telegram 💬
+        </a>
       </div>
     </div>
 
     ${!isAdmin ? `
-      <div class="alert alert-warning" style="justify-content:space-between; flex-wrap:wrap;">
+      <div class="alert alert-info" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
-          <strong>🛡️ Modo Visitante:</strong> Estás viendo la vista pública de registro y verificación. Para gestionar comandos y ver los reportes analíticos del profesor, inicia sesión como Administrador.
+          <strong>ℹ️ Portal de Atención Abierto:</strong> Puedes agendar citas libremente, consultar el directorio de terapeutas y evaluar tus síntomas. Para expedientes confidenciales y auditoría, ingresa como Especialista.
         </div>
         <a href="/login" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;">
           Acceso Administrador 🔐
@@ -827,67 +868,95 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     ` : ''}
 
+    <!-- SECCIÓN INTERACTIVA 1: AGENDAMIENTO RÁPIDO & ECOSISTEMA TERAPÉUTICO -->
     <div class="grid-2">
-      <!-- Tarjeta 1: Registro de Usuarios -->
-      <div class="card">
+      <!-- Tarjeta 1: Agendamiento Rápido de Citas -->
+      <div class="card" id="agendar" style="border:1px solid rgba(14,165,233,0.35);">
         <div class="card-header-styled">
           <div class="card-title">
-            <span>📝</span>
-            Registro y Verificación Web
+            <span>📅</span>
+            Agendamiento Rápido de Consulta
           </div>
-          <span class="badge badge-info">RF-01 • RF-02</span>
+          <span class="badge badge-success">● Turnos Disponibles</span>
         </div>
-        <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 20px;">
-          Ingresa tus datos para generar un token único y vincular tu cuenta de Telegram con el sistema en la base de datos.
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+          Ingresa tus datos para registrar tu cita inmediatamente. Se sincronizará con Telegram Bot y el expediente del CRM.
         </p>
 
-        <form action="/verificar" method="POST">
+        <form action="/api/citas" method="POST">
           <div class="form-group">
-            <label for="username">Usuario de Telegram</label>
-            <div class="input-wrapper">
-              <span class="input-icon">@</span>
-              <input type="text" id="username" name="username" class="input-with-icon" placeholder="tu_usuario_telegram" required>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="nombreVisible">Nombre Visible / Estudiante</label>
+            <label for="patientName">Nombre Completo del Paciente</label>
             <div class="input-wrapper">
               <span class="input-icon">👤</span>
-              <input type="text" id="nombreVisible" name="nombreVisible" class="input-with-icon" placeholder="Juan Carlos" required>
+              <input type="text" id="patientName" name="patientName" class="input-with-icon" placeholder="Ej: Juan Carlos Gutiérrez" required>
             </div>
           </div>
+          <div class="form-group">
+            <label for="specialty">Especialidad & Terapeuta Asignado</label>
+            <select id="specialty" name="specialty" required>
+              ${PSYCHOLOGY_SPECIALTIES.map(s => `
+                <option value="${s.name}">${s.icon} ${s.name} — ${s.therapist}</option>
+              `).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="dateTime">Fecha y Horario Deseado</label>
+            <div class="input-wrapper">
+              <span class="input-icon">⏰</span>
+              <input type="text" id="dateTime" name="dateTime" class="input-with-icon" placeholder="Ej: Mañana a las 2:00 PM o Viernes 10:00 AM" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="motive">Motivo de Consulta (Confidencial)</label>
+            <textarea id="motive" name="motive" placeholder="Ej: Consulta por manejo de ansiedad, sobrecarga laboral o dificultades para dormir..."></textarea>
+          </div>
           <button type="submit" class="btn btn-primary" style="width: 100%;">
-            Generar Enlace de Verificación 🔗
+            Confirmar y Reservar Cita 📅
           </button>
         </form>
       </div>
 
-      <!-- Tarjeta 2: Atajos y Estado del Bot MindCare -->
+      <!-- Tarjeta 2: Ecosistema Clínico MindCare & Asistente Dra. PsiBot -->
       <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
         <div>
           <div class="card-header-styled">
             <div class="card-title">
               <span>🧠</span>
-              MindCare & Dra. PsiBot
+              Ecosistema Terapéutico MindCare
             </div>
-            <span class="badge badge-success">Centro Activo</span>
+            <span class="badge badge-purple">IA & Psicometría</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
-            <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(99,102,241,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">🧠</span>
-              <span><strong>Apoyo Clínico IA (<code>!</code>):</strong> Triaje psicológico y escucha terapéutica.</span>
+          <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:18px;">
+            Herramientas integradas para acompañamiento emocional continuo y evaluación clínica objetiva.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:22px;">
+            <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <span style="font-size:1.3rem;">🧠</span>
+              <div>
+                <strong style="color:#fff;">Triaje Emocional IA Dra. PsiBot (Telegram):</strong>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Envía <code>!mensaje</code> o notas de voz para orientación empática con LLaMA 3.1.</div>
+              </div>
             </div>
-            <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(66,133,244,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">📅</span>
-              <span><strong>Citas de Psicología (<code>/cita</code>):</strong> Agendamiento en tiempo real sincronizado.</span>
+            <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <span style="font-size:1.3rem;">📊</span>
+              <div>
+                <strong style="color:#fff;">Batería de Tamizaje Psicométrico (GAD-2 / PHQ-9):</strong>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Escalas diagnósticas estandarizadas con cálculo inmediato de riesgo.</div>
+              </div>
             </div>
-            <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(168,85,247,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">💼</span>
-              <span><strong>CRM Clínico (<code>/crm</code>):</strong> Expedientes digitales, SOAP y libro de pagos.</span>
+            <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <span style="font-size:1.3rem;">🧘</span>
+              <div>
+                <strong style="color:#fff;">Técnicas de Regulación & Primeros Auxilios:</strong>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Respiración diafragmática 4-7-8, técnica sensorial SOS 5-4-3-2-1 y líneas 106/192.</div>
+              </div>
             </div>
-            <div style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
-              <span style="background:rgba(16,185,129,0.15); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;">📊</span>
-              <span><strong>Tamizajes & Ánimo (<code>/test</code>):</strong> Escalas PHQ-9, GAD-2 y diario emocional.</span>
+            <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <span style="font-size:1.3rem;">💼</span>
+              <div>
+                <strong style="color:#fff;">Expedientes Clínicos Confidenciales SOAP:</strong>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Notas de evolución, fórmulas conductuales con QR y control contable.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -898,25 +967,66 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           <a href="/crm" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
             💼 CRM Clínico
           </a>
-          <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); flex:1; text-align:center;">
-            Abrir Bot 💬
+          <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">
+            Abrir Dra. PsiBot 💬
           </a>
         </div>
       </div>
     </div>
 
-    <!-- TABLA EN VIVO: CITAS DE PSICOLOGÍA AGENDADAS -->
-    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.25) 0%, rgba(15, 23, 42, 0.8) 100%);">
+    <!-- SECCIÓN 2: DIRECTORIO DE ESPECIALISTAS Y CONSULTORIOS -->
+    <div class="card" style="margin-bottom:28px;">
+      <div class="card-header-styled">
+        <div>
+          <div class="card-title">
+            <span>👥</span>
+            Equipo Clínico de Especialistas MindCare
+          </div>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Profesionales acreditados en psicología clínica y neurociencias</span>
+        </div>
+        <a href="#agendar" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
+          Reservar Turno con un Especialista ↗
+        </a>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
+        ${PSYCHOLOGY_THERAPISTS.map(th => `
+          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:16px; padding:18px; display:flex; flex-direction:column; justify-content:space-between; transition:all 0.2s ease;">
+            <div>
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                <div style="width:44px; height:44px; border-radius:12px; background:rgba(14,165,233,0.15); border:1px solid rgba(14,165,233,0.3); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                  ${th.icon}
+                </div>
+                <div>
+                  <strong style="color:#fff; font-size:1rem; display:block;">${th.name}</strong>
+                  <span style="color:var(--primary-light); font-size:0.82rem; font-weight:600;">${th.specialty}</span>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:var(--text-muted); margin-bottom:14px; background:rgba(0,0,0,0.25); padding:6px 12px; border-radius:8px;">
+                <span>📍 ${th.office}</span>
+                <span class="badge badge-success" style="font-size:0.7rem; padding:2px 8px;">● Activo</span>
+              </div>
+            </div>
+            <a href="#agendar" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
+              Agendar con ${th.name.split(' ')[0]} 📅
+            </a>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- SECCIÓN 3: TABLA EN VIVO: CITAS DE PSICOLOGÍA AGENDADAS -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.22) 0%, rgba(13, 20, 36, 0.85) 100%);">
       <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
         <div>
-          <div class="card-title" style="color: #a5b4fc; font-size: 1.25rem;">
+          <div class="card-title" style="color: #c7d2fe; font-size: 1.25rem;">
             <span>📅</span>
-            Citas de Psicología Agendadas (${appointments.length})
+            Agenda Clínica en Tiempo Real (${appointments.length} Citas)
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Sincronización en tiempo real desde Telegram Bot @${BOT_USERNAME} y Portal Web</span>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Sincronización bidireccional inmediata con Telegram Bot @${BOT_USERNAME}</span>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px; background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+          <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
             Gestionar Citas Completas ↗
           </a>
           <a href="/crm" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
@@ -942,8 +1052,8 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           <tbody>
             ${appointments.length === 0 ? `
               <tr>
-                <td colspan="8" style="text-align:center; padding:24px; color:var(--text-muted);">
-                  Aún no hay citas registradas. ¡Agenda una desde el bot con <code>/cita</code>!
+                <td colspan="8" style="text-align:center; padding:28px; color:var(--text-muted);">
+                  Aún no hay citas registradas en el sistema. ¡Agenda la primera usando el formulario o vía Telegram con <code>/cita</code>!
                 </td>
               </tr>
             ` : appointments.map(a => `
@@ -953,15 +1063,15 @@ portalRouter.get("/", async (req: Request, res: Response) => {
                 <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
                 <td>${a.therapist}</td>
                 <td><strong style="color:#38bdf8;">${a.dateTime}</strong></td>
-                <td style="color:var(--text-muted); font-size:0.82rem; max-width:220px;">${a.motive ?? '—'}</td>
+                <td style="color:var(--text-muted); font-size:0.84rem; max-width:240px;">${a.motive ?? '—'}</td>
                 <td>
                   <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
                     ● ${a.status}
                   </span>
                 </td>
                 <td>
-                  <a href="/citas" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;">
-                    Ver / Modificar ↗
+                  <a href="/citas" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;">
+                    Gestionar ↗
                   </a>
                 </td>
               </tr>
@@ -971,18 +1081,18 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- Tabla de Usuarios Registrados -->
+    <!-- SECCIÓN 4: TABLA DE USUARIOS Y PACIENTES REGISTRADOS -->
     <div class="card">
       <div class="card-header-styled">
         <div>
           <div class="card-title">
             <span>👥</span>
-            Usuarios Registrados en el Sistema (${users.length})
+            Directorio de Pacientes y Cuentas Vinculadas (${users.length})
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Trazabilidad de identidades y roles</span>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Trazabilidad clínica y vinculación de identidades de Telegram</span>
         </div>
         <a href="/autorizar" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
-          Autorizar Apps de Terceros ⚡
+          Integraciones de Terceros ⚡
         </a>
       </div>
 
@@ -990,8 +1100,8 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         <table>
           <thead>
             <tr>
-              <th>Usuario</th>
-              <th>Username Telegram</th>
+              <th>Paciente</th>
+              <th>Telegram Handle</th>
               <th>ID Telegram</th>
               <th>Rol</th>
               <th>Estado Verificación</th>
@@ -1016,7 +1126,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
                   </td>
                   <td>${u.username ? '@' + u.username : 'N/A'}</td>
                   <td><code>${u.telegramId}</code></td>
-                  <td><span class="badge ${u.rol === 'administrador' ? 'badge-purple' : 'badge-info'}">${u.rol ?? 'usuario'}</span></td>
+                  <td><span class="badge ${u.rol === 'administrador' ? 'badge-purple' : 'badge-info'}">${u.rol ?? 'paciente'}</span></td>
                   <td>
                     <span class="badge ${u.estadoVerificacion === 'verificado' ? 'badge-success' : 'badge-warning'}">
                       ● ${u.estadoVerificacion}
@@ -1035,13 +1145,48 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         </table>
       </div>
     </div>
+
+    <!-- SECCIÓN 5: VINCULACIÓN DE TELEGRAM (DISCRETA Y PROFESIONAL) -->
+    <div class="card" style="margin-top:24px; background:rgba(15,23,42,0.45);">
+      <div class="card-header-styled">
+        <div class="card-title" style="font-size:1.1rem;">
+          <span>🔗</span>
+          Vincular Nueva Cuenta de Telegram
+        </div>
+        <span class="badge badge-info">Token Seguro</span>
+      </div>
+      <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:16px;">
+        Si deseas vincular tu cuenta de Telegram manualmente con el portal clínico para recibir recordatorios automáticos de citas y prescripciones, ingresa tus datos a continuación:
+      </p>
+      <form action="/verificar" method="POST" style="display:grid; grid-template-columns: 1fr 1fr auto; gap:14px; align-items:end;">
+        <div>
+          <label for="username">Usuario Telegram</label>
+          <div class="input-wrapper">
+            <span class="input-icon">@</span>
+            <input type="text" id="username" name="username" class="input-with-icon" placeholder="tu_usuario_telegram" required>
+          </div>
+        </div>
+        <div>
+          <label for="nombreVisible">Nombre del Paciente</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input type="text" id="nombreVisible" name="nombreVisible" class="input-with-icon" placeholder="Ej: Juan Carlos" required>
+          </div>
+        </div>
+        <div>
+          <button type="submit" class="btn btn-primary" style="height:46px;">
+            Generar Enlace 🔗
+          </button>
+        </div>
+      </form>
+    </div>
   `;
 
-  res.send(layout("Inicio & Gestión", content, "home", isAdmin));
+  res.send(layout("Inicio & Portal Clínico", content, "home", isAdmin));
 });
 
 // =============================================================================
-// RUTA 2: OBSERVACIÓN DEL PROFESOR: GRUPOS Y CHATS DEL BOT
+// RUTA 2: AUDITORÍA DE GRUPOS Y CHATS DEL BOT
 // =============================================================================
 portalRouter.get("/grupos", (req: Request, res: Response) => {
   const isAdmin = checkIsAdmin(req);
@@ -1052,11 +1197,11 @@ portalRouter.get("/grupos", (req: Request, res: Response) => {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
         <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.25); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:var(--primary-light); margin-bottom:8px; text-transform:uppercase;">
-          Observación del Profesor • Trazabilidad de Chats
+          Auditoría de Canales • Trazabilidad & Cobertura
         </div>
-        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Grupos y Chats donde Interactúa el Bot</h1>
+        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Grupos y Canales de Orientación Terapéutica</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Monitorea los grupos a los que han añadido al bot, total de integrantes, administradores responsables y volumen de mensajes.
+          Monitorea los grupos comunitarios y canales asistenciales donde interactúa Dra. PsiBot, total de integrantes y actividad en tiempo real.
         </p>
       </div>
     </div>
@@ -1140,7 +1285,7 @@ portalRouter.get("/grupos", (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// RUTA 3: OBSERVACIÓN DEL PROFESOR: GESTOR DE COMANDOS DESDE LA WEB
+// RUTA 3: GESTOR DE COMANDOS Y AUTOMATIZACIÓN DESDE LA WEB
 // =============================================================================
 portalRouter.get("/comandos", (req: Request, res: Response) => {
   const isAdmin = checkIsAdmin(req);
@@ -1151,11 +1296,11 @@ portalRouter.get("/comandos", (req: Request, res: Response) => {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
         <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:#a5b4fc; margin-bottom:8px; text-transform:uppercase;">
-          Observación del Profesor • Comandos Dinámicos
+          Consola de Automatización • Comandos Dinámicos
         </div>
-        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Gestor de Comandos y Frecuencia de Uso</h1>
+        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Gestor de Comandos & Estadísticas de Uso</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Crea nuevos comandos desde este formulario web sin reiniciar el bot y consulta qué comandos usan los usuarios.
+          Crea y despliega nuevos comandos interactivos en tiempo real sin reiniciar el bot y audita la frecuencia de interacciones en Telegram.
         </p>
       </div>
     </div>
@@ -3560,7 +3705,7 @@ portalRouter.get("/autorizar", async (req: Request, res: Response) => {
                   🤖
                 </div>
                 <div>
-                  <h2 style="font-size:1.15rem; font-weight:700; color:#fff;">Dr. MediBot (Telegram)</h2>
+                  <h2 style="font-size:1.15rem; font-weight:700; color:#fff;">Dra. PsiBot (Telegram)</h2>
                   <span style="font-size:0.75rem; color:#7dd3fc; font-weight:600;">Telegraf Engine • Polling Activo</span>
                 </div>
               </div>
@@ -3570,7 +3715,7 @@ portalRouter.get("/autorizar", async (req: Request, res: Response) => {
             </div>
 
             <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;">
-              Canal principal de atención a pacientes, agendamiento de citas médicas y triaje inteligente en tiempo real.
+              Asistente clínica de salud mental, agendamiento de citas de psicología y triaje emocional en tiempo real.
             </p>
 
             <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 10px; margin-bottom: 20px; font-size: 0.83rem;">
@@ -3580,7 +3725,7 @@ portalRouter.get("/autorizar", async (req: Request, res: Response) => {
               </div>
               <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                 <span style="color:var(--text-dim);">Nombre:</span>
-                <span style="color:#e2e8f0;">Dr. MediBot • Hospital Universitario</span>
+                <span style="color:#e2e8f0;">Dra. PsiBot • MindCare Psicología</span>
               </div>
               <div style="display:flex; justify-content:space-between;">
                 <span style="color:var(--text-dim);">Bot Token:</span>
@@ -3671,7 +3816,7 @@ portalRouter.post("/api/conectar", async (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// RUTA 5: MÓDULO DE REPORTES ADMINISTRATIVOS (RF-52 a RF-55)
+// RUTA 5: MÓDULO DE AUDITORÍA Y REPORTES CLÍNICOS
 // =============================================================================
 portalRouter.get("/reportes", async (req: Request, res: Response) => {
   const isAdmin = checkIsAdmin(req);
@@ -3682,13 +3827,13 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
   const reporte = await getModuleData(moduloSeleccionado, fechaDesde, fechaHasta);
 
   const modulosDisponibles = [
-    { key: "usuarios", name: "👥 Usuarios y Verificación", desc: "Registro, roles y actividad" },
+    { key: "usuarios", name: "👥 Pacientes y Verificación", desc: "Registro, roles y actividad" },
     { key: "comandos", name: "⚡ Comandos Ejecutados", desc: "Historial de comandos y latencias" },
     { key: "integraciones", name: "🔌 Integraciones & Tokens", desc: "Calendar, GitHub y YouTube" },
     { key: "logs", name: "⚠️ Logs y Diagnóstico", desc: "Trazabilidad técnica del sistema" },
     { key: "github", name: "🐙 Consultas GitHub", desc: "Issues, PRs y commits" },
     { key: "youtube", name: "📺 Consultas YouTube", desc: "Búsquedas y estado de API" },
-    { key: "calendar", name: "📅 Eventos Calendar", desc: "Agenda y actividades creadas" },
+    { key: "calendar", name: "📅 Eventos Calendar", desc: "Agenda y actividades sincronizadas" },
     { key: "juegos", name: "🎮 Minijuegos & Puntos", desc: "Trivia, Dados, RPS y ranking" },
   ];
 
@@ -3697,12 +3842,12 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
   const content = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
-        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.25); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:var(--primary-light); margin-bottom:8px; text-transform:uppercase;">
-          Módulo Analítico • RF-52 al RF-55
+        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(14,165,233,0.12); border:1px solid rgba(14,165,233,0.3); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:var(--primary-light); margin-bottom:8px; text-transform:uppercase;">
+          Auditoría & Analítica • MindCare Insights
         </div>
-        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Panel Administrativo de Reportes</h1>
+        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Panel Administrativo de Reportes Clínicos</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Auditoría técnica y reportes relacionales filtrados por módulo y fechas.
+          Auditoría técnica de expedientes, actividad de usuarios y reportes relacionales filtrados por módulo y fechas.
         </p>
       </div>
 
