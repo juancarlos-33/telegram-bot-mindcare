@@ -16,6 +16,7 @@ import {
   getGoogleToken,
   createPsyAppointment,
   getAllPsyAppointments,
+  getPsyAppointmentsByDocument,
   updatePsyAppointmentStatus,
   cancelPsyAppointment,
   PSYCHOLOGY_SPECIALTIES,
@@ -892,6 +893,13 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             </div>
           </div>
           <div class="form-group">
+            <label for="documentNumber">Documento de Identidad / Cédula (C.C.)</label>
+            <div class="input-wrapper">
+              <span class="input-icon">🪪</span>
+              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" required>
+            </div>
+          </div>
+          <div class="form-group">
             <label for="specialty">Especialidad & Terapeuta Asignado</label>
             <select id="specialty" name="specialty" required>
               ${PSYCHOLOGY_SPECIALTIES.map(s => `
@@ -1059,7 +1067,10 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             ` : appointments.map(a => `
               <tr>
                 <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
-                <td><strong style="color:#fff;">${a.patientName}</strong></td>
+                <td>
+                  <strong style="color:#fff;">${a.patientName}</strong>
+                  <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
+                </td>
                 <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
                 <td>${a.therapist}</td>
                 <td><strong style="color:#38bdf8;">${a.dateTime}</strong></td>
@@ -1430,6 +1441,9 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
   const pending = appointments.filter(a => a.status === "Pendiente").length;
   const canceled = appointments.filter(a => a.status === "Cancelada").length;
 
+  const consultarDoc = (req.query.consultar_doc as string)?.trim() || "";
+  const searchedAppointments = consultarDoc ? getPsyAppointmentsByDocument(consultarDoc) : [];
+
   let alertBanner = "";
   if (req.query.error) {
     alertBanner = `
@@ -1440,7 +1454,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
   } else if (req.query.created === "true") {
     alertBanner = `
       <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 600;">
-        ✅ Cita de psicología agendada y registrada exitosamente. Sincronizada con Google Calendar. 💙
+        ✅ Cita de psicología agendada y registrada exitosamente. Sincronizada con Google Calendar y expedientes CRM. 💙
       </div>
     `;
   } else if (req.query.updated === "true") {
@@ -1462,7 +1476,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         </div>
         <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Gestión de Citas & Bienestar Psicológico</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Agenda, confirma citas, monitorea el diario emocional de pacientes y evalúa tamizajes GAD-2. Integrado con Dra. PsiBot (Telegram).
+          Agenda, confirma citas, monitorea el diario emocional de pacientes y consulta horarios por documento de identidad.
         </p>
       </div>
       <div style="display:flex; gap:10px;">
@@ -1473,6 +1487,58 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     </div>
 
     ${alertBanner}
+
+    <!-- BUSCADOR / RECORDATORIO DE CITA POR DOCUMENTO -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.35); background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(13, 20, 36, 0.8) 100%);">
+      <div class="card-header-styled">
+        <div class="card-title">
+          <span>🔎</span> ¿Olvidaste la fecha u hora de tu cita? Consúltala aquí
+        </div>
+        <span class="badge badge-info">Consulta Inmediata</span>
+      </div>
+      <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:14px;">
+        Ingresa tu número de documento de identidad (Cédula o DNI) para consultar inmediatamente tus citas programadas y consultorio asignado:
+      </p>
+      <form action="/citas" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div class="input-wrapper" style="flex:1; min-width:240px;">
+          <span class="input-icon">🪪</span>
+          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula o DNI (ej: 1020304050)" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding:10px 20px;">
+          Buscar Mi Cita 🔍
+        </button>
+        ${consultarDoc ? `<a href="/citas" class="btn btn-secondary">Limpiar Búsqueda</a>` : ''}
+      </form>
+
+      ${consultarDoc ? `
+        <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border-subtle);">
+          ${searchedAppointments.length === 0 ? `
+            <div class="alert alert-warning" style="margin-bottom:0;">
+              ⚠️ No se encontraron citas agendadas para el documento <strong>${consultarDoc}</strong>. Verifica el número o agenda una nueva cita abajo.
+            </div>
+          ` : `
+            <div style="color:#6ee7b7; font-weight:700; margin-bottom:12px; font-size:1.05rem;">
+              ✅ Cita(s) encontrada(s) para el documento ${consultarDoc}:
+            </div>
+            ${searchedAppointments.map(a => `
+              <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(16,185,129,0.35); border-radius:12px; padding:18px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                  <strong style="color:#fff; font-size:1.1rem;">👤 ${a.patientName} (Doc: ${a.documentNumber})</strong>
+                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : 'badge-warning'}">● ${a.status}</span>
+                </div>
+                <div style="color:#cbd5e1; font-size:0.95rem; margin-bottom:6px;">
+                  👨‍⚕️ <strong>Especialista:</strong> ${a.therapist} · <span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span>
+                </div>
+                <div style="color:#38bdf8; font-size:1.15rem; font-weight:700; margin-bottom:6px;">
+                  ⏰ <strong>Fecha y Horario:</strong> ${a.dateTime}
+                </div>
+                ${a.motive ? `<div style="color:var(--text-muted); font-size:0.88rem;">📝 <strong>Motivo:</strong> ${a.motive}</div>` : ''}
+              </div>
+            `).join('')}
+          `}
+        </div>
+      ` : ''}
+    </div>
 
     <!-- Métricas -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-bottom: 28px;">
@@ -1511,6 +1577,10 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Nombre del Paciente:</label>
             <input type="text" name="patientName" required placeholder="Ej: Juan Carlos Gutiérrez" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Documento de Identidad / C.C.:</label>
+            <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
@@ -1582,7 +1652,10 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
             ${appointments.map(a => `
               <tr>
                 <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
-                <td><strong style="color:#fff;">${a.patientName}</strong></td>
+                <td>
+                  <strong style="color:#fff;">${a.patientName}</strong>
+                  <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
+                </td>
                 <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
                 <td>${a.therapist}</td>
                 <td>${a.dateTime}</td>
@@ -1691,12 +1764,18 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
 // Endpoint POST para agendar cita desde la web
 portalRouter.post("/api/citas", async (req: Request, res: Response) => {
-  const { patientName, specialty, dateTime, notes } = req.body;
+  const { patientName, documentNumber, specialty, dateTime, notes, motive } = req.body;
   const cleanName = String(patientName || "").trim();
+  const cleanDoc = String(documentNumber || "").trim();
   const cleanDate = String(dateTime || "").trim();
+  const consultationMotive = String(motive || notes || "").trim();
 
   if (!cleanName || cleanName.length < 3) {
     res.redirect("/citas?error=" + encodeURIComponent("El nombre del paciente debe tener al menos 3 caracteres."));
+    return;
+  }
+  if (!cleanDoc || cleanDoc.length < 5) {
+    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (mínimo 5 dígitos)."));
     return;
   }
   if (!cleanDate || cleanDate.length < 4) {
@@ -1711,17 +1790,35 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
     return;
   }
 
-  createPsyAppointment({
-    patientId: "web-paciente",
+  const newApp = createPsyAppointment({
+    patientId: "web-" + cleanDoc.replace(/\D/g, ""),
     patientName: cleanName,
+    documentNumber: cleanDoc,
     therapist: spec.therapist,
     specialty: spec.name,
     dateTime: cleanDate,
     status: "Confirmada",
-    motive: notes ? String(notes).trim() : undefined
+    motive: consultationMotive || undefined
   });
-  await saveLog("citas_psi", "INFO", `Cita de psicología agendada para ${cleanName} en ${spec.name} con ${spec.therapist}`);
-  res.redirect("/citas?created=true");
+
+  // Auto-registro en CRM Clínico si no existe
+  if (!patientExistsByDocument(cleanDoc)) {
+    createPatient({
+      fullName: cleanName,
+      document: cleanDoc,
+      age: 28,
+      phone: "+57 (Web)",
+      email: `${cleanDoc}@mindcare.clinic`,
+      pipelineStage: "Primera_Cita",
+      diagnosticHypothesis: consultationMotive ? `Motivo: ${consultationMotive}` : "En valoración inicial",
+      assignedTherapist: spec.therapist,
+      specialty: spec.name,
+      tags: ["Web", "Lead"]
+    });
+  }
+
+  await saveLog("citas_psi", "INFO", `Cita ${newApp.id} agendada para ${cleanName} (Doc: ${cleanDoc}) con ${spec.therapist}`);
+  res.redirect(`/citas?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
 });
 
 // Endpoint POST para cambiar estado de cita

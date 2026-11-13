@@ -7,7 +7,7 @@ import {
   saveLog, saveYoutubeSearch, ensureUser, ensureGroup, addMoney, addKarma, 
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
-  createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments,
+  createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments, getPsyAppointmentsByDocument,
   cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getTherapistsBySpecialty,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
@@ -179,6 +179,7 @@ bot.command(["menu", "ayuda", "help"], async (ctx) => {
     "",
     "🩺 HERRAMIENTAS CLÍNICAS Y PSICOMETRÍA:",
     "• /cita — Agendar cita paso a paso con botones interactivos",
+    "• /consultar <documento> — Consultar fecha y hora de tu cita por documento",
     "• /miscitas — Ver tus citas agendadas y consultorio",
     "• /cancelarcita <ID> — Cancelar o liberar turno de cita",
     "• /terapeutas — Directorio de 6 especialistas de MindCare",
@@ -1176,6 +1177,19 @@ bot.on("callback_query", async (ctx) => {
     return;
   }
 
+  if (data === "nav_back_doc") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_document" });
+    await ctx.reply("⬅️ Vamos a corregir tu número de documento.\n\nPor favor ingresa tu número de documento de identidad (Cédula de Ciudadanía, T.I. o DNI) 🪪:", {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+        ]
+      }
+    });
+    return;
+  }
+
   if (data === "nav_back_specialty") {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_specialty" });
@@ -1183,7 +1197,7 @@ bot.on("callback_query", async (ctx) => {
       text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
     }]));
     keyboard.push([
-      { text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" },
+      { text: "⬅️ Cambiar Documento", callback_data: "nav_back_doc" },
       { text: "❌ Cancelar", callback_data: "cancel_booking" }
     ]);
     await ctx.reply("⬅️ Selecciona nuevamente una especialidad:", {
@@ -1325,6 +1339,7 @@ bot.on("callback_query", async (ctx) => {
     const appt = createPsyAppointment({
       patientId: userId,
       patientName: state.name,
+      documentNumber: state.documentNumber,
       therapist: state.therapist,
       specialty: state.specialty,
       dateTime: state.date,
@@ -1334,14 +1349,14 @@ bot.on("callback_query", async (ctx) => {
     });
 
     await saveCalendarEvent(ctx.from, `Cita Psicología: ${spec.name} — ${state.name}`, state.date);
-    await saveLog(ctx.chat!.id, "CITA_PSI", `Cita ${appt.id} agendada para ${state.name} con ${state.therapist}`);
+    await saveLog(ctx.chat!.id, "CITA_PSI", `Cita ${appt.id} agendada para ${state.name} (${appt.documentNumber ?? ''}) con ${state.therapist}`);
 
     // Auto-registro en CRM Clínico si no existe
     const existingPatient = getPatientById(state.name ?? "");
     if (!existingPatient) {
       createPatient({
         fullName: state.name ?? displayName(ctx),
-        document: "CC-" + Math.floor(100000000 + Math.random() * 900000000),
+        document: state.documentNumber ? `CC-${state.documentNumber}` : "CC-" + Math.floor(100000000 + Math.random() * 900000000),
         age: 26,
         phone: "+57 (Telegram)",
         email: `${ctx.from?.username ?? 'paciente'}@telegram.org`,
@@ -1360,6 +1375,7 @@ bot.on("callback_query", async (ctx) => {
       "",
       `🎟️ Código: ${appt.id}`,
       `👤 Paciente: ${appt.patientName}`,
+      appt.documentNumber ? `🪪 Documento: ${appt.documentNumber}` : "",
       `${spec.icon} Especialidad: ${appt.specialty}`,
       `👤 Terapeuta: ${appt.therapist}`,
       `🏢 Consultorio: ${spec.office}`,
@@ -1368,9 +1384,13 @@ bot.on("callback_query", async (ctx) => {
       "📅 Sincronizado en Google Calendar.",
       "📁 Expediente clínico activado en el CRM.",
       "",
+      "💡 *¿Olvidaste para cuándo era tu cita?*",
+      `Puedes consultarla en cualquier momento con: \`/consultar ${appt.documentNumber ?? appt.id}\` o preguntando "¿para cuándo es mi cita?".`,
+      "",
       "Recuerda llegar 10 minutos antes. ¡Fue un placer acompañarte! 🌿",
       `🌐 Panel Web: ${APP_BASE_URL}/citas`
     ].filter(Boolean).join("\n"), {
+      parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
           [
@@ -1456,13 +1476,96 @@ bot.on("callback_query", async (ctx) => {
 });
 
 
+// Comando para consultar cita por documento o ID (para cuando el paciente olvida la fecha)
+bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita"], async (ctx) => {
+  const arg = commandArg(ctx).trim();
+  const userId = String(ctx.from?.id ?? "");
+
+  if (arg) {
+    const cleanDoc = arg.replace(/[^\w\-]/g, "");
+    const found = getPsyAppointmentsByDocument(cleanDoc);
+    if (found.length === 0) {
+      await ctx.reply([
+        `❌ No se encontraron citas activas asociadas al documento o código *${arg}*.`,
+        "",
+        "💡 Si necesitas agendar una nueva cita, escribe /cita o pulsa el botón abajo."
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "📅 Agendar Cita", callback_data: "book_start" }]]
+        }
+      });
+      return;
+    }
+
+    const lines = found.map(a =>
+      `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}\n  🪪 *Documento:* ${a.documentNumber ?? 'Registrado'}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
+    ).join("\n\n");
+
+    await ctx.reply([
+      `📋 *CITAS ENCONTRADAS PARA EL DOCUMENTO ${arg} (${found.length}):*`,
+      "",
+      lines,
+      "",
+      "🏢 Recuerda presentarte 10 minutos antes en las instalaciones de MindCare con tu documento de identidad original.",
+      `🌐 Consultar también en el portal web: ${APP_BASE_URL}/citas?consultar_doc=${encodeURIComponent(cleanDoc)}`
+    ].join("\n"), { parse_mode: "Markdown" });
+    return;
+  }
+
+  // Si no pasó argumento, primero buscar si tiene citas con su telegramId
+  const myApps = getPatientPsyAppointments(userId);
+  if (myApps.length > 0) {
+    const lines = myApps.map(a =>
+      `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}${a.documentNumber ? `\n  🪪 *Documento:* ${a.documentNumber}` : ""}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
+    ).join("\n\n");
+
+    await ctx.reply([
+      `📋 *TUS CITAS PROGRAMADAS (${myApps.length}):*`,
+      "",
+      lines,
+      "",
+      "💡 *¿Consultar por número de documento?*",
+      "Usa: `/consultar <número_documento>` (ej: `/consultar 1020304050`)."
+    ].join("\n"), { parse_mode: "Markdown" });
+    return;
+  }
+
+  // Si no tiene citas registradas con su telegramId y no pasó argumento
+  await ctx.reply([
+    "🪪 *CONSULTAR FECHA Y HORA DE TU CITA*",
+    "",
+    "¿Olvidaste para cuándo quedó tu cita de psicología?",
+    "",
+    "Por favor escribe tu número de documento para buscarla:",
+    "👉 `/consultar <número_documento>`",
+    "",
+    "Ejemplo: `/consultar 1020304050`",
+    "",
+    "O también puedes simplemente escribir tu número de documento aquí en el chat."
+  ].join("\n"), {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [[{ text: "📅 Agendar Nueva Cita", callback_data: "book_start" }]]
+    }
+  });
+});
+
 bot.command(["miscitas", "citas"], async (ctx) => {
-  const myApps = getPatientPsyAppointments(String(ctx.from?.id ?? ""));
+  const arg = commandArg(ctx).trim();
+  const userId = String(ctx.from?.id ?? "");
+
+  let myApps = arg ? getPsyAppointmentsByDocument(arg) : getPatientPsyAppointments(userId);
+  if (arg && myApps.length === 0) {
+    myApps = getPatientPsyAppointments(arg);
+  }
+
   if (myApps.length === 0) {
     await ctx.reply([
-      "📋 No tienes citas de psicología programadas.",
+      "📋 No encontramos citas de psicología programadas.",
       "",
-      "Para agendar escribe /cita y te guío paso a paso. 💙"
+      "• Si conoces tu número de documento: `/consultar <número>`",
+      "• Para agendar escribe /cita y te guío paso a paso. 💙"
     ].join("\n"), {
       reply_markup: {
         inline_keyboard: [[{ text: "📅 Agendar Cita Ahora", callback_data: "book_start" }]]
@@ -1472,7 +1575,7 @@ bot.command(["miscitas", "citas"], async (ctx) => {
   }
 
   const lines = myApps.map(a =>
-    `• [${a.id}] ${a.specialty} con ${a.therapist}\n  ⏰ ${a.dateTime} · Estado: ${a.status}${a.motive ? `\n  📌 ${a.motive}` : ""}`
+    `• [${a.id}] ${a.specialty} con ${a.therapist}\n  ⏰ ${a.dateTime} · Estado: ${a.status}${a.documentNumber ? `\n  🪪 Doc: ${a.documentNumber}` : ""}${a.motive ? `\n  📌 ${a.motive}` : ""}`
   ).join("\n\n");
 
   await ctx.reply([
@@ -1480,7 +1583,8 @@ bot.command(["miscitas", "citas"], async (ctx) => {
     "",
     lines,
     "",
-    "Para cancelar: /cancelarcita <ID>"
+    "Para cancelar: /cancelarcita <ID>",
+    "Para consultar por documento: /consultar <documento>"
   ].join("\n"));
 });
 
@@ -1769,15 +1873,26 @@ bot.on("text", async (ctx) => {
         const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
           text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
         }]));
-        keyboard.push([{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]);
+        keyboard.push([{ text: "⬅️ Cambiar Documento", callback_data: "nav_back_doc" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]);
         await ctx.reply("⬅️ Selecciona una especialidad:", {
           reply_markup: { inline_keyboard: keyboard }
         });
         return;
       }
       if (bookingState.step === "ask_specialty") {
+        setBookingState(userId, { ...bookingState, step: "ask_document" });
+        await ctx.reply("⬅️ ¿Cuál es tu número de documento de identidad (Cédula, T.I. o DNI)? 🪪:", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            ]
+          }
+        });
+        return;
+      }
+      if (bookingState.step === "ask_document") {
         setBookingState(userId, { ...bookingState, step: "ask_name" });
-        await ctx.reply("⬅️ ¿Cuál es tu nombre y apellido completos?", {
+        await ctx.reply("⬅️ ¿Cuál es tu nombre y apellido completos? 😊:", {
           reply_markup: { force_reply: true }
         });
         return;
@@ -1809,18 +1924,54 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    setBookingState(userId, { ...bookingState, step: "ask_specialty", name: cleanName });
+    setBookingState(userId, { ...bookingState, step: "ask_document", name: cleanName });
+
+    await ctx.reply(
+      `Gracias, *${cleanName}* 😊\n\n🪪 Ahora, por favor ingresa tu *número de documento de identidad* (Cédula de Ciudadanía, Tarjeta de Identidad o DNI):\n\n_💡 Con este número queda registrada tu cita en el sistema y podrás consultar para cuándo quedó si se te llega a olvidar._`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
+  if (bookingState.step === "ask_document" && !text.startsWith("!") && !text.startsWith("/")) {
+    const rawDoc = text.trim();
+    const cleanDigits = rawDoc.replace(/\D/g, "");
+
+    if (isGibberishOrGarbage(rawDoc)) {
+      await ctx.reply("⚠️ El documento ingresado contiene símbolos repetidos o texto inválido. Por favor escribe tu número de documento de identidad (ej: 1020304050) 🪪:");
+      return;
+    }
+
+    if (PROFANITY_PATTERN.test(rawDoc)) {
+      await ctx.reply("⚠️ Por favor ingresa un número de documento de identidad válido y con respeto 🪪:");
+      return;
+    }
+
+    if (cleanDigits.length < 5 || cleanDigits.length > 12) {
+      await ctx.reply("⚠️ El número de documento debe contener entre 5 y 12 dígitos numéricos válidos (ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:");
+      return;
+    }
+
+    const docNumber = cleanDigits || rawDoc;
+    setBookingState(userId, { ...bookingState, step: "ask_specialty", documentNumber: docNumber });
 
     const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
       text: `${s.icon} ${s.name}`, callback_data: `spec_${s.id}`
     }]));
     keyboard.push([
-      { text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" },
+      { text: "⬅️ Cambiar Documento", callback_data: "nav_back_doc" },
       { text: "❌ Cancelar", callback_data: "cancel_booking" }
     ]);
 
     await ctx.reply(
-      `Gracias, *${cleanName}* 😊\n\n¿Sobre qué área necesitas apoyo? Selecciona una especialidad:`,
+      `🪪 Documento registrado: *${docNumber}* ✅\n\n¿Sobre qué área necesitas apoyo? Selecciona una especialidad:`,
       { parse_mode: "Markdown", reply_markup: { inline_keyboard: keyboard } }
     );
     return;
@@ -2103,13 +2254,14 @@ Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
       "✅ *Resumen de tu cita:*",
       "",
       `👤 Paciente: ${updated.name}`,
+      updated.documentNumber ? `🪪 Documento: ${updated.documentNumber}` : "",
       `${spec.icon} Especialidad: ${updated.specialty}`,
       `👤 Terapeuta: ${updated.therapist}`,
       `⏰ Horario: ${updated.date}`,
       `📌 Motivo: ${updated.motive}`,
       "",
       "¿Confirmamos la cita?"
-    ].join("\n"), {
+    ].filter(Boolean).join("\n"), {
       parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
@@ -2122,6 +2274,63 @@ Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
       }
     });
     return;
+  }
+
+  // =============================================================================
+  // CONSULTA INTELIGENTE DE CITA (Si el paciente olvidó la fecha/hora)
+  // =============================================================================
+  if (!bookingState.step || bookingState.step === "idle") {
+    const isForgottenAppointmentQuery =
+      /(para cu[aá]ndo|cu[aá]ndo|a qu[eé] hora|fecha de mi|hora de mi|olvid[eé]|se me olvid[oó]|recordar).*(mi cita|la cita|cita)/i.test(lowerText) ||
+      /^(cu[aá]ndo es mi cita|para cu[aá]ndo es mi cita|a qu[eé] hora es mi cita|mi cita para cu[aá]ndo es|olvid[eé] mi cita|se me olvid[oó] mi cita)\??$/i.test(lowerText);
+
+    if (isForgottenAppointmentQuery) {
+      const myApps = getPatientPsyAppointments(userId);
+      if (myApps.length > 0) {
+        const lines = myApps.map(a =>
+          `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}${a.documentNumber ? `\n  🪪 *Documento:* ${a.documentNumber}` : ""}\n  🏷️ *Estado:* ${a.status}`
+        ).join("\n\n");
+        await ctx.reply([
+          "📅 *¡Aquí tienes los datos de tu cita programada!* 💙",
+          "",
+          lines,
+          "",
+          "🏢 Te esperamos 10 minutos antes en las instalaciones de MindCare.",
+          "💡 Si deseas agendar otra cita, usa /cita."
+        ].join("\n"), { parse_mode: "Markdown" });
+        return;
+      }
+
+      await ctx.reply([
+        "🪪 *¿Olvidaste para cuándo quedó tu cita?*",
+        "",
+        "Con gusto te ayudo a consultarla. Por favor indícame tu *número de documento de identidad* (Cédula o DNI):",
+        "",
+        "Ejemplo: `/consultar 1020304050` o escribe solo los números aquí."
+      ].join("\n"), { parse_mode: "Markdown" });
+      return;
+    }
+
+    // Si el usuario escribe directamente un número de documento suelto (5 a 12 dígitos)
+    const digitsOnly = text.trim();
+    if (/^\d{5,12}$/.test(digitsOnly) && !text.startsWith("/") && !text.startsWith("!")) {
+      const foundAppointments = getPsyAppointmentsByDocument(digitsOnly);
+      if (foundAppointments.length > 0) {
+        const lines = foundAppointments.map(a =>
+          `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}\n  🪪 *Documento:* ${a.documentNumber ?? digitsOnly}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
+        ).join("\n\n");
+
+        await ctx.reply([
+          `📋 *ENCONTRAMOS TU CITA ASOCIADA AL DOCUMENTO ${digitsOnly}:*`,
+          "",
+          lines,
+          "",
+          "🏢 Recuerda presentarte 10 minutos antes en las instalaciones de MindCare.",
+          `🌐 Ver en portal: ${APP_BASE_URL}/citas?consultar_doc=${digitsOnly}`
+        ].join("\n"), { parse_mode: "Markdown" });
+        return;
+      }
+    }
   }
 
   // IA solo si empieza con "!" o "/ia" / "/ai"

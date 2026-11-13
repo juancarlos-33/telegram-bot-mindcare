@@ -261,6 +261,7 @@ export interface PsyAppointment {
   id: string;
   patientId: string;
   patientName: string;
+  documentNumber?: string;
   therapist: string;
   specialty: string;
   dateTime: string;
@@ -275,6 +276,7 @@ const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [
     id: "psi-101",
     patientId: "usr-demo-1",
     patientName: "Juan Carlos Gutiérrez",
+    documentNumber: "1020304050",
     therapist: "Dra. Valentina Ríos",
     specialty: "Psicología Clínica Adultos",
     dateTime: "Mañana a las 10:00 AM",
@@ -287,6 +289,7 @@ const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [
     id: "psi-102",
     patientId: "usr-demo-2",
     patientName: "María López",
+    documentNumber: "1098765432",
     therapist: "Dr. Sebastián Torres",
     specialty: "Terapia de Pareja",
     dateTime: "Viernes 15:00 PM",
@@ -340,13 +343,31 @@ export function getAllPsyAppointments(): PsyAppointment[] {
   return psyAppointments;
 }
 
-export function getPatientPsyAppointments(patientId: string): PsyAppointment[] {
-  const lower = patientId.toLowerCase();
-  return psyAppointments.filter(a =>
-    a.patientId === patientId ||
-    a.patientName.toLowerCase().includes(lower) ||
-    patientId.includes(a.patientId)
-  );
+export function getPsyAppointmentsByDocument(documentNumber: string): PsyAppointment[] {
+  const cleanDigits = documentNumber.replace(/\D/g, "").trim();
+  const rawClean = documentNumber.trim().toLowerCase();
+
+  return psyAppointments.filter(a => {
+    if (!a.documentNumber) return false;
+    const aDigits = a.documentNumber.replace(/\D/g, "").trim();
+    if (cleanDigits && aDigits && aDigits === cleanDigits) return true;
+    return a.documentNumber.toLowerCase().trim() === rawClean;
+  });
+}
+
+export function getPatientPsyAppointments(patientIdOrDoc: string): PsyAppointment[] {
+  const clean = patientIdOrDoc.trim().toLowerCase();
+  const cleanDigits = patientIdOrDoc.replace(/\D/g, "").trim();
+  return psyAppointments.filter(a => {
+    if (a.patientId === patientIdOrDoc) return true;
+    if (a.patientName.toLowerCase().includes(clean)) return true;
+    if (a.documentNumber) {
+      if (a.documentNumber.toLowerCase().trim() === clean) return true;
+      const aDigits = a.documentNumber.replace(/\D/g, "").trim();
+      if (cleanDigits && aDigits && aDigits === cleanDigits) return true;
+    }
+    return false;
+  });
 }
 
 export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "Pendiente" | "Completada" | "Cancelada"): boolean {
@@ -729,10 +750,20 @@ export function getCRMMetrics() {
 // =============================================================================
 // ESTADO CONVERSACIONAL DEL BOT (Flujo de agendamiento paso a paso)
 // =============================================================================
-export type BookingStep = "idle" | "ask_name" | "ask_specialty" | "ask_therapist" | "ask_date" | "ask_motive" | "confirm";
+export type BookingStep = 
+  | "idle" 
+  | "ask_name" 
+  | "ask_document" 
+  | "ask_specialty" 
+  | "ask_therapist" 
+  | "ask_date" 
+  | "ask_motive" 
+  | "confirm";
+
 export interface BookingState {
   step: BookingStep;
   name?: string;
+  documentNumber?: string;
   specialty?: string;
   therapist?: string;
   date?: string;
