@@ -613,6 +613,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       padding: 3px 8px;
       border-radius: 6px;
       color: #38bdf8;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 100%;
     }
 
     .avatar {
@@ -2663,24 +2666,24 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
         </div>
         <span class="badge badge-success">Motor Anti-Colisión Activo</span>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 10px;">
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; word-break: break-word;">
           <strong style="color: #38bdf8; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>1️⃣</span> Filtro de Estado Activo
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            <code>getAllTherapists(includeInactive=false)</code> descarta automáticamente a especialistas inactivos o que hayan renunciado.
+            <code style="display: inline-block; word-break: break-all; font-size: 0.76rem; max-width: 100%;">getAllTherapists(includeInactive=false)</code> descarta automáticamente a especialistas inactivos o que hayan renunciado.
           </p>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; word-break: break-word;">
           <strong style="color: #a5b4fc; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>2️⃣</span> Normalización Canónica
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            <code>normalizeDateTimeToCanonical()</code> unifica formatos coloquiales: "3:00 PM", "15:00", "3 de la tarde" y "3pm" resuelven a la misma clave única <code>YYYY-MM-DD_15:00</code>.
+            <code style="display: inline-block; word-break: break-all; font-size: 0.76rem; max-width: 100%;">normalizeDateTimeToCanonical()</code> unifica formatos coloquiales: "3:00 PM", "15:00", "3 de la tarde" y "3pm" resuelven a la misma clave única <code>YYYY-MM-DD_15:00</code>.
           </p>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; word-break: break-word;">
           <strong style="color: #fbbf24; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>3️⃣</span> Anti-Colisión Doctor (X vs Z)
           </strong>
@@ -2688,20 +2691,20 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
             Si el Paciente X ya tiene turno con el Doctor A, y el Paciente Z intenta reservar al Doctor A en esa franja, el motor lo rechaza al instante.
           </p>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; word-break: break-word;">
           <strong style="color: #f43f5e; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>4️⃣</span> Doble Agendamiento de Paciente
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            <code>hasPatientAppointmentConflict()</code> bloquea citas duplicadas y evita que un paciente agende dos citas simultáneas con diferentes doctores.
+            <code style="display: inline-block; word-break: break-all; font-size: 0.76rem; max-width: 100%;">hasPatientAppointmentConflict()</code> bloquea citas duplicadas y evita que un paciente agende dos citas simultáneas con diferentes doctores.
           </p>
         </div>
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; word-break: break-word;">
           <strong style="color: #34d399; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>5️⃣</span> Espacio Físico (Consultorios)
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            <code>hasOfficeAppointmentConflict()</code> garantiza que dos profesionales clínicos no sean programados en el mismo consultorio físico al mismo tiempo.
+            <code style="display: inline-block; word-break: break-all; font-size: 0.76rem; max-width: 100%;">hasOfficeAppointmentConflict()</code> garantiza que dos profesionales clínicos no sean programados en el mismo consultorio físico al mismo tiempo.
           </p>
         </div>
       </div>
