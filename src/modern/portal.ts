@@ -757,21 +757,6 @@ portalRouter.get("/login", (req: Request, res: Response) => {
             </div>
           </div>
 
-          <!-- Helper para evaluación / copiar clave -->
-          <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 10px; padding: 10px 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            <div style="font-size: 0.8rem; color: #c7d2fe;">
-              <span style="font-weight: 700;">💡 Clave Demo:</span> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #38bdf8;">mindcare2026</code>
-            </div>
-            <button 
-              type="button" 
-              onclick="autofillPassword('mindcare2026')" 
-              style="background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(99, 102, 241, 0.4); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;"
-              onmouseover="this.style.background='rgba(99, 102, 241, 0.45)';"
-              onmouseout="this.style.background='rgba(99, 102, 241, 0.25)';"
-            >
-              📋 Rellenar
-            </button>
-          </div>
 
           <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 0.98rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span>Ingresar al Panel de Gestión</span>
@@ -814,13 +799,6 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           eye.textContent = '👁️';
           btn.setAttribute('title', 'Mostrar contraseña');
         }
-      }
-
-      function autofillPassword(pass) {
-        const input = document.getElementById('passwordInput');
-        if (!input) return;
-        input.value = pass;
-        input.focus();
       }
     </script>
   `;
@@ -1981,6 +1959,42 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
       </div>
     </div>
 
+    <!-- EXPLICACIÓN ACADÉMICA / DISPONIBILIDAD Y ANTI-COLISIÓN -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(16, 185, 129, 0.4); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(13, 20, 36, 0.9) 100%);">
+      <div class="card-header-styled">
+        <div class="card-title" style="color: #34d399;">
+          <span>🎓</span> ¿Cómo sabe el sistema qué Doctor está disponible? (Algoritmo Anti-Colisión)
+        </div>
+        <span class="badge badge-success">Lógica de Disponibilidad</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #38bdf8; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+            <span>1️⃣</span> Filtro de Estado Activo
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            La función <code>getAllTherapists(includeInactive=false)</code> descarta automáticamente a especialistas que hayan renunciado o tengan su turno pausado (vacaciones o licencia).
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #a5b4fc; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+            <span>2️⃣</span> Matriz de Especialidad
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            Al seleccionar un área en Telegram o Web (ej: <em>Terapia de Pareja</em>), <code>getTherapistsBySpecialty()</code> consulta los profesionales con esa competencia clínica y consultorio.
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #fbbf24; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+            <span>3️⃣</span> Detección de Conflictos de Horario
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            Antes de confirmar, <code>hasPsyAppointmentConflict(therapist, dateTime)</code> escanea la base de datos de citas activas. Si el médico ya tiene turno en esa hora, bloquea el turno y exige seleccionar otra franja.
+          </p>
+        </div>
+      </div>
+    </div>
+
     ${isAdmin ? `
       <!-- PANEL SUPER ADMIN: FORMULARIO PARA DAR DE ALTA NUEVO ESPECIALISTA -->
       <div class="card" id="nuevo-medico" style="margin-bottom:32px; border:1px solid rgba(99,102,241,0.5); background: linear-gradient(180deg, rgba(30, 27, 75, 0.3) 0%, rgba(13, 20, 36, 0.88) 100%);">
@@ -1999,6 +2013,11 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
           <div>
             <label for="name" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Nombre Completo del Médico / Psicólogo *:</label>
             <input type="text" id="name" name="name" required placeholder="Ej: Dra. Camila Morales" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="documentNumber" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Cédula de Ciudadanía / Documento *:</label>
+            <input type="text" id="documentNumber" name="documentNumber" required placeholder="Ej: 1020304050" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
           </div>
 
           <div>
@@ -2092,6 +2111,10 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
 
               <div style="background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:10px; font-size:0.82rem; margin-bottom:16px; display:flex; flex-direction:column; gap:4px;">
                 <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--text-dim);">Cédula / Documento:</span>
+                  <strong style="color:#38bdf8; font-family:'JetBrains Mono',monospace;">🪪 ${th.documentNumber || 'Registrada'}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
                   <span style="color:var(--text-dim);">Consultorio:</span>
                   <strong style="color:#fff;">📍 ${th.office}</strong>
                 </div>
@@ -2144,7 +2167,7 @@ portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
     res.redirect("/login");
     return;
   }
-  const { name, specialty, customSpecialty, office, licenseNumber, icon, phone, email } = req.body;
+  const { name, documentNumber, specialty, customSpecialty, office, licenseNumber, icon, phone, email } = req.body;
   const finalSpecialty = (specialty === "OTRA" && customSpecialty && customSpecialty.trim()) ? customSpecialty.trim() : specialty;
   if (!name || !finalSpecialty || !office) {
     res.redirect("/especialistas?error=" + encodeURIComponent("Por favor diligencia nombre, especialidad y consultorio."));
@@ -2153,6 +2176,7 @@ portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
 
   createTherapist({
     name: String(name).trim(),
+    documentNumber: documentNumber ? String(documentNumber).trim() : undefined,
     specialty: String(finalSpecialty).trim(),
     office: String(office).trim(),
     licenseNumber: licenseNumber ? String(licenseNumber).trim() : undefined,

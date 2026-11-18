@@ -318,6 +318,7 @@ export interface PsySpecialty {
 export interface PsyTherapist {
   id: string;
   name: string;
+  documentNumber?: string; // Cédula de Ciudadanía o DNI del Especialista
   specialty: string;
   office: string;
   icon?: string;
@@ -353,16 +354,17 @@ export function addSpecialty(specialty: PsySpecialty): PsySpecialty {
 }
 
 const INITIAL_PSY_THERAPISTS: PsyTherapist[] = [
-  { id: "valentina", name: "Dra. Valentina Ríos", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201", licenseNumber: "T.P. 188.420 Colpsic", active: true, createdAt: new Date() },
-  { id: "torres", name: "Dr. Sebastián Torres", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203", licenseNumber: "T.P. 162.301 Colpsic", active: true, createdAt: new Date() },
-  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Adolescente", icon: "👩‍⚕️", office: "Consultorio 202", licenseNumber: "T.P. 195.112 Colpsic", active: true, createdAt: new Date() },
-  { id: "castillo", name: "Dr. Andrés Castillo", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204", licenseNumber: "T.P. 142.890 Colpsic", active: true, createdAt: new Date() },
-  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Psicología del Duelo y Crisis", icon: "👩‍⚕️", office: "Consultorio 205", licenseNumber: "T.P. 201.754 Colpsic", active: true, createdAt: new Date() },
-  { id: "ramos", name: "Dr. Felipe Ramos", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206", licenseNumber: "T.P. 177.340 Colpsic", active: true, createdAt: new Date() }
+  { id: "valentina", name: "Dra. Valentina Ríos", documentNumber: "1020304051", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201", licenseNumber: "T.P. 188.420 Colpsic", active: true, createdAt: new Date() },
+  { id: "torres", name: "Dr. Sebastián Torres", documentNumber: "1098765431", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203", licenseNumber: "T.P. 162.301 Colpsic", active: true, createdAt: new Date() },
+  { id: "sofia", name: "Dra. Sofía Mendoza", documentNumber: "1032456789", specialty: "Psicología Infantil y Adolescente", icon: "👩‍⚕️", office: "Consultorio 202", licenseNumber: "T.P. 195.112 Colpsic", active: true, createdAt: new Date() },
+  { id: "castillo", name: "Dr. Andrés Castillo", documentNumber: "1015987654", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204", licenseNumber: "T.P. 142.890 Colpsic", active: true, createdAt: new Date() },
+  { id: "luciana", name: "Dra. Luciana Vega", documentNumber: "1074561230", specialty: "Psicología del Duelo y Crisis", icon: "👩‍⚕️", office: "Consultorio 205", licenseNumber: "T.P. 201.754 Colpsic", active: true, createdAt: new Date() },
+  { id: "ramos", name: "Dr. Felipe Ramos", documentNumber: "1085236974", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206", licenseNumber: "T.P. 177.340 Colpsic", active: true, createdAt: new Date() }
 ];
 
 const psyTherapists: PsyTherapist[] = loadJsonFile<any[]>("therapists.json", INITIAL_PSY_THERAPISTS).map((t: any) => ({
   ...t,
+  documentNumber: t.documentNumber || `10${Math.floor(10000000 + Math.random() * 90000000)}`,
   active: t.active !== false,
   createdAt: new Date(t.createdAt || Date.now())
 }));
@@ -384,6 +386,7 @@ export function getTherapistsBySpecialty(specialty: string, includeInactive = fa
 
 export function createTherapist(data: {
   name: string;
+  documentNumber?: string;
   specialty: string;
   office: string;
   icon?: string;
@@ -395,6 +398,7 @@ export function createTherapist(data: {
   const newTherapist: PsyTherapist = {
     id: cleanId,
     name: data.name.trim(),
+    documentNumber: data.documentNumber?.trim() || `10${Math.floor(10000000 + Math.random() * 90000000)}`,
     specialty: data.specialty.trim(),
     office: data.office.trim(),
     icon: data.icon || (data.name.toLowerCase().includes("dra") ? "👩‍⚕️" : "👨‍⚕️"),

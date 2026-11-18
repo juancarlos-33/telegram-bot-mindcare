@@ -155,7 +155,8 @@ async function handleStartFlow(ctx: Context) {
         inline_keyboard: [
           [{ text: "📅 Agendar Cita", callback_data: "book_start" }, { text: "📝 Test de Ansiedad", callback_data: "test_start" }],
           [{ text: "💭 ¿Cómo te sientes hoy?", callback_data: "mood_check" }, { text: "🌬️ Respirar", callback_data: "breath_guide" }],
-          [{ text: "👥 Terapeutas", callback_data: "show_therapists" }, { text: "🆘 Auxilio Emocional", callback_data: "sos_guide" }]
+          [{ text: "👥 Terapeutas", callback_data: "show_therapists" }, { text: "🆘 Auxilio Emocional", callback_data: "sos_guide" }],
+          [{ text: "🔎 ¿Olvidaste tu cita? Consultar por Cédula", callback_data: "check_doc_prompt" }]
         ]
       }
     });
@@ -666,6 +667,14 @@ bot.on("callback_query", async (ctx) => {
           ]
         }
       }
+    );
+    return;
+  }
+
+  if (data === "check_doc_prompt") {
+    await ctx.reply(
+      "🔎 *CONSULTA DE CITA POR CÉDULA / DNI*\n\n¿Olvidaste para cuándo era tu cita? Con gusto te ayudo a buscarla.\n\nPor favor escribe únicamente tu *número de documento de identidad* (Cédula o DNI):\n_Ejemplo:_ `1020304050`\n\nTambién puedes usar el comando directo:\n`/consultar <número>`",
+      { parse_mode: "Markdown", reply_markup: { force_reply: true } }
     );
     return;
   }
