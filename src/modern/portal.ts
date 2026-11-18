@@ -1032,18 +1032,26 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </div>
 
           <div style="margin-bottom: 18px;">
-            <label for="passwordInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
-              Contraseña Clínica:
-            </label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label for="passwordInput" style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+                Contraseña Clínica:
+              </label>
+              ${error && !isLocked ? `
+                <span id="clickNotice" style="font-size: 0.73rem; color: #fbbf24; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                  <span>👆</span> Haz clic aquí para reintentar
+                </span>
+              ` : ''}
+            </div>
             <div style="position: relative; display: flex; align-items: center;">
               <span style="position: absolute; left: 14px; font-size: 1.1rem; color: #818cf8; pointer-events: none; z-index: 2;">🔑</span>
               <input 
                 type="password" 
                 id="passwordInput" 
                 name="password" 
-                style="width: 100%; padding: 12px 48px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none; ${isLocked ? 'opacity: 0.5; cursor: not-allowed;' : ''}" 
-                placeholder="Ingresa la contraseña..." 
-                ${isLocked ? 'disabled' : 'required autofocus'}
+                style="width: 100%; padding: 12px 48px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid ${error && !isLocked ? 'rgba(245, 158, 11, 0.6)' : 'rgba(99, 102, 241, 0.35)'}; border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none; transition: all 0.2s ease; ${isLocked ? 'opacity: 0.5; cursor: not-allowed;' : (error ? 'cursor: pointer; background: rgba(245, 158, 11, 0.05);' : '')}" 
+                placeholder="${isLocked ? 'Acceso suspendido temporalmente' : (error ? '👆 Haz clic con el mouse aquí para escribir...' : 'Ingresa la contraseña...')}" 
+                ${isLocked ? 'disabled' : (error ? 'readonly onclick="unlockPasswordInput(this)" onkeydown="checkUnlocked(event, this)"' : 'required')}
+                autocomplete="off"
               >
               <button 
                 type="button" 
@@ -1137,6 +1145,26 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           input.type = 'password';
           eye.textContent = '👁️';
           btn.setAttribute('title', 'Mostrar contraseña');
+        }
+      }
+
+      function unlockPasswordInput(el) {
+        if (!el || el.disabled) return;
+        el.readOnly = false;
+        el.style.cursor = 'text';
+        el.style.background = 'rgba(15, 23, 42, 0.85)';
+        el.style.borderColor = 'rgba(99, 102, 241, 0.6)';
+        el.placeholder = 'Ingresa la contraseña...';
+        const notice = document.getElementById('clickNotice');
+        if (notice) notice.remove();
+        el.focus();
+      }
+
+      function checkUnlocked(e, el) {
+        if (el && el.readOnly) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
         }
       }
 
