@@ -1433,12 +1433,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         <strong>juntos por siempre te amo ❤️ 👻</strong>
       </h1>
 
-      <p class="love-subtitle">
-        En cada latido, en cada proyecto y en cada rincón de este camino.<br>
-        Contigo siempre, inseparables e infinitos. 💖✨
-      </p>
-
-      <div style="margin-top: 10px;">
+      <div style="margin-top: 16px;">
         <button type="button" class="btn-love-primary" onclick="dismissLoveAnnouncement()">
           <span>💖</span> Entrar con Todo Mi Amor <span>👻</span>
         </button>
@@ -1990,7 +1985,44 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         }, 5000);
       }
 
+      function updateKpisDirectly(stats) {
+        if (!stats) return;
+        function setAndPulse(id, val) {
+          const el = document.getElementById(id);
+          if (el && val !== undefined) {
+            if (el.textContent !== String(val)) {
+              el.textContent = val;
+              el.style.transition = 'transform 0.25s ease, color 0.25s ease';
+              el.style.transform = 'scale(1.22)';
+              el.style.color = '#38bdf8';
+              setTimeout(function() {
+                el.style.transform = 'scale(1)';
+                el.style.color = '';
+              }, 400);
+            }
+          }
+        }
+        setAndPulse('kpi-num-total', stats.totalAppointments);
+        setAndPulse('kpi-num-confirmed', stats.confirmedAppointments);
+        setAndPulse('kpi-num-pending', stats.pendingAppointments);
+        setAndPulse('kpi-num-canceled', stats.canceledAppointments);
+        setAndPulse('kpi-num-moods', stats.totalMoods);
+        setAndPulse('kpi-num-tests', stats.totalTests);
+      }
+
+      function syncRealtimeStats() {
+        fetch('/api/realtime/summary')
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res && res.stats) {
+              updateKpisDirectly(res.stats);
+            }
+          })
+          .catch(function() {});
+      }
+
       function refreshPageSection() {
+        syncRealtimeStats();
         const url = window.location.href;
         fetch(url, { headers: { 'X-Requested-With': 'RealtimeUpdate' } })
           .then(function(r) { return r.text(); })
@@ -2002,6 +2034,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const curTable = document.querySelector('table');
             if (newTable && curTable) {
               curTable.innerHTML = newTable.innerHTML;
+            }
+
+            // Actualizar grilla de 6 KPIs en tiempo real
+            const newAdminKpis = doc.getElementById('admin-kpi-grid');
+            const curAdminKpis = document.getElementById('admin-kpi-grid');
+            if (newAdminKpis && curAdminKpis) {
+              curAdminKpis.innerHTML = newAdminKpis.innerHTML;
             }
 
             const newMetrics = doc.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
@@ -2034,6 +2073,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               indicator.style.color = '#34d399';
               indicator.style.borderColor = 'rgba(16,185,129,0.3)';
             }
+            syncRealtimeStats();
           };
 
           eventSource.onmessage = function(e) {
@@ -3737,11 +3777,11 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
     </div>
 
     <!-- 6 MÉTRICAS EXCLUSIVAS DE LA CONSOLA CLÍNICA CON APERTURA DE DETALLE Y FILTRO -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px;">
+    <div id="admin-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px;">
       <!-- Card 1: Total Citas -->
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('TODAS')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.12); position:relative; background:linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver todas las citas registradas">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${appointments.length}</div>
+        <div id="kpi-num-total" style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${appointments.length}</div>
         <span style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">Registradas en MindCare</span>
         <span class="badge" style="font-size:0.68rem; background:rgba(255,255,255,0.08); color:#cbd5e1; border:1px solid rgba(255,255,255,0.15);">Ver detalle 👁️</span>
       </div>
@@ -3749,7 +3789,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Card 2: Confirmadas -->
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('Confirmada')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(16,185,129,0.35); position:relative; background:linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para filtrar solo citas confirmadas">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Confirmadas</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #34d399; margin: 6px 0;">${confirmed}</div>
+        <div id="kpi-num-confirmed" style="font-size: 2.1rem; font-weight: 800; color: #34d399; margin: 6px 0;">${confirmed}</div>
         <span style="font-size: 0.72rem; color: #34d399; display:block; margin-bottom:8px;">En agenda terapéutica</span>
         <span class="badge badge-success" style="font-size:0.68rem;">Filtrar citas 🔍</span>
       </div>
@@ -3757,7 +3797,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Card 3: Pendientes -->
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('Pendiente')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(245,158,11,0.35); position:relative; background:linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para filtrar solo citas pendientes">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pendientes</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #fbbf24; margin: 6px 0;">${pending}</div>
+        <div id="kpi-num-pending" style="font-size: 2.1rem; font-weight: 800; color: #fbbf24; margin: 6px 0;">${pending}</div>
         <span style="font-size: 0.72rem; color: #fbbf24; display:block; margin-bottom:8px;">Por confirmar / triaje</span>
         <span class="badge badge-warning" style="font-size:0.68rem;">Filtrar citas 🔍</span>
       </div>
@@ -3765,7 +3805,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Card 4: Canceladas -->
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('Cancelada')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(239,68,68,0.35); position:relative; background:linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver las citas canceladas">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Canceladas</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #f87171; margin: 6px 0;">${canceled}</div>
+        <div id="kpi-num-canceled" style="font-size: 2.1rem; font-weight: 800; color: #f87171; margin: 6px 0;">${canceled}</div>
         <span style="font-size: 0.72rem; color: #f87171; display:block; margin-bottom:8px;">Turnos cancelados / baja</span>
         <span class="badge badge-danger" style="font-size:0.68rem;">Ver canceladas ✕</span>
       </div>
@@ -3773,7 +3813,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Card 5: Chequeos de Ánimo -->
       <div class="card metric-interactive-card" onclick="openMoodsModal()" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(56,189,248,0.35); position:relative; background:linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver el diario emocional y registro de ánimo">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Chequeos de Ánimo</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #38bdf8; margin: 6px 0;">${allMoods.length}</div>
+        <div id="kpi-num-moods" style="font-size: 2.1rem; font-weight: 800; color: #38bdf8; margin: 6px 0;">${allMoods.length}</div>
         <span style="font-size: 0.72rem; color: #bae6fd; display:block; margin-bottom:8px;">Diario emocional activo</span>
         <span class="badge badge-info" style="font-size:0.68rem;">Ver registros 👁️</span>
       </div>
@@ -3781,7 +3821,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Card 6: Tests GAD-2 -->
       <div class="card metric-interactive-card" onclick="openTestsModal()" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(168,85,247,0.35); position:relative; background:linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver los resultados de los tests de tamizaje GAD-2">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tests GAD-2</span>
-        <div style="font-size: 2.1rem; font-weight: 800; color: #a855f7; margin: 6px 0;">${allTests.length}</div>
+        <div id="kpi-num-tests" style="font-size: 2.1rem; font-weight: 800; color: #a855f7; margin: 6px 0;">${allTests.length}</div>
         <span style="font-size: 0.72rem; color: #d8b4fe; display:block; margin-bottom:8px;">Evaluaciones clínicas</span>
         <span class="badge" style="font-size:0.68rem; background:rgba(168,85,247,0.18); color:#d8b4fe; border:1px solid rgba(168,85,247,0.35);">Ver resultados 📋</span>
       </div>
