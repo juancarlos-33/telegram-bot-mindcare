@@ -649,6 +649,145 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       background: rgba(6, 10, 20, 0.75);
     }
 
+    /* Global Page Loader Overlay */
+    #mindcare-global-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(6, 9, 19, 0.94);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+
+    #mindcare-global-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+    }
+
+    .loader-logo-ring {
+      position: relative;
+      width: 86px;
+      height: 86px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .loader-ring-pulse {
+      position: absolute;
+      inset: -6px;
+      border-radius: 26px;
+      border: 2.5px solid transparent;
+      border-top-color: #38bdf8;
+      border-right-color: #6366f1;
+      border-bottom-color: #10b981;
+      animation: spinRing 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.35);
+    }
+
+    .loader-logo-box {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      box-shadow: inset 0 2px 10px rgba(255,255,255,0.2), 0 8px 24px rgba(0,0,0,0.5);
+      animation: heartbeat 1.8s ease-in-out infinite;
+    }
+
+    @keyframes spinRing {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes heartbeat {
+      0%, 100% { transform: scale(1); }
+      25% { transform: scale(1.06); }
+      50% { transform: scale(0.97); }
+      75% { transform: scale(1.03); }
+    }
+
+    .loader-title {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #bae6fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .loader-bar-wrap {
+      width: 220px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 14px 0 10px;
+      position: relative;
+    }
+
+    .loader-bar-prog {
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, #0ea5e9, #6366f1, #10b981);
+      border-radius: 10px;
+      position: absolute;
+      left: 0;
+      animation: indeterminateBar 1.5s infinite ease-in-out;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+    }
+
+    @keyframes indeterminateBar {
+      0% { left: -40%; width: 40%; }
+      50% { left: 40%; width: 60%; }
+      100% { left: 100%; width: 30%; }
+    }
+
+    .loader-status-text {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      transition: all 0.2s ease;
+    }
+
+    /* Spinner Inline para botones */
+    .spinner-inline {
+      width: 15px;
+      height: 15px;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      display: inline-block;
+      animation: spinRing 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
     @media (max-width: 900px) {
       .navbar { flex-direction: column; gap: 14px; }
       .nav-links { flex-wrap: wrap; justify-content: center; }
@@ -659,6 +798,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
   </style>
 </head>
 <body>
+  <!-- GLOBAL PAGE LOADER DE ALTO NIVEL -->
+  <div id="mindcare-global-loader">
+    <div class="loader-container">
+      <div class="loader-logo-ring">
+        <div class="loader-ring-pulse"></div>
+        <div class="loader-logo-box">🧠</div>
+      </div>
+      <div class="loader-title">MindCare</div>
+      <div class="loader-bar-wrap">
+        <div class="loader-bar-prog"></div>
+      </div>
+      <div id="loaderStatusLabel" class="loader-status-text">Cargando plataforma médica...</div>
+    </div>
+  </div>
+
   <!-- Header Principal -->
   <header>
     <div class="navbar">
@@ -731,6 +885,43 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       </div>
     </div>
   </footer>
+
+  <script>
+    function hideGlobalLoader() {
+      const loader = document.getElementById('mindcare-global-loader');
+      if (loader) {
+        loader.classList.add('hidden');
+      }
+    }
+    function showGlobalLoader(msg) {
+      const loader = document.getElementById('mindcare-global-loader');
+      const label = document.getElementById('loaderStatusLabel');
+      if (label && msg) label.textContent = msg;
+      if (loader) loader.classList.remove('hidden');
+    }
+
+    // Ocultar suavemente al terminar de cargar la ventana
+    if (document.readyState === 'complete') {
+      setTimeout(hideGlobalLoader, 150);
+    } else {
+      window.addEventListener('load', function() {
+        setTimeout(hideGlobalLoader, 200);
+      });
+    }
+    // Salvaguarda en caso de carga instantánea
+    setTimeout(hideGlobalLoader, 1600);
+
+    // Activar loader en navegación entre módulos internos
+    document.addEventListener('click', function(e) {
+      const a = e.target.closest('a');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('javascript:') || a.target === '_blank') return;
+      if (href.startsWith('/') || href.startsWith(window.location.origin)) {
+        showGlobalLoader('Cargando ' + (a.textContent || '').trim().replace(/^[^\wáéíóúÁÉÍÓÚ]+/, '') + '...');
+      }
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -779,7 +970,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </div>
         ` : ''}
 
-        <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm">
+        <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm" onsubmit="handleLoginSubmit(event)">
           <div style="margin-bottom: 16px;">
             <label for="credentialInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
               Usuario o Correo Institucional:
@@ -825,10 +1016,22 @@ portalRouter.get("/login", (req: Request, res: Response) => {
             </div>
           </div>
 
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px;">
-            <span>Iniciar Sesión Clínica Segura</span>
-            <span>🚀</span>
+          <button 
+            type="submit" 
+            id="loginSubmitBtn"
+            class="btn btn-primary" 
+            style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;"
+          >
+            <span id="loginBtnSpinner" style="display: none;" class="spinner-inline"></span>
+            <span id="loginBtnText">Iniciar Sesión Clínica Segura</span>
+            <span id="loginBtnIcon">🚀</span>
           </button>
+
+          <!-- Banner de verificación interactivo al dar Enter o clic -->
+          <div id="loginFeedbackBanner" style="display: none; margin-top: 14px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 12px; padding: 12px 14px; text-align: center; color: #c7d2fe; font-size: 0.85rem; font-weight: 600;">
+            <span class="spinner-inline"></span>
+            <span>Verificando credenciales clínicas y cifrando sesión HTTP-Only...</span>
+          </div>
         </form>
 
         <!-- SELECTOR DE ACCESO RÁPIDO PARA EVALUACIÓN DOCENTE / DEMO -->
@@ -838,10 +1041,10 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             ${staffAccounts.map(s => `
-              <form action="/login" method="POST" style="margin:0;">
+              <form action="/login" method="POST" style="margin:0;" onsubmit="handleQuickLogin(this, '${s.fullName}')">
                 <input type="hidden" name="staffQuickLogin" value="${s.id}">
                 <button type="submit" style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; color: #e2e8f0; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;" onmouseover="this.style.background='rgba(99,102,241,0.2)'; this.style.borderColor='rgba(99,102,241,0.4)';" onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.08)';">
-                  <span>${s.role === 'DIRECTOR_ADMIN' ? '👑' : s.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'}</span>
+                  <span class="quick-icon">${s.role === 'DIRECTOR_ADMIN' ? '👑' : s.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'}</span>
                   <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     <strong>${s.fullName.split(' ')[0]} ${s.fullName.split(' ')[1] || ''}</strong>
                     <div style="font-size: 0.68rem; color: #94a3b8;">${s.role === 'DIRECTOR_ADMIN' ? 'Director' : (s.specialty ? s.specialty.split(' ')[0] : 'Triage')}</div>
@@ -879,6 +1082,45 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           input.type = 'password';
           eye.textContent = '👁️';
           btn.setAttribute('title', 'Mostrar contraseña');
+        }
+      }
+
+      function handleLoginSubmit(e) {
+        const btn = document.getElementById('loginSubmitBtn');
+        const spinner = document.getElementById('loginBtnSpinner');
+        const btnText = document.getElementById('loginBtnText');
+        const btnIcon = document.getElementById('loginBtnIcon');
+        const banner = document.getElementById('loginFeedbackBanner');
+
+        if (btn && spinner && btnText) {
+          spinner.style.display = 'inline-block';
+          btnText.textContent = 'Verificando credenciales...';
+          if (btnIcon) btnIcon.style.display = 'none';
+          btn.style.opacity = '0.85';
+          btn.style.pointerEvents = 'none';
+        }
+
+        if (banner) {
+          banner.style.display = 'block';
+        }
+
+        if (typeof showGlobalLoader === 'function') {
+          showGlobalLoader('Validando credenciales y abriendo sesión clínica...');
+        }
+      }
+
+      function handleQuickLogin(form, name) {
+        const btn = form.querySelector('button');
+        if (btn) {
+          btn.style.opacity = '0.75';
+          btn.style.pointerEvents = 'none';
+          const icon = btn.querySelector('.quick-icon');
+          if (icon) {
+            icon.innerHTML = '<span class="spinner-inline" style="margin:0;"></span>';
+          }
+        }
+        if (typeof showGlobalLoader === 'function') {
+          showGlobalLoader('Iniciando sesión como ' + name + '...');
         }
       }
     </script>
