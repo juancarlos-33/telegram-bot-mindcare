@@ -732,18 +732,33 @@ export function hasOfficeAppointmentConflict(office: string, dateTime: string, e
   });
 }
 
+/** Extrae y normaliza hora clínica (am/pm, 24h, o 'a las X') sin confundir números de fecha (ej: día 25) */
+export function parseClinicalTime(str: string): { hour24: number; minute: number; raw: string } | null {
+  const m = str.toLowerCase().match(/(?:(?:a\s+las?|hora:?)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?)|(?:(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?)|(?:(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.))/i);
+  if (!m) return null;
+  const hour = parseInt(m[1] || m[4] || m[7], 10);
+  const minute = parseInt(m[2] || m[5] || '0', 10);
+  const meridiem = (m[3] || m[6] || m[8] || '').replace(/\./g, '');
+  let hour24 = hour;
+  if (meridiem === 'pm' && hour24 < 12) hour24 += 12;
+  else if (meridiem === 'am' && hour24 === 12) hour24 = 0;
+  else if (!meridiem && hour24 >= 1 && hour24 <= 7) hour24 += 12;
+  return { hour24, minute, raw: m[0].trim() };
+}
+
 /** Validación clínica robusta de fechas y horarios para evitar fechas pasadas y domingos */
 export function validateAppointmentDate(dateTime: string): { valid: boolean; reason?: string } {
   const clean = dateTime.trim();
   const lower = clean.toLowerCase();
 
-  // 1. Palabras clave de tiempo pasado
+  // 1. Palabras clave de tiempo pasado (excluyendo 'pasado mañana' que es futuro)
+  const withoutPasadoManana = lower.replace(/\bpasado\s*ma[ñn]ana\b/gi, '');
   const pastKeywords = [
     "ayer", "antier", "anteayer", "el mes pasado", "la semana pasada", "el año pasado",
-    "el ano pasado", "hace un", "hace 2", "hace 3", "hace días", "hace dias", "ya paso", "ya pasó",
-    "anoche", "hace una hora", "hace horas", "pasada", "pasado"
+    "el ano pasado", "año pasado", "mes pasado", "semana pasada", "hace un", "hace 2", "hace 3",
+    "hace días", "hace dias", "ya paso", "ya pasó", "anoche", "hace una hora", "hace horas", "tiempo pasado"
   ];
-  if (pastKeywords.some(p => lower.includes(p))) {
+  if (pastKeywords.some(p => withoutPasadoManana.includes(p)) || /\b(pasada|pasadas|pasado|pasados)\b/i.test(withoutPasadoManana)) {
     return { 
       valid: false, 
       reason: "No es posible agendar una cita en una fecha u hora que ya transcurrió ('ayer' o tiempo pasado). Por favor selecciona una fecha futura a partir de hoy o mañana." 
@@ -763,16 +778,18 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
     }
   }
 
-  // 3. Fechas en formato YYYY-MM-DD o DD/MM/YYYY
+  // Referencia de hoy en Colombia (zona horaria America/Bogota)
+  const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const todayBogota = new Date(nowBogota.getFullYear(), nowBogota.getMonth(), nowBogota.getDate(), 0, 0, 0, 0);
+
+  // 3. Fechas en formato ISO (YYYY-MM-DD)
   const isoMatch = lower.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (isoMatch) {
     const yr = parseInt(isoMatch[1], 10);
     const mo = parseInt(isoMatch[2], 10) - 1;
     const dy = parseInt(isoMatch[3], 10);
     const targetDate = new Date(yr, mo, dy, 23, 59, 59);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (targetDate < today) {
+    if (targetDate < todayBogota) {
       return { 
         valid: false, 
         reason: "La fecha seleccionada es anterior a hoy en el calendario. Por favor elige una fecha posterior." 
@@ -784,7 +801,36 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
         reason: "La fecha seleccionada cae en domingo. MindCare atiende de Lunes a Sábado."
       };
     }
-    const maxFuture = new Date();
+    const maxFuture = new Date(todayBogota);
+    maxFuture.setDate(maxFuture.getDate() + 90);
+    if (targetDate > maxFuture) {
+      return {
+        valid: false,
+        reason: "La fecha supera el límite máximo de programación (90 días). Las agendas se abren con hasta 3 meses de anticipación."
+      };
+    }
+  }
+
+  // 3b. Fechas en formato DD/MM/YYYY o DD-MM-YYYY
+  const dmyMatch = lower.match(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b/);
+  if (dmyMatch) {
+    const dy = parseInt(dmyMatch[1], 10);
+    const mo = parseInt(dmyMatch[2], 10) - 1;
+    const yr = parseInt(dmyMatch[3], 10);
+    const targetDate = new Date(yr, mo, dy, 23, 59, 59);
+    if (targetDate < todayBogota) {
+      return { 
+        valid: false, 
+        reason: "La fecha seleccionada es anterior a hoy en el calendario. Por favor elige una fecha posterior." 
+      };
+    }
+    if (targetDate.getDay() === 0) {
+      return {
+        valid: false,
+        reason: "La fecha seleccionada cae en domingo. MindCare atiende de Lunes a Sábado."
+      };
+    }
+    const maxFuture = new Date(todayBogota);
     maxFuture.setDate(maxFuture.getDate() + 90);
     if (targetDate > maxFuture) {
       return {
@@ -802,43 +848,28 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
     };
   }
 
+  // Extraer hora con el parser clínico robusto
+  const timeInfo = parseClinicalTime(lower);
+
   // 5. Si menciona "hoy", verificar si la hora ya transcurrió en Colombia
-  if (lower.includes("hoy")) {
-    const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  if (/\bhoy\b/i.test(lower) && timeInfo) {
     const currentHour24 = nowBogota.getHours();
     const currentMinute = nowBogota.getMinutes();
 
-    const timeMatch = lower.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1], 10);
-      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-      const meridiem = timeMatch[3]?.toLowerCase().replace(/\./g, "");
-
-      if (meridiem === "pm" && hour < 12) hour += 12;
-      else if (meridiem === "am" && hour === 12) hour = 0;
-      else if (!meridiem && hour < 8) hour += 12; // asume tarde si es 1 a 7
-
-      if (hour < currentHour24 || (hour === currentHour24 && minute <= currentMinute)) {
-        const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
-        const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
-        return { 
-          valid: false, 
-          reason: `La hora ingresada (${timeMatch[0]}) ya pasó el día de hoy (en este momento son las ${formattedHourNow} hora Colombia). Elige una hora más tarde o agenda a partir de mañana.` 
-        };
-      }
+    if (timeInfo.hour24 < currentHour24 || (timeInfo.hour24 === currentHour24 && timeInfo.minute <= currentMinute)) {
+      const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
+      const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
+      return { 
+        valid: false, 
+        reason: `La hora ingresada (${timeInfo.raw}) ya pasó el día de hoy (en este momento son las ${formattedHourNow} hora Colombia). Elige una hora más tarde o agenda a partir de mañana.` 
+      };
     }
   }
 
   // 6. Horario de atención clínica (7 AM a 8 PM)
-  const timeCheck = lower.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
-  if (timeCheck) {
-    let hour = parseInt(timeCheck[1], 10);
-    const meridiem = timeCheck[3]?.toLowerCase().replace(/\./g, "");
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    else if (meridiem === "am" && hour === 12) hour = 0;
-
+  if (timeInfo) {
     // Madrugada entre 00:00 y 06:59 o noche después de las 20:00
-    if ((meridiem === "am" && (hour < 7 || hour === 0)) || hour > 20) {
+    if (timeInfo.hour24 < 7 || timeInfo.hour24 > 20) {
       return { 
         valid: false, 
         reason: "Horario fuera de atención clínica. MindCare atiende de Lunes a Sábado entre las 7:00 AM y las 8:00 PM." 

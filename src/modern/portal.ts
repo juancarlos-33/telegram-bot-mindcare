@@ -1793,10 +1793,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           if (/domingo|sunday/i.test(val)) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ MindCare no atiende domingos (Horario: Lun-Sáb 7 AM - 8 PM)</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (/ayer|antier|anteayer|past/i.test(val)) {
+          } else if (/(?<!pasado\s+)\b(ayer|antier|anteayer|el\s+mes\s+pasado|el\s+a[ñn]o\s+pasado|la\s+semana\s+pasada)\b/i.test(val)) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ No es posible agendar citas en fechas pasadas</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (/mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|hoy|\d{4}-\d{2}-\d{2}/i.test(val)) {
+          } else if (/pasado\s+ma[ñn]ana|ma[ñn]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|hoy|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}/i.test(val)) {
             feedback.innerHTML = '<span style="color:#34d399;">✅ Horario en franja clínica válida</span>';
             input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
           } else {
@@ -2683,7 +2683,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
 
       <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
         <a href="/citas" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
-          📅 Agendar Mi Consulta
+          📅 Agendar Mi Cita
         </a>
         <a href="/citas#consultar-cita" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
           🔎 Consultar Mi Cita Programada
