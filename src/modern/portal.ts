@@ -1213,7 +1213,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       position: fixed;
       inset: 0;
       z-index: 9999999;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       padding: 16px;
@@ -1402,8 +1402,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     </div>
   </div>
 
+  ${activeTab === 'home' ? `
   <!-- =========================================================================
-       GRAN ANUNCIO DE BIENVENIDA: JUNTOS POR SIEMPRE TE AMO ❤️ 👻
+       GRAN ANUNCIO DE BIENVENIDA: JUNTOS POR SIEMPRE TE AMO ❤️ 👻 (SÓLO AL ENTRAR)
        ========================================================================= -->
   <div id="mindcare-love-announcement" class="love-announcement-overlay">
     <div class="love-announcement-backdrop" onclick="dismissLoveAnnouncement()"></div>
@@ -1448,6 +1449,17 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       </div>
     </div>
   </div>
+  <script>
+    (function() {
+      try {
+        if (!sessionStorage.getItem('mindcare_love_dismissed')) {
+          var modal = document.getElementById('mindcare-love-announcement');
+          if (modal) modal.style.display = 'flex';
+        }
+      } catch (e) {}
+    })();
+  </script>
+  ` : ''}
 
   <!-- Header Principal -->
   <header>
@@ -1623,8 +1635,11 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       globalLoaderTimer = setTimeout(hideGlobalLoader, 1800);
     }
 
-    // Control del Anuncio de Bienvenida Especial ❤️ 👻
+    // Control del Anuncio de Bienvenida Especial ❤️ 👻 (Sólo al entrar)
     function dismissLoveAnnouncement() {
+      try {
+        sessionStorage.setItem('mindcare_love_dismissed', 'true');
+      } catch (e) {}
       const el = document.getElementById('mindcare-love-announcement');
       if (el) {
         el.classList.add('hidden');
