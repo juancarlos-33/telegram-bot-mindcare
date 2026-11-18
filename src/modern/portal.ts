@@ -919,40 +919,67 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
   </footer>
 
   <script>
+    let globalLoaderTimer = null;
+
     function hideGlobalLoader() {
+      if (globalLoaderTimer) {
+        clearTimeout(globalLoaderTimer);
+        globalLoaderTimer = null;
+      }
       const loader = document.getElementById('mindcare-global-loader');
       if (loader) {
         loader.classList.add('hidden');
       }
     }
+
     function showGlobalLoader(msg) {
       const loader = document.getElementById('mindcare-global-loader');
       const label = document.getElementById('loaderStatusLabel');
       if (label && msg) label.textContent = msg;
       if (loader) loader.classList.remove('hidden');
+
+      // Salvaguarda absoluta anti-bloqueo: NUNCA se queda en pantalla más de 1.8 segundos
+      if (globalLoaderTimer) clearTimeout(globalLoaderTimer);
+      globalLoaderTimer = setTimeout(hideGlobalLoader, 1800);
     }
 
-    // Ocultar suavemente al terminar de cargar la ventana
+    // Permitir cerrar el loader si el usuario da clic en cualquier parte o pulsa Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') hideGlobalLoader();
+    });
+    const loaderOverlay = document.getElementById('mindcare-global-loader');
+    if (loaderOverlay) {
+      loaderOverlay.addEventListener('click', hideGlobalLoader);
+    }
+
+    // Ocultar al completar carga
     if (document.readyState === 'complete') {
-      setTimeout(hideGlobalLoader, 150);
+      hideGlobalLoader();
     } else {
       window.addEventListener('load', function() {
-        setTimeout(hideGlobalLoader, 200);
+        setTimeout(hideGlobalLoader, 50);
       });
     }
-    // Salvaguarda en caso de carga instantánea
-    setTimeout(hideGlobalLoader, 1600);
+    document.addEventListener('DOMContentLoaded', hideGlobalLoader);
 
-    // Activar loader en navegación entre módulos internos
-    document.addEventListener('click', function(e) {
-      const a = e.target.closest('a');
-      if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href || href.startsWith('#') || href.startsWith('javascript:') || a.target === '_blank') return;
-      if (href.startsWith('/') || href.startsWith(window.location.origin)) {
-        showGlobalLoader('Cargando ' + (a.textContent || '').trim().replace(/^[^\wáéíóúÁÉÍÓÚ]+/, '') + '...');
-      }
+    // SOLUCIÓN AL BUCLE DE NAVEGACIÓN ATRÁS (bfcache):
+    // Cuando el usuario pulsa "Atrás" en el navegador, pageshow se ejecuta de inmediato
+    window.addEventListener('pageshow', function(e) {
+      hideGlobalLoader();
+      // Desbloquear botones de formulario si estaban en submit
+      document.querySelectorAll('[data-submitting="true"]').forEach(function(btn) {
+        btn.dataset.submitting = 'false';
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+      });
     });
+
+    window.addEventListener('popstate', function() {
+      hideGlobalLoader();
+    });
+
+    // Cerrar loader con tiempo límite de seguridad inicial
+    setTimeout(hideGlobalLoader, 400);
 
     // =========================================================================
     // VALIDACIONES Y MICRO-INTERACCIONES INTERACTIVAS MINDCARE (ESTÁNDAR WEB)
@@ -1185,6 +1212,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           } else {
             showGlobalLoader('Cifrando y registrando nota en expediente SOAP...');
           }
+
+          // Salvaguarda: si por alguna razón no se refresca la página, restaurar el botón en 2.5 segundos
+          setTimeout(function() {
+            btn.dataset.submitting = 'false';
+            btn.style.pointerEvents = 'auto';
+            btn.style.opacity = '1';
+          }, 2500);
         });
       });
     }
@@ -1644,6 +1678,24 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         }
       }
 
+      window.addEventListener('pageshow', function() {
+        isLoginSubmitting = false;
+        if (typeof hideGlobalLoader === 'function') hideGlobalLoader();
+        document.querySelectorAll('form[action="/login"] button, #passwordInput, #credentialInput').forEach(function(el) {
+          el.style.pointerEvents = 'auto';
+          el.style.opacity = '1';
+          if (el.readOnly !== undefined) el.readOnly = false;
+        });
+        const spinner = document.getElementById('loginBtnSpinner');
+        if (spinner) spinner.style.display = 'none';
+        const btnText = document.getElementById('loginBtnText');
+        if (btnText) btnText.textContent = 'Ingresar a Consola Médica';
+        const btnIcon = document.getElementById('loginBtnIcon');
+        if (btnIcon) btnIcon.style.display = 'inline';
+        const toggleBtn = document.getElementById('togglePassBtn');
+        if (toggleBtn) toggleBtn.style.pointerEvents = 'auto';
+      });
+
       // Cuenta regresiva en vivo si la IP está bloqueada por Rate Limit
       ${isLocked ? `
         (function() {
@@ -1835,56 +1887,58 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     ` : ''}
 
-    <!-- HERO BANNER CLÍNICO DE ALTO NIVEL -->
-    <div class="hero-banner">
-      <div class="hero-badge">
-        <span class="status-dot"></span>
-        <span>Centro Clínico de Excelencia en Psicología & Salud Mental Integrada</span>
+    <!-- HERO BANNER INSTITUCIONAL & SHOWCASE DE PORTADA -->
+    <div class="card" style="margin-bottom: 30px; padding: 44px 38px; border: 1px solid rgba(14, 165, 233, 0.4); background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.12) 45%, rgba(10, 15, 30, 0.95) 100%); border-radius: 26px; position: relative; overflow: hidden; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);">
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #38bdf8 0%, #6366f1 50%, #10b981 100%);"></div>
+      
+      <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #7dd3fc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em;">
+        <span>✨</span> MindCare Health Technologies • Centro Clínico de Psicología Integrada
       </div>
-      <h1>MindCare — Centro Clínico & Salud Mental Integrada</h1>
-      <p>
-        Ecosistema médico digital para reserva inmediata de consultas presenciales y virtuales, orientación terapéutica asistida por Dra. PsiBot en Telegram y cumplimiento estricto de la Ley 1090 de 2006 y Ley 1581 de 2012 (Habeas Data).
+
+      <h1 style="font-size: 2.45rem; font-weight: 800; color: #fff; line-height: 1.22; margin: 0 0 16px 0; letter-spacing: -0.025em;">
+        Psicoterapia Basada en Evidencia, Calidez Humana & Tecnología al Servicio de tu Mente
+      </h1>
+
+      <p style="color: #cbd5e1; font-size: 1.05rem; line-height: 1.65; max-width: 880px; margin: 0 0 26px 0;">
+        En <strong>MindCare</strong> transformamos la experiencia de salud mental en Colombia. Acompañamos a niños, jóvenes, adultos y parejas con planes psicoterapéuticos estructurados, calidez profesional y estricta confidencialidad médica amparada por la <span style="color:#7dd3fc; font-weight:600;">Ley 1090 de 2006</span> y <span style="color:#7dd3fc; font-weight:600;">Ley 1581 de 2012 (Habeas Data)</span>.
       </p>
 
-      <div class="hero-metrics">
-        <div class="hero-metric-item">
-          <span class="status-dot"></span>
-          <span>Dra. PsiBot: <strong>@${BOT_USERNAME}</strong> (Online 24/7)</span>
-        </div>
-        <div class="hero-metric-item">
-          <span>🩺 <strong>6</strong> Consultorios Privados (201-206)</span>
-        </div>
-        <div class="hero-metric-item">
-          <span>🔒 Confidencialidad: <strong>Ley 1090 & Ley 1581</strong></span>
-        </div>
-        <div class="hero-metric-item">
-          <span>👥 <strong>+1,500</strong> Pacientes Acompañados</span>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:12px; margin-top:26px; flex-wrap:wrap;">
-        <a href="/citas#agendar-paciente" class="btn btn-primary" style="padding:12px 24px; font-weight:700;">
-          📅 Agendar Cita de Psicología
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+        <a href="/citas#agendar-paciente" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
+          📅 Agendar Mi Consulta
         </a>
-        <a href="/citas#consultar-cita" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8; padding:12px 20px; font-weight:600;">
+        <a href="/citas#consultar-cita" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
           🔎 Consultar Mi Cita Programada
         </a>
-        <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8; padding:12px 20px; font-weight:600;">
-          <span class="status-dot"></span> Abrir Chat en Telegram 💬
+        <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(99, 102, 241, 0.4); color: #a5b4fc;">
+          💬 Hablar con Dra. PsiBot en Telegram
         </a>
       </div>
     </div>
 
-    ${!isStaff ? `
-      <div class="alert alert-info" style="justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom: 24px;">
-        <div>
-          <strong>🔒 Privacidad y Protección de Datos (Ley 1581 de 2012):</strong> MindCare protege la confidencialidad de tu consulta psicológica. Las citas son estrictamente privadas.
-        </div>
-        <a href="/login" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;">
-          Acceso Profesional 🔐
-        </a>
+    <!-- FRANJA DE CONFIANZA & SOCIAL PROOF -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 34px;">
+      <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(255,255,255,0.08); background: rgba(13, 20, 36, 0.72);">
+        <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin-bottom: 4px;">+1,500</div>
+        <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Pacientes Acompañados</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Procesos terapéuticos completados con éxito</div>
       </div>
-    ` : ''}
+      <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(255,255,255,0.08); background: rgba(13, 20, 36, 0.72);">
+        <div style="font-size: 2.2rem; font-weight: 800; color: #10b981; margin-bottom: 4px;">100%</div>
+        <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Secreto Médico & Ética</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Código Deontológico Ley 1090 de 2006</div>
+      </div>
+      <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(255,255,255,0.08); background: rgba(13, 20, 36, 0.72);">
+        <div style="font-size: 2.2rem; font-weight: 800; color: #a855f7; margin-bottom: 4px;">6</div>
+        <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Consultorios Bioclimáticos</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Aislamiento acústico privado (Cons. 201-206)</div>
+      </div>
+      <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(255,255,255,0.08); background: rgba(13, 20, 36, 0.72);">
+        <div style="font-size: 2.2rem; font-weight: 800; color: #f59e0b; margin-bottom: 4px;">24/7</div>
+        <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Acompañamiento Digital</div>
+        <div style="font-size: 0.75rem; color: var(--text-dim);">Dra. PsiBot en Telegram para triaje y apoyo</div>
+      </div>
+    </div>
 
     <!-- SECCIÓN INTERACTIVA 1: AGENDAMIENTO RÁPIDO & ECOSISTEMA TERAPÉUTICO -->
     <div class="grid-2">
@@ -2532,56 +2586,32 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
       ${alertBanner}
 
-      <!-- HERO BANNER INSTITUCIONAL & SHOWCASE SUPERCOOL -->
-      <div class="card" style="margin-bottom: 34px; padding: 40px 36px; border: 1px solid rgba(14, 165, 233, 0.4); background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.12) 45%, rgba(10, 15, 30, 0.95) 100%); border-radius: 26px; position: relative; overflow: hidden; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);">
-        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #38bdf8 0%, #6366f1 50%, #10b981 100%);"></div>
+      <!-- ENCABEZADO DE SERVICIOS & RESERVA DE CITAS -->
+      <div class="card" style="margin-bottom: 30px; padding: 36px 32px; border: 1px solid rgba(14, 165, 233, 0.4); background: radial-gradient(circle at top right, rgba(14, 165, 233, 0.16) 0%, rgba(10, 15, 30, 0.95) 100%); border-radius: 24px; position: relative; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);">
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #38bdf8 0%, #6366f1 100%);"></div>
         
-        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #7dd3fc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em;">
-          <span>✨</span> MindCare Health Technologies • Centro Clínico de Psicología Integrada
+        <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #7dd3fc; margin-bottom: 14px; text-transform: uppercase;">
+          <span>📅</span> Agenda Psicológica • Pacientes & Familias
         </div>
 
-        <h1 style="font-size: 2.45rem; font-weight: 800; color: #fff; line-height: 1.22; margin: 0 0 16px 0; letter-spacing: -0.025em;">
-          Psicoterapia Basada en Evidencia, Calidez Humana & Tecnología al Servicio de tu Mente
+        <h1 style="font-size: 2.25rem; font-weight: 800; color: #fff; line-height: 1.25; margin: 0 0 14px 0;">
+          Reserva tu Consulta de Psicología & Consulta tu Cita
         </h1>
 
-        <p style="color: #cbd5e1; font-size: 1.05rem; line-height: 1.65; max-width: 880px; margin: 0 0 26px 0;">
-          En <strong>MindCare</strong> transformamos la experiencia de salud mental en Colombia. Acompañamos a niños, jóvenes, adultos y parejas con planes psicoterapéuticos estructurados, calidez profesional y estricta confidencialidad médica amparada por la <span style="color:#7dd3fc; font-weight:600;">Ley 1090 de 2006</span> y <span style="color:#7dd3fc; font-weight:600;">Ley 1581 de 2012 (Habeas Data)</span>.
+        <p style="color: #cbd5e1; font-size: 1.02rem; line-height: 1.6; max-width: 840px; margin: 0 0 24px 0;">
+          Selecciona tu especialista clínico, modalidad (presencial o virtual) y asegura tu turno en minutos. Si ya agendaste con nosotros, puedes consultar la fecha y consultorio asignado usando únicamente tu número de cédula de 10 dígitos.
         </p>
 
         <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-          <a href="#agendar-paciente" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
-            📅 Agendar Mi Consulta
+          <a href="#agendar-paciente" class="btn btn-primary" style="padding: 11px 22px; font-size: 0.92rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">
+            📅 Agendar Mi Cita Ahora
           </a>
-          <a href="#consultar-cita" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
-            🔎 Consultar Mi Cita Programada
+          <a href="#consultar-cita" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.92rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
+            🔎 Consultar Mi Cita con Cédula
           </a>
-          <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(99, 102, 241, 0.4); color: #a5b4fc;">
-            💬 Hablar con Dra. PsiBot en Telegram
+          <a href="/" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.92rem; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.15); color: #cbd5e1;">
+            🏠 Ver Portada Principal
           </a>
-        </div>
-      </div>
-
-      <!-- FRANJA DE CONFIANZA & SOCIAL PROOF -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 34px;">
-        <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(255,255,255,0.08); background: rgba(13, 20, 36, 0.72);">
-          <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin-bottom: 4px;">+1,500</div>
-          <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Pacientes Acompañados</div>
-          <div style="font-size: 0.75rem; color: var(--text-dim);">Procesos terapéuticos completados con éxito</div>
-        </div>
-        <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(16,185,129,0.25); background: rgba(13, 20, 36, 0.72);">
-          <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin-bottom: 4px;">100%</div>
-          <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Secreto Médico & Ética</div>
-          <div style="font-size: 0.75rem; color: var(--text-dim);">Código Deontológico Ley 1090 de 2006</div>
-        </div>
-        <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(99,102,241,0.25); background: rgba(13, 20, 36, 0.72);">
-          <div style="font-size: 2.2rem; font-weight: 800; color: #a5b4fc; margin-bottom: 4px;">6</div>
-          <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Consultorios Bioclimáticos</div>
-          <div style="font-size: 0.75rem; color: var(--text-dim);">Aislamiento acústico privado (Cons. 201-206)</div>
-        </div>
-        <div class="card" style="margin-bottom:0; padding: 22px; text-align: center; border: 1px solid rgba(245,158,11,0.25); background: rgba(13, 20, 36, 0.72);">
-          <div style="font-size: 2.2rem; font-weight: 800; color: #fbbf24; margin-bottom: 4px;">24/7</div>
-          <div style="font-size: 0.88rem; font-weight: 700; color: #fff; margin-bottom: 4px;">Acompañamiento Digital</div>
-          <div style="font-size: 0.75rem; color: var(--text-dim);">Dra. PsiBot en Telegram para triaje y apoyo</div>
         </div>
       </div>
 
@@ -2835,14 +2865,6 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         </div>
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="padding: 13px 26px; font-weight: 700; font-size: 0.95rem; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); box-shadow: 0 10px 25px rgba(99, 102, 241, 0.35);">
           💬 Iniciar Chat en Telegram
-        </a>
-      </div>
-
-      <!-- ACCESO SEGURO EXCLUSIVO PARA PERSONAL MÉDICO -->
-      <div style="background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 14px; padding: 18px 24px; text-align: center; margin-bottom: 24px;">
-        <span style="font-size: 0.88rem; color: var(--text-dim);">¿Eres psicólogo clínico o personal administrativo de MindCare?</span>
-        <a href="/login" style="color: #38bdf8; font-weight: 700; margin-left: 8px; text-decoration: underline;">
-          Ingresar a la Consola Médica Segura (/login) 🔐
         </a>
       </div>
     `;
