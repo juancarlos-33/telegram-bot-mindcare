@@ -690,46 +690,139 @@ portalRouter.get("/login", (req: Request, res: Response) => {
   const error = req.query.error ? String(req.query.error) : "";
 
   const content = `
-    <div class="card" style="max-width: 480px; margin: 50px auto; padding: 42px 34px; border: 1px solid rgba(99, 102, 241, 0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.6);">
-      <div style="width: 72px; height: 72px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.2rem; box-shadow: 0 0 25px rgba(99, 102, 241, 0.25);">
-        👑
-      </div>
+    <div style="max-width: 480px; margin: 40px auto; padding: 0 16px;">
+      <!-- Tarjeta Principal de Login -->
+      <div class="card" style="padding: 42px 34px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(20, 27, 48, 0.85) 0%, rgba(10, 15, 30, 0.95) 100%); backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(99, 102, 241, 0.15); position: relative; overflow: hidden;">
+        
+        <!-- Línea decorativa superior -->
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #10b981 100%);"></div>
 
-      <h1 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin-bottom: 8px; text-align: center;">Acceso Super Admin</h1>
-      <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 24px; text-align: center; line-height: 1.5;">
-        Panel exclusivo del Propietario o Director Médico de MindCare para incorporar nuevos especialistas, tramitar renuncias y gestionar la clínica.
-      </p>
-
-      ${error ? `
-        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600; text-align: center;">
-          ⚠️ ${error}
+        <!-- Escudo / Icono Principal -->
+        <div style="width: 76px; height: 76px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%); border: 1.5px solid rgba(99, 102, 241, 0.5); border-radius: 22px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.3rem; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);">
+          👑
         </div>
-      ` : ''}
 
-      <form action="/login" method="POST" style="margin-bottom: 18px;">
-        <div class="form-group" style="margin-bottom: 18px;">
-          <label for="password" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em;">Clave Maestra de Propietario:</label>
-          <div class="input-wrapper">
-            <span class="input-icon">🔑</span>
-            <input type="password" id="password" name="password" class="input-with-icon" placeholder="Ingresa la clave maestra (ej: mindcare2026)" required autofocus>
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">
+            🔒 Módulo Directivo • Super Admin
           </div>
+          <h1 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Acceso de Propietario</h1>
+          <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; margin: 0;">
+            Gestión de especialistas médicos, altas, renuncias y administración integral de MindCare.
+          </p>
         </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);">
-          Ingresar al Panel de Gestión 🚀
-        </button>
-      </form>
 
-      <form action="/login" method="POST" style="margin: 0;">
-        <input type="hidden" name="user" value="owner">
-        <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.08);">
-          ⚡ Acceso Directo de Demostración (1-Click)
-        </button>
-      </form>
+        ${error ? `
+          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 22px; color: #f87171; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2rem;">⚠️</span>
+            <span>${error}</span>
+          </div>
+        ` : ''}
 
-      <div style="border-top: 1px solid var(--border-subtle); margin-top: 24px; padding-top: 16px; font-size: 0.78rem; color: var(--text-dim); text-align: center;">
-        🔒 Sesión cifrada protegida por HTTP-Only cookies para el dueño del software.
+        <form action="/login" method="POST" style="margin-bottom: 18px;">
+          <div style="margin-bottom: 18px;">
+            <label for="passwordInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+              Contraseña Maestra:
+            </label>
+            
+            <!-- Campo de Contraseña con botón Ver/Ocultar -->
+            <div style="position: relative; display: flex; align-items: center;">
+              <span style="position: absolute; left: 14px; font-size: 1.15rem; color: #818cf8; pointer-events: none; z-index: 2;">🔑</span>
+              
+              <input 
+                type="password" 
+                id="passwordInput" 
+                name="password" 
+                style="width: 100%; padding: 13px 48px 13px 44px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.95rem; font-family: inherit; transition: all 0.25s ease; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);"
+                placeholder="Ingresa la contraseña..." 
+                required 
+                autofocus
+                onfocus="this.style.borderColor='#818cf8'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.25), inset 0 2px 4px rgba(0,0,0,0.4)';"
+                onblur="this.style.borderColor='rgba(99, 102, 241, 0.35)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.4)';"
+              >
+
+              <!-- Botón Mostrar/Ocultar Contraseña -->
+              <button 
+                type="button" 
+                id="togglePassBtn" 
+                onclick="togglePasswordVisibility()" 
+                title="Mostrar u ocultar contraseña"
+                aria-label="Alternar visibilidad de contraseña"
+                style="position: absolute; right: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; z-index: 3; font-size: 1.05rem;"
+                onmouseover="this.style.background='rgba(99,102,241,0.25)'; this.style.color='#fff'; this.style.borderColor='rgba(99,102,241,0.5)';"
+                onmouseout="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#cbd5e1'; this.style.borderColor='rgba(255,255,255,0.12)';"
+              >
+                <span id="eyeIcon">👁️</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Helper para evaluación / copiar clave -->
+          <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 10px; padding: 10px 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="font-size: 0.8rem; color: #c7d2fe;">
+              <span style="font-weight: 700;">💡 Clave Demo:</span> <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #38bdf8;">mindcare2026</code>
+            </div>
+            <button 
+              type="button" 
+              onclick="autofillPassword('mindcare2026')" 
+              style="background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(99, 102, 241, 0.4); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;"
+              onmouseover="this.style.background='rgba(99, 102, 241, 0.45)';"
+              onmouseout="this.style.background='rgba(99, 102, 241, 0.25)';"
+            >
+              📋 Rellenar
+            </button>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 0.98rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>Ingresar al Panel de Gestión</span>
+            <span>🚀</span>
+          </button>
+        </form>
+
+        <form action="/login" method="POST" style="margin: 0 0 20px 0;">
+          <input type="hidden" name="user" value="owner">
+          <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 11px; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.03); color: #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span>⚡ Acceso Directo de Demostración (1-Click)</span>
+          </button>
+        </form>
+
+        <!-- Footer de Seguridad -->
+        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;">
+          <span style="font-size: 0.76rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px;">
+            <span>🔒</span> Sesión cifrada protegida por HTTP-Only cookies.
+          </span>
+          <a href="/" style="color: #818cf8; text-decoration: none; font-size: 0.82rem; font-weight: 600; transition: color 0.2s ease;" onmouseover="this.style.color='#c7d2fe';" onmouseout="this.style.color='#818cf8';">
+            ⬅️ Volver al Portal Clínico Público
+          </a>
+        </div>
       </div>
     </div>
+
+    <script>
+      function togglePasswordVisibility() {
+        const input = document.getElementById('passwordInput');
+        const eye = document.getElementById('eyeIcon');
+        const btn = document.getElementById('togglePassBtn');
+        if (!input || !eye) return;
+        
+        if (input.type === 'password') {
+          input.type = 'text';
+          eye.textContent = '🙈';
+          btn.setAttribute('title', 'Ocultar contraseña');
+        } else {
+          input.type = 'password';
+          eye.textContent = '👁️';
+          btn.setAttribute('title', 'Mostrar contraseña');
+        }
+      }
+
+      function autofillPassword(pass) {
+        const input = document.getElementById('passwordInput');
+        if (!input) return;
+        input.value = pass;
+        input.focus();
+      }
+    </script>
   `;
 
   res.send(layout("Acceso Propietario", content, "home", false));
@@ -2103,6 +2196,7 @@ portalRouter.post("/api/especialistas/toggle", (req: Request, res: Response) => 
 portalRouter.get("/crm", async (req: Request, res: Response) => {
   const isAdmin = checkIsAdmin(req);
   const patients = getAllPatients();
+  const users = await getAllUsers();
   const metrics = getCRMMetrics();
   const payments = getAllPayments();
   const appointments = getAllPsyAppointments();
@@ -2144,6 +2238,42 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
     </div>
 
     ${banner}
+
+    <!-- SECCIÓN ACADÉMICA / ARQUITECTURA DE PERSISTENCIA Y REGISTRO -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.4); background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(13, 20, 36, 0.9) 100%);">
+      <div class="card-header-styled">
+        <div class="card-title" style="color: #38bdf8;">
+          <span>🎓</span> Arquitectura de Persistencia: ¿Dónde se registran los Especialistas y los Usuarios?
+        </div>
+        <span class="badge badge-info">Auditoría del Sistema</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #a5b4fc; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+            <span>👨‍⚕️</span> 1. ¿Dónde se registran los Especialistas?
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            Se dan de alta en el módulo <a href="/especialistas" style="color:#38bdf8; font-weight:700;">Especialistas</a> por el <strong>Super Admin (Propietario)</strong>. Se guardan en <code>therapists.json</code> y la BD con su consultorio, especialidad y Tarjeta Profesional (Colpsic). El bot de Telegram los sincroniza al instante en <code>/cita</code> y <code>/terapeutas</code>.
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #34d399; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+            <span>📱</span> 2. ¿Dónde se registran los Usuarios de Telegram?
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            Se registran <strong>automáticamente</strong> al interactuar con el bot mediante el middleware <code>ensureUser(ctx.from)</code>. Quedan persistidos en la tabla <code>User</code> con su <code>telegramId</code>, nombre, username y rol de usuario.
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #fbbf24; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+            <span>📁</span> 3. ¿Dónde se registran los Pacientes Clínicos?
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            Se crean al agendar cita por Telegram (<code>/cita</code>) o Web (<code>/citas</code>) capturando su <strong>Documento de Identidad (Cédula/TI)</strong>, o manualmente en el botón <a href="#nuevo-paciente" style="color:#fbbf24; font-weight:700;">Nuevo Paciente</a>. Se genera su expediente en <code>patients.json</code> con historia clínica y notas SOAP.
+          </p>
+        </div>
+      </div>
+    </div>
 
     <!-- Métricas Clave del CRM -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 28px;">
@@ -2348,6 +2478,47 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
                     </a>
                   </div>
                 </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AUDITORÍA DE USUARIOS REGISTRADOS EN TELEGRAM (ensureUser) -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.35);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; display:flex; align-items:center; gap:8px;">
+            <span>📱</span> Usuarios Registrados en Telegram (Auditoría Bot • ${users.length})
+          </h2>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Usuarios que han iniciado sesión o interactuado con @${BOT_USERNAME} registrados automáticamente en la Base de Datos</span>
+        </div>
+        <span class="badge badge-purple">Trazabilidad en Tiempo Real</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ID Sistema</th>
+              <th>Telegram ID</th>
+              <th>Nombre de Usuario</th>
+              <th>Username</th>
+              <th>Rol</th>
+              <th>Estado Verificación</th>
+              <th>Última Actividad</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map((u: any) => `
+              <tr>
+                <td><code>${u.id}</code></td>
+                <td><strong style="color:#38bdf8;">${u.telegramId}</strong></td>
+                <td><strong style="color:#fff;">${u.firstName ?? 'Usuario'}</strong></td>
+                <td><span style="color:#a5b4fc;">${u.username ? '@' + u.username : 'Sin username'}</span></td>
+                <td><span class="badge ${u.rol === 'admin' ? 'badge-purple' : 'badge-info'}">${u.rol ?? 'usuario'}</span></td>
+                <td><span class="badge badge-success">● ${u.estadoVerificacion ?? 'verificado'}</span></td>
+                <td style="color:var(--text-dim); font-size:0.8rem;">${new Date(u.fechaUltimaActividad || Date.now()).toLocaleString('es-CO')}</td>
               </tr>
             `).join('')}
           </tbody>
