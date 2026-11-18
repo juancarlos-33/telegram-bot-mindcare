@@ -24,6 +24,7 @@ import {
   getAllTherapists,
   getTherapistById,
   getTherapistsBySpecialty,
+  getTherapistNameForSpecialty,
   createTherapist,
   toggleTherapistStatus,
   deleteTherapist,
@@ -1943,7 +1944,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <label for="specialty">Especialidad & Terapeuta Asignado</label>
             <select id="specialty" name="specialty" required>
               ${PSYCHOLOGY_SPECIALTIES.map(s => `
-                <option value="${s.name}">${s.icon} ${s.name} — ${s.therapist} (${s.office})</option>
+                <option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)} (${s.office})</option>
               `).join('')}
             </select>
           </div>
@@ -2691,27 +2692,54 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     </div>
 
     ${isStaff ? `
-      <!-- Métricas Exclusivas para Personal Clínico -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-bottom: 28px;">
-        <div class="card" style="padding: 20px; text-align: center;">
-          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
-          <div style="font-size: 2.2rem; font-weight: 800; color: #fff; margin: 8px 0;">${appointments.length}</div>
-          <span style="font-size: 0.75rem; color: #a5b4fc;">Registradas en MindCare</span>
+      <!-- Métricas Exclusivas para Personal Clínico con Filtrado Interactivo y Apertura de Detalle -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px;">
+        <!-- Card 1: Total Citas -->
+        <div class="card metric-interactive-card" onclick="filterCitasByStatus('TODAS')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.12); position:relative; background:linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver todas las citas registradas">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${appointments.length}</div>
+          <span style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">Registradas en MindCare</span>
+          <span class="badge" style="font-size:0.68rem; background:rgba(255,255,255,0.08); color:#cbd5e1; border:1px solid rgba(255,255,255,0.15);">Ver detalle 👁️</span>
         </div>
-        <div class="card" style="padding: 20px; text-align: center;">
-          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Confirmadas</span>
-          <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin: 8px 0;">${confirmed}</div>
-          <span style="font-size: 0.75rem; color: #34d399;">En agenda terapéutica</span>
+
+        <!-- Card 2: Confirmadas -->
+        <div class="card metric-interactive-card" onclick="filterCitasByStatus('Confirmada')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(16,185,129,0.35); position:relative; background:linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para filtrar solo citas confirmadas">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Confirmadas</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #34d399; margin: 6px 0;">${confirmed}</div>
+          <span style="font-size: 0.72rem; color: #34d399; display:block; margin-bottom:8px;">En agenda terapéutica</span>
+          <span class="badge badge-success" style="font-size:0.68rem;">Filtrar citas 🔍</span>
         </div>
-        <div class="card" style="padding: 20px; text-align: center;">
-          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Chequeos de Ánimo</span>
-          <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin: 8px 0;">${allMoods.length}</div>
-          <span style="font-size: 0.75rem; color: #bae6fd;">Diario emocional activo</span>
+
+        <!-- Card 3: Pendientes -->
+        <div class="card metric-interactive-card" onclick="filterCitasByStatus('Pendiente')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(245,158,11,0.35); position:relative; background:linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para filtrar solo citas pendientes">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pendientes</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #fbbf24; margin: 6px 0;">${pending}</div>
+          <span style="font-size: 0.72rem; color: #fbbf24; display:block; margin-bottom:8px;">Por confirmar / triaje</span>
+          <span class="badge badge-warning" style="font-size:0.68rem;">Filtrar citas 🔍</span>
         </div>
-        <div class="card" style="padding: 20px; text-align: center;">
-          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tests GAD-2</span>
-          <div style="font-size: 2.2rem; font-weight: 800; color: #a855f7; margin: 8px 0;">${allTests.length}</div>
-          <span style="font-size: 0.75rem; color: #d8b4fe;">Evaluaciones realizadas</span>
+
+        <!-- Card 4: Canceladas (Caja solicitada) -->
+        <div class="card metric-interactive-card" onclick="filterCitasByStatus('Cancelada')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(239,68,68,0.35); position:relative; background:linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver las citas canceladas">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Canceladas</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #f87171; margin: 6px 0;">${canceled}</div>
+          <span style="font-size: 0.72rem; color: #f87171; display:block; margin-bottom:8px;">Turnos cancelados / baja</span>
+          <span class="badge badge-danger" style="font-size:0.68rem;">Ver canceladas ✕</span>
+        </div>
+
+        <!-- Card 5: Chequeos de Ánimo -->
+        <div class="card metric-interactive-card" onclick="openMoodsModal()" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(56,189,248,0.35); position:relative; background:linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver el diario emocional y registro de ánimo">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Chequeos de Ánimo</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #38bdf8; margin: 6px 0;">${allMoods.length}</div>
+          <span style="font-size: 0.72rem; color: #bae6fd; display:block; margin-bottom:8px;">Diario emocional activo</span>
+          <span class="badge badge-info" style="font-size:0.68rem;">Ver registros 👁️</span>
+        </div>
+
+        <!-- Card 6: Tests GAD-2 -->
+        <div class="card metric-interactive-card" onclick="openTestsModal()" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(168,85,247,0.35); position:relative; background:linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver los resultados de los tests de tamizaje GAD-2">
+          <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tests GAD-2</span>
+          <div style="font-size: 2.1rem; font-weight: 800; color: #a855f7; margin: 6px 0;">${allTests.length}</div>
+          <span style="font-size: 0.72rem; color: #d8b4fe; display:block; margin-bottom:8px;">Evaluaciones clínicas</span>
+          <span class="badge" style="font-size:0.68rem; background:rgba(168,85,247,0.18); color:#d8b4fe; border:1px solid rgba(168,85,247,0.35);">Ver resultados 📋</span>
         </div>
       </div>
     ` : ''}
@@ -2737,7 +2765,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
             <select name="specialty" required style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
-              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${s.therapist} (${s.office})</option>`).join('')}
+              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)} (${s.office})</option>`).join('')}
             </select>
           </div>
           <div style="margin-bottom: 14px;">
@@ -2781,7 +2809,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
                 <span style="font-size:1.3rem;">${s.icon}</span>
                 <div>
                   <div style="font-weight:700; color:#fff; font-size:0.9rem;">${s.name}</div>
-                  <div style="color:var(--text-dim); font-size:0.78rem;">${s.therapist} · <span style="color:#93c5fd;">${s.office}</span></div>
+                  <div style="color:var(--text-dim); font-size:0.78rem;">${getTherapistNameForSpecialty(s.name)} · <span style="color:#93c5fd;">${s.office}</span></div>
                 </div>
               </div>
               <div style="font-size:0.78rem; color:#a5b4fc; padding-left:38px;">📌 ${s.description}</div>
@@ -2793,14 +2821,30 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
     ${isStaff ? `
       <!-- TABLA PRIVADA DE CITAS (SOLO VISIBLE PARA PERSONAL CLÍNICO AUTORIZADO) -->
-      <div class="card" style="margin-bottom: 28px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+      <div class="card" id="agenda-clinica-card" style="margin-bottom: 28px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
           <div>
-            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff;">📋 Agenda Clínica Confidencial</h2>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff; display:flex; align-items:center; gap:8px;">
+              📋 Agenda Clínica Confidencial
+            </h2>
             <span style="color:var(--text-dim); font-size:0.85rem;">Historial médico sincronizado bajo Ley 1090 de 2006</span>
           </div>
-          <span class="badge badge-info" style="font-size:0.8rem;">${appointments.length} Citas en Total</span>
+          <span class="badge badge-info" id="agenda-total-badge" style="font-size:0.8rem;">${appointments.length} Citas en Total</span>
         </div>
+
+        <!-- Filtros Rápidos por Estado -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:12px; border:1px solid var(--border-subtle);">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;" id="table-filter-pills">
+            <button type="button" class="btn btn-secondary filter-pill active" onclick="filterCitasByStatus('TODAS')" data-filter="TODAS" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; background:rgba(255,255,255,0.15);">Todas (${appointments.length})</button>
+            <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Confirmada')" data-filter="Confirmada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#34d399;">Confirmadas (${confirmed})</button>
+            <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Pendiente')" data-filter="Pendiente" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#fbbf24;">Pendientes (${pending})</button>
+            <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Cancelada')" data-filter="Cancelada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#f87171;">Canceladas (${canceled})</button>
+          </div>
+          <div style="color:var(--text-dim); font-size:0.75rem;">
+            💡 Haz clic en cualquier botón de estado o fila para ver el detalle
+          </div>
+        </div>
+
         <div class="table-responsive">
           <table>
             <thead>
@@ -2816,8 +2860,20 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
               </tr>
             </thead>
             <tbody>
-              ${appointments.map(a => `
-                <tr>
+              ${appointments.map(a => {
+                const serialized = JSON.stringify({
+                  id: a.id,
+                  patientName: a.patientName,
+                  documentNumber: a.documentNumber,
+                  specialty: a.specialty,
+                  therapist: a.therapist,
+                  dateTime: a.dateTime,
+                  scheduledAt: a.scheduledAt,
+                  motive: a.motive,
+                  status: a.status
+                }).replace(/'/g, "&apos;");
+                return `
+                <tr data-status="${a.status}" style="cursor:pointer;" onclick='openCitaDetailModal(${serialized})' title="Haz clic para ver el detalle de esta cita">
                   <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
                   <td>
                     <strong style="color:#fff;">${a.patientName}</strong>
@@ -2829,32 +2885,33 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
                     <strong style="color:#38bdf8;">${a.dateTime}</strong>
                     ${a.scheduledAt ? `<div style="font-size:0.72rem; color:var(--text-dim);">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
                   </td>
-                  <td style="color:var(--text-muted); font-size:0.82rem;">${a.motive ?? '—'}</td>
+                  <td style="color:var(--text-muted); font-size:0.82rem; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.motive ?? '—'}</td>
                   <td>
                     <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
                       ● ${a.status}
                     </span>
                   </td>
-                  <td>
+                  <td onclick="event.stopPropagation();">
                     <div style="display:flex; gap:6px;">
+                      <button type="button" class="btn btn-secondary" onclick='openCitaDetailModal(${serialized})' style="padding:4px 8px; font-size:0.75rem; color:#38bdf8;" title="Ver detalle completo">👁️ Detalle</button>
                       ${a.status !== 'Confirmada' ? `
                         <form action="/api/citas/estado" method="POST" style="margin:0;">
                           <input type="hidden" name="id" value="${a.id}">
                           <input type="hidden" name="status" value="Confirmada">
-                          <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;">Confirmar ✓</button>
+                          <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;" title="Confirmar turno">✓</button>
                         </form>
                       ` : ''}
                       ${a.status !== 'Cancelada' ? `
                         <form action="/api/citas/estado" method="POST" style="margin:0;">
                           <input type="hidden" name="id" value="${a.id}">
                           <input type="hidden" name="status" value="Cancelada">
-                          <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;">Cancelar ✕</button>
+                          <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" title="Cancelar turno">✕</button>
                         </form>
                       ` : ''}
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -2915,18 +2972,216 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
             `).join('')}
           </div>
         </div>
-
       </div>
     ` : ''}
 
+    <!-- MODAL DETALLE DE CITA CLÍNICA -->
+    <div id="modal-cita-detail" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); z-index:999999; align-items:center; justify-content:center; padding:16px;">
+      <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.4); border-radius:18px; max-width:550px; width:100%; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+          <div>
+            <h3 style="color:#fff; font-size:1.25rem; font-weight:700; margin:0;">📋 Detalle de Consulta Médica</h3>
+            <span style="font-size:0.78rem; color:#38bdf8;" id="mcd-id">ID: psi-000</span>
+          </div>
+          <button type="button" onclick="closeCitaDetailModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer; padding:4px;">✕</button>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Paciente</span>
+            <div style="font-weight:700; color:#fff; font-size:0.95rem; margin-top:2px;" id="mcd-patient">—</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Documento / C.C.</span>
+            <div style="font-weight:700; color:#38bdf8; font-family:'JetBrains Mono',monospace; margin-top:2px;" id="mcd-doc">—</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialidad</span>
+            <div style="font-weight:600; color:#a5b4fc; margin-top:2px;" id="mcd-specialty">—</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialista</span>
+            <div style="font-weight:600; color:#fff; margin-top:2px;" id="mcd-therapist">—</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.25); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+          <span style="font-size:0.72rem; color:#38bdf8; text-transform:uppercase; font-weight:700;">Fecha y Horario</span>
+          <div style="font-size:1.05rem; font-weight:800; color:#fff; margin-top:2px;" id="mcd-date">—</div>
+          <div style="font-size:0.78rem; color:#94a3b8; margin-top:2px;" id="mcd-scheduled">—</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03); padding:12px 14px; border-radius:10px; margin-bottom:18px;">
+          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Motivo de Consulta (Confidencial)</span>
+          <div style="color:#e2e8f0; font-size:0.88rem; margin-top:4px; line-height:1.4;" id="mcd-motive">—</div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div id="mcd-status-badge">● Pendiente</div>
+          <div style="display:flex; gap:8px;" id="mcd-actions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL CHEQUEOS DE ÁNIMO COMPLETO -->
+    <div id="modal-moods-detail" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); z-index:999999; align-items:center; justify-content:center; padding:16px;">
+      <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.4); border-radius:18px; max-width:650px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+          <div>
+            <h3 style="color:#fff; font-size:1.25rem; font-weight:700; margin:0;">🧠 Diario Emocional & Chequeos de Ánimo</h3>
+            <span style="font-size:0.78rem; color:#38bdf8;">Registros completos de estado emocional vía Telegram (/diario)</span>
+          </div>
+          <button type="button" onclick="closeMoodsModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">✕</button>
+        </div>
+        <div style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+          ${allMoods.length === 0 ? '<p style="color:var(--text-dim); text-align:center; padding:30px 0;">No hay chequeos de ánimo registrados todavía.</p>' : ''}
+          ${allMoods.map(m => `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <span style="font-size:1.8rem;">${m.emoji}</span>
+                <div>
+                  <div style="font-weight:700; color:#fff; font-size:0.95rem;">${m.userName} — <span style="color:#38bdf8;">${m.mood}</span></div>
+                  <div style="color:#94a3b8; font-size:0.8rem; margin-top:2px;">${m.note || 'Sin nota adicional'}</div>
+                </div>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-dim);">${new Date(m.createdAt).toLocaleString('es-CO')}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top:14px; text-align:right;">
+          <button type="button" onclick="closeMoodsModal()" class="btn btn-secondary" style="padding:6px 16px;">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL TESTS GAD-2 COMPLETO -->
+    <div id="modal-tests-detail" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); z-index:999999; align-items:center; justify-content:center; padding:16px;">
+      <div style="background:#0f172a; border:1px solid rgba(168,85,247,0.4); border-radius:18px; max-width:650px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+          <div>
+            <h3 style="color:#fff; font-size:1.25rem; font-weight:700; margin:0;">📋 Evaluaciones y Tamizajes GAD-2</h3>
+            <span style="font-size:0.78rem; color:#d8b4fe;">Puntajes clínicos de ansiedad y tamizajes realizados vía Telegram (/test)</span>
+          </div>
+          <button type="button" onclick="closeTestsModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">✕</button>
+        </div>
+        <div style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+          ${allTests.length === 0 ? '<p style="color:var(--text-dim); text-align:center; padding:30px 0;">No hay tests completados todavía. Usa /test en Telegram.</p>' : ''}
+          ${allTests.map(t => `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(168,85,247,0.25); border-radius:12px; padding:12px 16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <strong style="color:#fff; font-size:0.95rem;">${t.userName}</strong>
+                <span class="badge ${t.score >= 4 ? 'badge-danger' : t.score >= 2 ? 'badge-warning' : 'badge-success'}" style="font-size:0.78rem;">
+                  ${t.score}/${t.maxScore} pts · ${t.severity}
+                </span>
+              </div>
+              <div style="font-size:0.82rem; color:#cbd5e1; margin-bottom:4px;">🩺 ${t.recommendation}</div>
+              <div style="font-size:0.72rem; color:var(--text-dim);">${new Date(t.createdAt).toLocaleString('es-CO')}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top:14px; text-align:right;">
+          <button type="button" onclick="closeTestsModal()" class="btn btn-secondary" style="padding:6px 16px;">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
     <script>
-      setInterval(function() {
-        const activeEl = document.activeElement;
-        const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
-        if (!isTyping) {
-          window.location.reload();
+      function filterCitasByStatus(status) {
+        const rows = document.querySelectorAll('#agenda-clinica-card tbody tr');
+        const pills = document.querySelectorAll('#table-filter-pills .filter-pill');
+        
+        pills.forEach(function(p) {
+          if (p.getAttribute('data-filter') === status) {
+            p.classList.add('active');
+            p.style.background = 'rgba(255,255,255,0.2)';
+            p.style.borderColor = 'rgba(56,189,248,0.6)';
+          } else {
+            p.classList.remove('active');
+            p.style.background = '';
+            p.style.borderColor = '';
+          }
+        });
+
+        rows.forEach(function(r) {
+          const rowStatus = r.getAttribute('data-status');
+          if (status === 'TODAS' || rowStatus === status) {
+            r.style.display = '';
+          } else {
+            r.style.display = 'none';
+          }
+        });
+
+        const card = document.getElementById('agenda-clinica-card');
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          card.style.borderColor = 'rgba(56,189,248,0.6)';
+          card.style.boxShadow = '0 0 20px rgba(56,189,248,0.25)';
+          setTimeout(function() {
+            card.style.borderColor = '';
+            card.style.boxShadow = '';
+          }, 1500);
         }
-      }, 30000);
+      }
+
+      function openCitaDetailModal(cita) {
+        const modal = document.getElementById('modal-cita-detail');
+        if (!modal || !cita) return;
+        document.getElementById('mcd-id').textContent = 'ID: ' + cita.id;
+        document.getElementById('mcd-patient').textContent = cita.patientName || 'Paciente';
+        document.getElementById('mcd-doc').textContent = cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado';
+        document.getElementById('mcd-specialty').textContent = cita.specialty || 'Psicología';
+        document.getElementById('mcd-therapist').textContent = cita.therapist || 'Especialista';
+        document.getElementById('mcd-date').textContent = cita.dateTime || '';
+        document.getElementById('mcd-scheduled').textContent = cita.scheduledAt ? 'Hora exacta en Colombia: ' + new Date(cita.scheduledAt).toLocaleString('es-CO') : '';
+        document.getElementById('mcd-motive').textContent = cita.motive || 'Sin motivo específico registrado';
+        
+        const badge = document.getElementById('mcd-status-badge');
+        badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
+        badge.textContent = '● ' + cita.status;
+
+        const actions = document.getElementById('mcd-actions');
+        actions.innerHTML = '';
+        if (cita.status !== 'Confirmada') {
+          actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+        }
+        if (cita.status !== 'Cancelada') {
+          actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
+        }
+        modal.style.display = 'flex';
+      }
+
+      function closeCitaDetailModal() {
+        const modal = document.getElementById('modal-cita-detail');
+        if (modal) modal.style.display = 'none';
+      }
+
+      function openMoodsModal() {
+        const modal = document.getElementById('modal-moods-detail');
+        if (modal) modal.style.display = 'flex';
+      }
+
+      function closeMoodsModal() {
+        const modal = document.getElementById('modal-moods-detail');
+        if (modal) modal.style.display = 'none';
+      }
+
+      function openTestsModal() {
+        const modal = document.getElementById('modal-tests-detail');
+        if (modal) modal.style.display = 'flex';
+      }
+
+      function closeTestsModal() {
+        const modal = document.getElementById('modal-tests-detail');
+        if (modal) modal.style.display = 'none';
+      }
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeCitaDetailModal();
+          closeMoodsModal();
+          closeTestsModal();
+        }
+      });
     </script>
   `;
 
@@ -3892,7 +4147,7 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
           <div>
             <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Especialidad Requerida:</label>
             <select name="specialty" required style="width:100%; padding:10px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:8px; color:#fff; font-size:0.85rem;">
-              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${s.therapist}</option>`).join('')}
+              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)}</option>`).join('')}
             </select>
           </div>
           <div>

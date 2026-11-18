@@ -370,19 +370,33 @@ export interface PsyTherapist {
 }
 
 const INITIAL_PSY_SPECIALTIES: PsySpecialty[] = [
-  { id: "clinica", name: "Psicología Clínica Adultos", office: "Consultorio 201", waitTime: "10-15 min", icon: "🧠", description: "Ansiedad, depresión, estrés, fobias, TOC" },
-  { id: "infantil", name: "Psicología Infantil y Adolescente", office: "Consultorio 202", waitTime: "15 min", icon: "👦", description: "Dificultades conductuales, TDA/H, bullying, aprendizaje" },
-  { id: "pareja", name: "Terapia de Pareja y Familia", office: "Consultorio 203", waitTime: "15-20 min", icon: "💑", description: "Comunicación, conflictos, divorcio, duelo familiar" },
-  { id: "neuro", name: "Neuropsicología", office: "Consultorio 204", waitTime: "20-30 min", icon: "🔬", description: "Evaluación cognitiva, daño cerebral, Alzheimer, TDAH adulto" },
-  { id: "duelo", name: "Psicología del Duelo y Crisis", office: "Consultorio 205", waitTime: "10 min", icon: "🌿", description: "Pérdidas, traumas, crisis vitales, acompañamiento" },
-  { id: "deporte", name: "Psicología del Deporte", office: "Consultorio 206", waitTime: "15 min", icon: "🏅", description: "Rendimiento, motivación, ansiedad competitiva" }
+  { id: "clinica", name: "Psicología Clínica Adultos", therapist: "Dra. Valentina Ríos", office: "Consultorio 201", waitTime: "10-15 min", icon: "🧠", description: "Ansiedad, depresión, estrés, fobias, TOC" },
+  { id: "infantil", name: "Psicología Infantil y Adolescente", therapist: "Dra. Sofía Mendoza", office: "Consultorio 202", waitTime: "15 min", icon: "👦", description: "Dificultades conductuales, TDA/H, bullying, aprendizaje" },
+  { id: "pareja", name: "Terapia de Pareja y Familia", therapist: "Dr. Sebastián Torres", office: "Consultorio 203", waitTime: "15-20 min", icon: "💑", description: "Comunicación, conflictos, divorcio, duelo familiar" },
+  { id: "neuro", name: "Neuropsicología", therapist: "Dr. Andrés Castillo", office: "Consultorio 204", waitTime: "20-30 min", icon: "🔬", description: "Evaluación cognitiva, daño cerebral, Alzheimer, TDAH adulto" },
+  { id: "duelo", name: "Psicología del Duelo y Crisis", therapist: "Dra. Luciana Vega", office: "Consultorio 205", waitTime: "10 min", icon: "🌿", description: "Pérdidas, traumas, crisis vitales, acompañamiento" },
+  { id: "deporte", name: "Psicología del Deporte", therapist: "Dr. Felipe Ramos", office: "Consultorio 206", waitTime: "15 min", icon: "🏅", description: "Rendimiento, motivación, ansiedad competitiva" }
 ];
 
-const psySpecialties: PsySpecialty[] = loadJsonFile<any[]>("specialties.json", INITIAL_PSY_SPECIALTIES);
+const psySpecialties: PsySpecialty[] = loadJsonFile<any[]>("specialties.json", INITIAL_PSY_SPECIALTIES).map((s: any) => {
+  const match = INITIAL_PSY_SPECIALTIES.find(ds => ds.name.toLowerCase() === s.name.toLowerCase());
+  return {
+    ...s,
+    therapist: s.therapist || match?.therapist || "Especialista MindCare"
+  };
+});
 export const PSYCHOLOGY_SPECIALTIES = psySpecialties;
 
 export function getAllSpecialties(): PsySpecialty[] {
   return psySpecialties;
+}
+
+export function getTherapistNameForSpecialty(specialtyName: string): string {
+  const th = psyTherapists.find(t => t.specialty.toLowerCase() === specialtyName.toLowerCase() && t.active) ||
+             psyTherapists.find(t => t.specialty.toLowerCase() === specialtyName.toLowerCase());
+  if (th) return th.name;
+  const spec = psySpecialties.find(s => s.name.toLowerCase() === specialtyName.toLowerCase());
+  return spec?.therapist || "Especialista MindCare";
 }
 
 export function addSpecialty(specialty: PsySpecialty): PsySpecialty {
