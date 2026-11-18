@@ -817,12 +817,250 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
 
+    /* =========================================================================
+       RESPONSIVE DESIGN SYSTEM — ULTRA-COMPATIBLE MOBILE (ALL VIEWS)
+       ========================================================================= */
+
+    /* Regla base anti-desborde para todo dispositivo móvil */
+    html, body {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
     @media (max-width: 900px) {
-      .navbar { flex-direction: column; gap: 14px; }
-      .nav-links { flex-wrap: wrap; justify-content: center; }
-      .grid-2 { grid-template-columns: 1fr; }
-      .hero-banner { padding: 26px 22px; }
-      .hero-banner h1 { font-size: 1.8rem; }
+      .navbar {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px 14px;
+      }
+      .nav-links {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr !important;
+        gap: 18px !important;
+      }
+      .hero-banner {
+        padding: 28px 20px !important;
+      }
+      .hero-banner h1 {
+        font-size: 1.85rem !important;
+      }
+      main {
+        padding: 24px 16px 50px !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      /* Encabezado y Barra de Navegación */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        padding: 0;
+      }
+      .navbar {
+        padding: 10px 12px;
+        gap: 10px;
+      }
+      .brand {
+        gap: 10px;
+      }
+      .brand-icon {
+        width: 36px;
+        height: 36px;
+      }
+      .brand-icon svg {
+        width: 20px;
+        height: 20px;
+      }
+      .brand-text h1 {
+        font-size: 1.05rem;
+      }
+      .brand-text span {
+        font-size: 0.65rem;
+      }
+      .nav-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+      }
+      .nav-link {
+        font-size: 0.78rem !important;
+        padding: 6px 9px !important;
+        gap: 5px;
+      }
+      .nav-btn-tg {
+        font-size: 0.78rem !important;
+        padding: 6px 12px !important;
+      }
+      .admin-pill {
+        font-size: 0.75rem !important;
+        padding: 4px 10px !important;
+      }
+
+      /* Contenedor principal sin desbordes */
+      main {
+        padding: 14px 10px 40px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Tarjetas y Contenedores */
+      .card {
+        padding: 18px 14px !important;
+        border-radius: 16px !important;
+        margin-bottom: 16px !important;
+      }
+      .card-title {
+        font-size: 1.1rem !important;
+      }
+
+      /* Títulos y textos principales */
+      h1 {
+        font-size: 1.55rem !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.015em !important;
+      }
+      h2 {
+        font-size: 1.35rem !important;
+      }
+      h3 {
+        font-size: 1.05rem !important;
+      }
+      p {
+        font-size: 0.88rem !important;
+        line-height: 1.5 !important;
+      }
+
+      /* Botones amigables al tacto */
+      .btn {
+        padding: 10px 16px !important;
+        font-size: 0.88rem !important;
+      }
+
+      /* Contenedores de botones apilados en móvil */
+      .hero-banner [style*="display: flex"],
+      .card [style*="display: flex; gap: 12px"],
+      .card [style*="display:flex; gap:12px"],
+      [style*="display:flex; justify-content:space-between; align-items:center"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+
+      .card [style*="display: flex; gap: 12px"] a.btn,
+      .card [style*="display:flex; gap:12px"] a.btn,
+      .card [style*="display: flex; gap: 10px"] a.btn,
+      .card [style*="display:flex; gap:10px"] a.btn {
+        width: 100% !important;
+        text-align: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Formularios e inputs (evitar auto-zoom en iOS Safari con font-size: 16px) */
+      input[type="text"],
+      input[type="date"],
+      input[type="number"],
+      input[type="password"],
+      input[type="email"],
+      select,
+      textarea {
+        font-size: 16px !important;
+        padding: 12px 14px !important;
+        border-radius: 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .input-with-icon {
+        padding-left: 42px !important;
+      }
+
+      /* Tablas con scroll horizontal suave en móvil */
+      .table-responsive, [style*="overflow-x: auto"], table {
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        display: block !important;
+      }
+      table {
+        min-width: 520px !important;
+        font-size: 0.82rem !important;
+      }
+      th, td {
+        padding: 9px 8px !important;
+        white-space: nowrap !important;
+      }
+
+      /* Modales de detalle adaptativos */
+      [id^="modal-"] > div {
+        width: 95% !important;
+        max-width: 95% !important;
+        margin: 16px auto !important;
+        padding: 18px 14px !important;
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        border-radius: 16px !important;
+      }
+
+      /* Grillas de estadísticas y métricas KPI */
+      [style*="grid-template-columns: repeat(auto-fit, minmax"] {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+      }
+
+      /* Barra de estado staff superior */
+      [style*="background: linear-gradient(90deg, rgba(99, 102, 241"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 12px 14px !important;
+      }
+      [style*="background: linear-gradient(90deg, rgba(99, 102, 241"] a.btn {
+        width: 100% !important;
+        text-align: center !important;
+      }
+
+      /* Pie de página */
+      footer {
+        padding: 22px 14px 34px !important;
+      }
+      footer > div {
+        flex-direction: column !important;
+        gap: 10px !important;
+        text-align: center !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .navbar {
+        padding: 8px 10px;
+      }
+      .brand-text h1 {
+        font-size: 1rem;
+      }
+      .nav-links {
+        gap: 3px;
+      }
+      .nav-link {
+        font-size: 0.74rem !important;
+        padding: 5px 7px !important;
+      }
+      h1 {
+        font-size: 1.38rem !important;
+      }
+      .card {
+        padding: 16px 12px !important;
+      }
+      [style*="grid-template-columns: repeat(auto-fit, minmax"] {
+        grid-template-columns: 1fr !important;
+      }
     }
   </style>
 </head>
