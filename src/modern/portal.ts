@@ -930,6 +930,234 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         showGlobalLoader('Cargando ' + (a.textContent || '').trim().replace(/^[^\wáéíóúÁÉÍÓÚ]+/, '') + '...');
       }
     });
+
+    // =========================================================================
+    // VALIDACIONES Y MICRO-INTERACCIONES INTERACTIVAS MINDCARE (ESTÁNDAR WEB)
+    // =========================================================================
+
+    // 1. Validador interactivo de Cédula / Documento de Identidad en vivo
+    function initDocumentValidation() {
+      const inputs = document.querySelectorAll('input[name="documentNumber"], input[name="consultar_doc"], input[id="documentNumber"]');
+      inputs.forEach(function(input) {
+        input.setAttribute('inputmode', 'numeric');
+        input.setAttribute('maxlength', '12');
+
+        let feedback = input.parentElement.querySelector('.doc-feedback-badge');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'doc-feedback-badge';
+          feedback.style.fontSize = '0.74rem';
+          feedback.style.marginTop = '5px';
+          feedback.style.fontWeight = '600';
+          feedback.style.transition = 'all 0.2s ease';
+          input.parentElement.appendChild(feedback);
+        }
+
+        input.addEventListener('input', function() {
+          const val = this.value.replace(/\D/g, '');
+          this.value = val;
+
+          if (!val) {
+            feedback.innerHTML = '';
+            input.style.borderColor = '';
+            return;
+          }
+
+          if (val.length < 6) {
+            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Cédula incompleta (' + val.length + '/6 dígitos mínimos)</span>';
+            input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
+          } else if (val.length >= 6 && val.split('').every(function(c){ return c === val[0]; })) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ No se permiten dígitos idénticos repetidos (' + val + ')</span>';
+            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          } else if (['12345', '123456', '1234567', '12345678', '0123456789', '987654321'].includes(val)) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ Secuencia de prueba inválida</span>';
+            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          } else {
+            feedback.innerHTML = '<span style="color:#34d399;">✅ Documento válido para expediente clínico</span>';
+            input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+          }
+        });
+      });
+    }
+
+    // 2. Validador interactivo de Nombre Completo (Mínimo 2 palabras)
+    function initNameValidation() {
+      const nameInputs = document.querySelectorAll('input[name="patientName"], input[name="name"], input[id="patientName"], input[id="name"]');
+      nameInputs.forEach(function(input) {
+        let feedback = input.parentElement.querySelector('.name-feedback-badge');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'name-feedback-badge';
+          feedback.style.fontSize = '0.74rem';
+          feedback.style.marginTop = '5px';
+          feedback.style.fontWeight = '600';
+          feedback.style.transition = 'all 0.2s ease';
+          input.parentElement.appendChild(feedback);
+        }
+
+        input.addEventListener('input', function() {
+          const val = this.value.trim();
+          if (!val) {
+            feedback.innerHTML = '';
+            input.style.borderColor = '';
+            return;
+          }
+          if (/\d/.test(val)) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ El nombre no puede contener números</span>';
+            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          } else if (val.split(/\s+/).length < 2 || val.length < 5) {
+            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Ingresa nombre y apellido completos (ej: Juan Gutiérrez)</span>';
+            input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
+          } else {
+            feedback.innerHTML = '<span style="color:#34d399;">✅ Nombre válido</span>';
+            input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+          }
+        });
+      });
+    }
+
+    // 3. Validador interactivo de Fecha y Horario en vivo
+    function initDateValidation() {
+      const dateInputs = document.querySelectorAll('input[name="dateTime"]');
+      dateInputs.forEach(function(input) {
+        let feedback = input.parentElement.querySelector('.date-feedback-badge');
+        if (!feedback) {
+          feedback = document.createElement('div');
+          feedback.className = 'date-feedback-badge';
+          feedback.style.fontSize = '0.74rem';
+          feedback.style.marginTop = '5px';
+          feedback.style.fontWeight = '600';
+          feedback.style.transition = 'all 0.2s ease';
+          input.parentElement.appendChild(feedback);
+        }
+
+        input.addEventListener('input', function() {
+          const val = this.value.trim().toLowerCase();
+          if (!val) {
+            feedback.innerHTML = '';
+            input.style.borderColor = '';
+            return;
+          }
+          if (/domingo|sunday/i.test(val)) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ MindCare no atiende domingos (Horario: Lun-Sáb 7 AM - 8 PM)</span>';
+            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          } else if (/ayer|antier|anteayer|past/i.test(val)) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ No es posible agendar citas en fechas pasadas</span>';
+            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+          } else if (/mañana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|hoy|\d{4}-\d{2}-\d{2}/i.test(val)) {
+            feedback.innerHTML = '<span style="color:#34d399;">✅ Horario en franja clínica válida</span>';
+            input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+          } else {
+            feedback.innerHTML = '<span style="color:#fbbf24;">ℹ️ Especifica día y hora (ej: "Viernes 3:00 PM" o "Mañana 10 AM")</span>';
+            input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
+          }
+        });
+      });
+    }
+
+    // 4. Contador de Caracteres en vivo para Motivo de Consulta y Notas SOAP
+    function initTextareaCounters() {
+      const textareas = document.querySelectorAll('textarea[name="motive"], textarea[name="note"], textarea[id="motive"]');
+      textareas.forEach(function(ta) {
+        let counter = ta.parentElement.querySelector('.textarea-counter');
+        if (!counter) {
+          counter = document.createElement('div');
+          counter.className = 'textarea-counter';
+          counter.style.display = 'flex';
+          counter.style.justifyContent = 'space-between';
+          counter.style.fontSize = '0.73rem';
+          counter.style.marginTop = '4px';
+          counter.style.color = '#94a3b8';
+          counter.innerHTML = '<span class="counter-hint">Mínimo 8 caracteres</span><span class="counter-num">0 / 400</span>';
+          ta.parentElement.appendChild(counter);
+        }
+
+        ta.addEventListener('input', function() {
+          const len = this.value.length;
+          const hint = counter.querySelector('.counter-hint');
+          const num = counter.querySelector('.counter-num');
+          if (num) num.textContent = len + ' / 400';
+          if (hint) {
+            if (len === 0) {
+              hint.innerHTML = '<span style="color:#94a3b8;">Mínimo 8 caracteres</span>';
+            } else if (len < 8) {
+              hint.innerHTML = '<span style="color:#fbbf24;">⚠️ Agrega más detalles para el triaje (' + len + '/8)</span>';
+            } else {
+              hint.innerHTML = '<span style="color:#34d399;">✅ Motivo clínico adecuado</span>';
+            }
+          }
+        });
+      });
+    }
+
+    // 5. Función de botones de selección rápida de horarios
+    function selectQuickSlot(btn, text) {
+      const form = btn.closest('form');
+      if (!form) return;
+      const input = form.querySelector('input[name="dateTime"]');
+      if (input) {
+        input.value = text;
+        input.dispatchEvent(new Event('input'));
+        input.focus();
+      }
+      form.querySelectorAll('.quick-slot-btn').forEach(function(b) {
+        b.style.borderColor = 'rgba(255,255,255,0.1)';
+        b.style.background = 'rgba(255,255,255,0.04)';
+      });
+      btn.style.borderColor = 'rgba(14, 165, 233, 0.8)';
+      btn.style.background = 'rgba(14, 165, 233, 0.2)';
+    }
+
+    // 6. Formateo automático de Tarjeta Profesional Colpsic en /especialistas
+    function initLicenseFormatting() {
+      const lic = document.getElementById('licenseNumber');
+      if (lic) {
+        lic.addEventListener('blur', function() {
+          const raw = this.value.trim();
+          if (raw && /^\d+$/.test(raw)) {
+            this.value = 'T.P. ' + Number(raw).toLocaleString('es-CO') + ' Colpsic';
+          }
+        });
+      }
+    }
+
+    // 7. Bloqueo de doble envío y estados de carga en formularios clínicos
+    function initFormSubmitLock() {
+      const forms = document.querySelectorAll('form[action="/api/citas"], form[action="/api/especialistas/nuevo"], form[action="/api/crm/nota"]');
+      forms.forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+          const btn = form.querySelector('button[type="submit"]');
+          if (!btn) return;
+          if (btn.dataset.submitting === 'true') {
+            e.preventDefault();
+            return false;
+          }
+          btn.dataset.submitting = 'true';
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.75';
+
+          btn.innerHTML = '<span class="spinner-inline"></span> Procesando solicitud...';
+
+          if (form.getAttribute('action') === '/api/citas') {
+            showGlobalLoader('Verificando matriz anti-colisión y reservando cita...');
+          } else if (form.getAttribute('action') === '/api/especialistas/nuevo') {
+            showGlobalLoader('Verificando matrícula Colpsic y dando de alta especialista...');
+          } else {
+            showGlobalLoader('Cifrando y registrando nota en expediente SOAP...');
+          }
+        });
+      });
+    }
+
+    // Inicializar todos los validadores interactivos al cargar el DOM
+    document.addEventListener('DOMContentLoaded', function() {
+      initDocumentValidation();
+      initNameValidation();
+      initDateValidation();
+      initTextareaCounters();
+      initLicenseFormatting();
+      initFormSubmitLock();
+    });
   </script>
 </body>
 </html>`;
@@ -1561,6 +1789,12 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <div class="input-wrapper">
               <span class="input-icon">⏰</span>
               <input type="text" id="dateTime" name="dateTime" class="input-with-icon" placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" required>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Mañana 10:00 AM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 3:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Mañana 3:00 PM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Pasado Mañana 10 AM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 4:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Pasado Mañana 4 PM</button>
             </div>
           </div>
           <div class="form-group">
@@ -2288,6 +2522,12 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Fecha y Horario Deseado:</label>
             <input type="text" name="dateTime" required placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Mañana 10:00 AM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 3:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Mañana 3:00 PM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Pasado Mañana 10 AM</button>
+              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 4:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Pasado Mañana 4 PM</button>
+            </div>
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Motivo de Consulta (Confidencial):</label>
