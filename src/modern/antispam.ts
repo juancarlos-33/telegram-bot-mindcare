@@ -5,19 +5,23 @@ const userLastMessage = new Map<number, number>();
 
 export function checkSpam(ctx: Context): boolean {
   if (!ctx.from) return false;
-  
+
+  // En chats privados (1 a 1 entre el paciente y el bot), NUNCA bloquear al usuario por escribir rápido
+  // Los usuarios suelen enviar mensajes cortos o correcciones en rápida sucesión.
+  if (ctx.chat?.type === "private") {
+    return false;
+  }
+
   const now = Date.now();
   const userId = ctx.from.id;
   const lastMsgTime = userLastMessage.get(userId);
 
-  // Si el usuario envió un mensaje hace menos de 2000 ms (2 segundos), lo consideramos spam
-  if (lastMsgTime && (now - lastMsgTime < 1500)) {
-    // Actualizamos de todos modos para que siga bloqueado si sigue insistiendo
-    userLastMessage.set(userId, now);
-    return true; // Es spam
+  // En grupos públicos: Si el usuario envió un mensaje hace menos de 800 ms, evitar flood masivo
+  if (lastMsgTime && (now - lastMsgTime < 800)) {
+    return true; // Es flood en grupo
   }
 
-  // Si pasó el filtro, guardamos el tiempo actual y devolvemos false (no es spam)
+  // Guardamos el tiempo actual sólo en mensajes válidos
   userLastMessage.set(userId, now);
   return false;
 }

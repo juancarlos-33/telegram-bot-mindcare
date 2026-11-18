@@ -2066,9 +2066,9 @@ bot.on("text", async (ctx) => {
 
   // Opción de cancelar o volver en cualquier momento por texto
   if (bookingState.step && bookingState.step !== "idle") {
-    if (lowerText === "cancelar" || text === "/cancelar" || lowerText === "menu" || lowerText === "menú" || text === "/menu" || text === "/start") {
+    if (lowerText === "cancelar" || text === "/cancelar" || lowerText === "menu" || lowerText === "menú" || text === "/menu" || text === "/start" || lowerText === "reiniciar" || text === "/reiniciar" || lowerText === "salir" || text === "/salir" || lowerText === "inicio") {
       clearBookingState(userId);
-      await ctx.reply("❌ Agendamiento cancelado. Puedes escribir /menu para ver las opciones disponibles o /cita para agendar cuando quieras. 💙");
+      await ctx.reply("❌ Agendamiento cancelado / reiniciado. Puedes escribir /menu para ver las opciones disponibles o /cita para agendar cuando quieras. 💙");
       return;
     }
 
@@ -2132,32 +2132,44 @@ bot.on("text", async (ctx) => {
     const lowerName = cleanName.toLowerCase();
 
     if (isGibberishOrGarbage(cleanName)) {
-      await ctx.reply("⚠️ El nombre ingresado contiene caracteres repetidos o símbolos sin sentido. Por favor escribe tu nombre y apellido reales 😊:");
+      await ctx.reply("⚠️ El nombre ingresado contiene caracteres repetidos o símbolos sin sentido. Por favor escribe tu nombre y apellido reales 😊:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
     if (PROFANITY_PATTERN.test(cleanName)) {
-      await ctx.reply("⚠️ Por favor utiliza un lenguaje respetuoso y adecuado para un entorno clínico profesional. ¿Cuál es tu nombre y apellido reales? 😊:");
+      await ctx.reply("⚠️ Por favor utiliza un lenguaje respetuoso y adecuado para un entorno clínico profesional. ¿Cuál es tu nombre y apellido reales? 😊:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
     if (TROLL_NAMES.some(t => lowerName.includes(t))) {
-      await ctx.reply("⚠️ Por favor ingresa tu nombre y apellido reales (ej: Carlos Gómez) para poder generar tu ficha clínica legal reglamentaria 📋:");
+      await ctx.reply("⚠️ Por favor ingresa tu nombre y apellido reales (ej: Carlos Gómez) para poder generar tu ficha clínica legal reglamentaria 📋:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
     if (/\d/.test(cleanName)) {
-      await ctx.reply("⚠️ El nombre no puede contener números (ej: 'Carlos123' o 'Juan 2'). Por favor escribe tu nombre y apellido reales sólo con letras 😊:");
+      await ctx.reply("⚠️ El nombre no puede contener números (ej: 'Carlos123' o 'Juan 2'). Por favor escribe tu nombre y apellido reales sólo con letras 😊:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
     if (/^([a-záéíóúñA-ZÁÉÍÓÚÑ])\1+$/i.test(cleanName.replace(/\s+/g, ""))) {
-      await ctx.reply("⚠️ El nombre ingresado no es válido (letras repetidas sin sentido). Por favor escribe tu nombre y apellido reales 😊:");
+      await ctx.reply("⚠️ El nombre ingresado no es válido (letras repetidas sin sentido). Por favor escribe tu nombre y apellido reales 😊:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
     if (cleanName.length < 4 || cleanName.split(/\s+/).length < 2) {
-      await ctx.reply("⚠️ Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido, ej: 'Andrés López') para registrarte en la ficha clínica 😊:");
+      await ctx.reply("⚠️ Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido, ej: 'Andrés López') para registrarte en la ficha clínica 😊:", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
+      });
       return;
     }
 
@@ -2181,30 +2193,54 @@ bot.on("text", async (ctx) => {
     const rawDoc = text.trim();
     const cleanDigits = rawDoc.replace(/\D/g, "");
 
+    const docActionButtons = [
+      [{ text: "⬅️ Cambiar Mi Nombre", callback_data: "nav_back_name" }],
+      [{ text: "❌ Cancelar Agendamiento", callback_data: "cancel_booking" }]
+    ];
+
     if (/[a-zA-Z]/.test(rawDoc)) {
-      await ctx.reply("⚠️ La cédula no debe contener letras. Por favor ingresa únicamente los 10 números de tu cédula (ej: 1020304050) 🪪:");
+      await ctx.reply(
+        "⚠️ La cédula no debe contener letras. Por favor ingresa únicamente los 10 números de tu cédula (ej: 1020304050) 🪪:\n\n_💡 Si deseas corregir tu nombre o reiniciar, usa los botones de abajo:_",
+        {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: docActionButtons }
+        }
+      );
       return;
     }
 
     if (PROFANITY_PATTERN.test(rawDoc)) {
-      await ctx.reply("⚠️ Por favor ingresa un número de cédula válido y con respeto 🪪:");
+      await ctx.reply("⚠️ Por favor ingresa un número de cédula válido y con respeto 🪪:", {
+        reply_markup: { inline_keyboard: docActionButtons }
+      });
       return;
     }
 
     if (cleanDigits.length !== 10) {
-      await ctx.reply("⚠️ El número de cédula debe contener únicamente 10 dígitos numéricos (ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:");
+      await ctx.reply(
+        `⚠️ El número de cédula debe contener únicamente 10 dígitos numéricos (has escrito ${cleanDigits.length} dígitos, ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:`,
+        {
+          reply_markup: { inline_keyboard: docActionButtons }
+        }
+      );
       return;
     }
 
     // Validación novato: dígitos idénticos repetidos (ej: 0000000000, 1111111111)
     if (/^(\d)\1+$/.test(cleanDigits)) {
-      await ctx.reply("⚠️ El número de cédula no puede consistir únicamente del mismo dígito repetido (ej: '0000000000', '1111111111'). Por favor ingresa tu cédula real de 10 dígitos 🪪:");
+      await ctx.reply(
+        "⚠️ El número de cédula no puede consistir únicamente del mismo dígito repetido (ej: '0000000000', '1111111111'). Por favor ingresa tu cédula real de 10 dígitos 🪪:",
+        { reply_markup: { inline_keyboard: docActionButtons } }
+      );
       return;
     }
 
     // Validación novato: secuencias numéricas de prueba obvias
     if (["1234567890", "0123456789", "9876543210"].includes(cleanDigits)) {
-      await ctx.reply("⚠️ Has ingresado una secuencia numérica de prueba. Por favor ingresa tu número de cédula oficial de 10 dígitos 🪪:");
+      await ctx.reply(
+        "⚠️ Has ingresado una secuencia numérica de prueba. Por favor ingresa tu número de cédula oficial de 10 dígitos 🪪:",
+        { reply_markup: { inline_keyboard: docActionButtons } }
+      );
       return;
     }
 

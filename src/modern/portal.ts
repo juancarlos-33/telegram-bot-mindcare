@@ -1481,23 +1481,6 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
           }
         });
-
-        const form = input.closest('form');
-        if (form && !form.dataset.docValidationAttached) {
-          form.dataset.docValidationAttached = 'true';
-          form.addEventListener('submit', function(e) {
-            const docInput = form.querySelector('input[name="documentNumber"], input[name="consultar_doc"], input[name="document"], input[id="documentNumber"]');
-            if (docInput) {
-              const clean = docInput.value.replace(/\D/g, '');
-              if (clean.length !== 10) {
-                e.preventDefault();
-                alert('⚠️ La cédula debe tener exactamente 10 números (ej: 1020304050).');
-                docInput.focus();
-                return false;
-              }
-            }
-          });
-        }
       });
     }
 
@@ -1642,37 +1625,85 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       }
     }
 
-    // 7. Bloqueo de doble envío y estados de carga en formularios clínicos
+    // 7. Control seguro de envíos, validación integral y estados de carga en formularios
     function initFormSubmitLock() {
       const forms = document.querySelectorAll('form[action="/api/citas"], form[action="/api/especialistas/nuevo"], form[action="/api/crm/nota"]');
       forms.forEach(function(form) {
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn && !btn.dataset.origHtml) {
+          btn.dataset.origHtml = btn.innerHTML;
+        }
+
         form.addEventListener('submit', function(e) {
           const btn = form.querySelector('button[type="submit"]');
           if (!btn) return;
+
+          // Si ya está enviando legítimamente, evitar doble clic
           if (btn.dataset.submitting === 'true') {
             e.preventDefault();
             return false;
           }
+
+          // 1. Pre-validación de Nombre (no números, mínimo 2 palabras)
+          const nameInput = form.querySelector('input[name="patientName"], input[name="name"]');
+          if (nameInput) {
+            const nameVal = nameInput.value.trim();
+            if (/\d/.test(nameVal)) {
+              e.preventDefault();
+              alert('⚠️ El nombre del paciente no puede contener números (ej: Juan Carlos Gutiérrez). Por favor verifica e inténtalo de nuevo.');
+              nameInput.focus();
+              return false;
+            }
+            if (nameVal.split(/\s+/).length < 2 || nameVal.length < 4) {
+              e.preventDefault();
+              alert('⚠️ Por favor escribe tu nombre y apellido completos (mínimo 2 palabras).');
+              nameInput.focus();
+              return false;
+            }
+          }
+
+          // 2. Pre-validación de Documento (exactamente 10 números)
+          const docInput = form.querySelector('input[name="documentNumber"], input[name="document"]');
+          if (docInput) {
+            const cleanDoc = docInput.value.replace(/\D/g, '');
+            if (cleanDoc.length !== 10) {
+              e.preventDefault();
+              alert('⚠️ La cédula debe tener exactamente 10 números (ingresaste ' + cleanDoc.length + ' dígitos, ej: 1020304050).');
+              docInput.focus();
+              return false;
+            }
+            if (cleanDoc.length === 10 && cleanDoc.split('').every(function(c){ return c === cleanDoc[0]; })) {
+              e.preventDefault();
+              alert('⚠️ El número de cédula no puede consistir únicamente del mismo dígito repetido (ej: 0000000000).');
+              docInput.focus();
+              return false;
+            }
+          }
+
+          // Si superó todas las validaciones, activar estado de procesamiento
           btn.dataset.submitting = 'true';
           btn.style.pointerEvents = 'none';
           btn.style.opacity = '0.75';
-
           btn.innerHTML = '<span class="spinner-inline"></span> Procesando solicitud...';
 
           if (form.getAttribute('action') === '/api/citas') {
-            showGlobalLoader('Verificando matriz anti-colisión y reservando cita...');
+            showGlobalLoader('Verificando disponibilidad clínica y reservando turno...');
           } else if (form.getAttribute('action') === '/api/especialistas/nuevo') {
-            showGlobalLoader('Verificando matrícula Colpsic y dando de alta especialista...');
+            showGlobalLoader('Verificando matrícula Colpsic y registrando especialista...');
           } else {
-            showGlobalLoader('Cifrando y registrando nota en expediente SOAP...');
+            showGlobalLoader('Registrando nota en expediente SOAP confidencial...');
           }
 
-          // Salvaguarda: si por alguna razón no se refresca la página, restaurar el botón en 2.5 segundos
+          // Salvaguarda: restaurar completamente el botón e interfaz si no hubo redirección en 3 segundos
           setTimeout(function() {
             btn.dataset.submitting = 'false';
             btn.style.pointerEvents = 'auto';
             btn.style.opacity = '1';
-          }, 2500);
+            if (btn.dataset.origHtml) {
+              btn.innerHTML = btn.dataset.origHtml;
+            }
+            hideGlobalLoader();
+          }, 3000);
         });
       });
     }
