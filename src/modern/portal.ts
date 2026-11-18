@@ -42,6 +42,8 @@ import {
   PipelineStage,
   patientExistsByDocument,
   hasPsyAppointmentConflict,
+  hasPatientAppointmentConflict,
+  validateAppointmentDate,
   flagPatientRisk
 } from "./db.js";
 
@@ -1808,8 +1810,9 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
     res.redirect("/citas?error=" + encodeURIComponent("El nombre del paciente debe tener al menos 3 caracteres."));
     return;
   }
-  if (!cleanDoc || cleanDoc.length < 5) {
-    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (mínimo 5 dígitos)."));
+  const cleanDigitsDoc = cleanDoc.replace(/\D/g, "");
+  if (!cleanDigitsDoc || cleanDigitsDoc.length < 5) {
+    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (mínimo 5 dígitos numéricos)."));
     return;
   }
   if (!cleanDate || cleanDate.length < 4) {
@@ -1817,11 +1820,30 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
     return;
   }
 
+  // 1. Validación pesada de fechas pasadas y horario clínico
+  const dateValidation = validateAppointmentDate(cleanDate);
+  if (!dateValidation.valid) {
+    res.redirect("/citas?error=" + encodeURIComponent(dateValidation.reason || "Fecha u horario no válido para consulta clínica."));
+    return;
+  }
+
   const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === specialty) || PSYCHOLOGY_SPECIALTIES[0];
   const assignedTherapistName = getTherapistsBySpecialty(spec.name)[0]?.name || spec.therapist || "Especialista MindCare";
   
+  // 2. Validación de conflicto del paciente (No permitir dos citas a la misma hora para el mismo paciente)
+  const patientConflict = hasPatientAppointmentConflict("", cleanDoc, cleanDate);
+  if (patientConflict) {
+    const isSame = patientConflict.therapist.toLowerCase() === assignedTherapistName.toLowerCase();
+    const errMsg = isSame 
+      ? `Cita duplicada: El paciente con documento ${cleanDoc} ya cuenta con una cita registrada con ${assignedTherapistName} en el horario "${cleanDate}".`
+      : `Conflicto de horario: El paciente con documento ${cleanDoc} ya tiene otra consulta médica en el horario "${cleanDate}" (con ${patientConflict.therapist}). No es posible agendar dos consultas al mismo tiempo.`;
+    res.redirect("/citas?error=" + encodeURIComponent(errMsg));
+    return;
+  }
+
+  // 3. Validación de conflicto del especialista (Doctor ocupado)
   if (hasPsyAppointmentConflict(assignedTherapistName, cleanDate)) {
-    res.redirect("/citas?error=" + encodeURIComponent(`Conflicto de agenda: ${assignedTherapistName} ya cuenta con una cita en el horario "${cleanDate}". Por favor selecciona otro turno.`));
+    res.redirect("/citas?error=" + encodeURIComponent(`Conflicto de agenda médica: ${assignedTherapistName} ya cuenta con una cita en el horario "${cleanDate}". Por favor selecciona otro turno.`));
     return;
   }
 

@@ -507,6 +507,116 @@ export function hasPsyAppointmentConflict(therapist: string, dateTime: string, e
   );
 }
 
+/** Verifica si el paciente ya tiene una cita agendada en ese mismo horario */
+export function hasPatientAppointmentConflict(patientId: string, documentNumber: string | undefined, dateTime: string, excludeId?: string): PsyAppointment | undefined {
+  const normTime = dateTime.trim().toLowerCase();
+  const cleanDoc = documentNumber ? documentNumber.replace(/\D/g, "") : "";
+  return psyAppointments.find(a => {
+    if (a.status === "Cancelada" || a.id === excludeId) return false;
+    if (a.dateTime.trim().toLowerCase() !== normTime) return false;
+    // Mismo ID de Telegram o web
+    if (patientId && a.patientId === patientId) return true;
+    // Misma cédula / documento
+    if (cleanDoc && a.documentNumber && a.documentNumber.replace(/\D/g, "") === cleanDoc) return true;
+    return false;
+  });
+}
+
+/** Validación clínica robusta de fechas y horarios para evitar fechas pasadas y colisiones */
+export function validateAppointmentDate(dateTime: string): { valid: boolean; reason?: string } {
+  const clean = dateTime.trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Palabras clave de tiempo pasado
+  const pastKeywords = [
+    "ayer", "antier", "anteayer", "el mes pasado", "la semana pasada", "el año pasado",
+    "el ano pasado", "hace un", "hace 2", "hace 3", "hace días", "hace dias", "ya paso", "ya pasó",
+    "anoche", "hace una hora", "hace horas", "pasada", "pasado"
+  ];
+  if (pastKeywords.some(p => lower.includes(p))) {
+    return { 
+      valid: false, 
+      reason: "No es posible agendar una cita en una fecha u hora que ya transcurrió ('ayer' o tiempo pasado). Por favor selecciona una fecha futura a partir de hoy o mañana." 
+    };
+  }
+
+  // 2. Años pasados explícitos (ej: 2019 a 2025)
+  const currentYear = new Date().getFullYear();
+  const yearMatch = lower.match(/\b(19\d\d|20[0-2]\d)\b/);
+  if (yearMatch) {
+    const yr = parseInt(yearMatch[1], 10);
+    if (yr < currentYear) {
+      return { 
+        valid: false, 
+        reason: `El año ${yr} ya finalizó. Las consultas deben programarse para el año en curso (${currentYear}) o posterior.` 
+      };
+    }
+  }
+
+  // 3. Fechas en formato YYYY-MM-DD o DD/MM/YYYY
+  const isoMatch = lower.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (isoMatch) {
+    const yr = parseInt(isoMatch[1], 10);
+    const mo = parseInt(isoMatch[2], 10) - 1;
+    const dy = parseInt(isoMatch[3], 10);
+    const targetDate = new Date(yr, mo, dy, 23, 59, 59);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (targetDate < today) {
+      return { 
+        valid: false, 
+        reason: "La fecha seleccionada es anterior a hoy en el calendario. Por favor elige una fecha posterior." 
+      };
+    }
+  }
+
+  // 4. Si menciona "hoy", verificar si la hora ya transcurrió en Colombia
+  if (lower.includes("hoy")) {
+    const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+    const currentHour24 = nowBogota.getHours();
+    const currentMinute = nowBogota.getMinutes();
+
+    const timeMatch = lower.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+      const meridiem = timeMatch[3]?.toLowerCase().replace(/\./g, "");
+
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      else if (meridiem === "am" && hour === 12) hour = 0;
+      else if (!meridiem && hour < 8) hour += 12; // asume tarde si es 1 a 7
+
+      if (hour < currentHour24 || (hour === currentHour24 && minute <= currentMinute)) {
+        const ampmNow = currentHour24 >= 12 ? "PM" : "AM";
+        const formattedHourNow = `${currentHour24 % 12 || 12}:${currentMinute.toString().padStart(2, "0")} ${ampmNow}`;
+        return { 
+          valid: false, 
+          reason: `La hora ingresada (${timeMatch[0]}) ya pasó el día de hoy (en este momento son las ${formattedHourNow} hora Colombia). Elige una hora más tarde o agenda a partir de mañana.` 
+        };
+      }
+    }
+  }
+
+  // 5. Horario de atención clínica (7 AM a 8 PM)
+  const timeCheck = lower.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
+  if (timeCheck) {
+    let hour = parseInt(timeCheck[1], 10);
+    const meridiem = timeCheck[3]?.toLowerCase().replace(/\./g, "");
+    if (meridiem === "pm" && hour < 12) hour += 12;
+    else if (meridiem === "am" && hour === 12) hour = 0;
+
+    // Madrugada entre 00:00 y 05:59 o noche después de las 21:00
+    if ((meridiem === "am" && (hour < 6 || hour === 0)) || hour > 21) {
+      return { 
+        valid: false, 
+        reason: "Horario fuera de atención clínica. MindCare atiende de Lunes a Sábado entre las 7:00 AM y las 8:00 PM." 
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
 // =============================================================================
 // MÓDULO CRM CLÍNICO: EXPEDIENTES, HISTORIAS CLÍNICAS (SOAP) Y PAGOS
 // =============================================================================

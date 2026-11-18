@@ -14,7 +14,7 @@ import {
   saveTestResult, getUserTestResults, getAllTestResults,
   getActiveTest, setActiveTest, clearActiveTest, GAD2_QUESTIONS, PHQ9_QUESTIONS, PSS4_QUESTIONS, PSYCHO_TIPS,
   getAllPatients, getPatientById, createPatient, getCRMMetrics, getAllPayments, recordPatientPayment,
-  flagPatientRisk, hasPsyAppointmentConflict
+  flagPatientRisk, hasPsyAppointmentConflict, hasPatientAppointmentConflict, validateAppointmentDate
 } from "./db.js";
 import { portalRouter } from "./portal.js";
 import { gamesMenu, handleGameCommand, maybeHandleGameAnswer } from "./games.js";
@@ -1508,8 +1508,32 @@ bot.on("callback_query", async (ctx) => {
       clearBookingState(userId);
       return;
     }
+
+    // 1. Validación de fecha y hora válida (evitar fechas pasadas)
+    const dateVal = validateAppointmentDate(state.date);
+    if (!dateVal.valid) {
+      await ctx.reply(`⚠️ ${dateVal.reason || "La fecha u horario seleccionado no es válido."}\n\nPor favor escribe otro horario:`);
+      setBookingState(userId, { ...state, step: "ask_date" });
+      return;
+    }
+
+    // 2. Validación de conflicto del paciente (Evitar que el mismo usuario/cédula agende doble cita a la misma hora)
+    const patientConflict = hasPatientAppointmentConflict(userId, state.documentNumber, state.date);
+    if (patientConflict) {
+      const isSameDoc = patientConflict.therapist.toLowerCase() === state.therapist.toLowerCase();
+      await ctx.reply(
+        isSameDoc
+          ? `⚠️ *Cita duplicada:* Ya tienes registrada una cita con ${state.therapist} para el horario *${state.date}*.\n\nNo es posible duplicar la misma cita. Revisa tus citas con /miscitas.`
+          : `⚠️ *Conflicto de horario:* Ya cuentas con otra consulta médica programada para *${state.date}* con ${patientConflict.therapist}.\n\nNo puedes estar en dos citas a la vez. Elige otro horario para esta consulta:`,
+        { parse_mode: "Markdown" }
+      );
+      setBookingState(userId, { ...state, step: "ask_date" });
+      return;
+    }
+
+    // 3. Validación de conflicto del especialista médico (Doctor ocupado)
     if (hasPsyAppointmentConflict(state.therapist, state.date)) {
-      await ctx.reply("⚠️ Ese horario acaba de ser reservado. Elige otro horario para continuar.");
+      await ctx.reply(`⚠️ *Conflicto de agenda médica:* ${state.therapist} ya cuenta con una cita en el horario "${state.date}".\n\nPor favor selecciona otro horario o día:`);
       setBookingState(userId, { ...state, step: "ask_date" });
       return;
     }
@@ -2184,8 +2208,9 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    if (PAST_TIME_KEYWORDS.some(p => lowerDate.includes(p))) {
-      await ctx.reply("⚠️ No es posible agendar una cita en el pasado ('ayer'). Por favor indícanos un día y horario futuro a partir de hoy o mañana (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM' o 'Lunes a las 9 AM') 📅:");
+    const dateVal = validateAppointmentDate(cleanDate);
+    if (!dateVal.valid) {
+      await ctx.reply(`⚠️ ${dateVal.reason}\n\nPor favor indícanos un día y horario futuro a partir de hoy o mañana (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM' o 'Lunes a las 9 AM') 📅:`);
       return;
     }
 
@@ -2346,6 +2371,28 @@ bot.on("text", async (ctx) => {
     }
 
     const therapist = bookingState.therapist ?? "Dra. Valentina Ríos";
+
+    // 1. Conflicto del paciente (no permitir que el paciente agende dos citas a la misma hora o duplique la misma cita)
+    const patientConflict = hasPatientAppointmentConflict(userId, bookingState.documentNumber, cleanDate);
+    if (patientConflict) {
+      const isSameDoc = patientConflict.therapist.toLowerCase() === therapist.toLowerCase();
+      await ctx.reply(
+        isSameDoc
+          ? `⚠️ *Cita duplicada:* Ya tienes registrada una cita con ${therapist} para el horario *${cleanDate}*.\n\nNo es posible duplicar la misma cita. Revisa tus citas con /miscitas o elige otro horario:`
+          : `⚠️ *Conflicto de horario:* Ya cuentas con otra consulta médica programada para *${cleanDate}* con ${patientConflict.therapist}.\n\nNo puedes estar en dos citas a la vez. Por favor elige otro horario:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📅 Elegir otro horario", callback_data: "ask_date_retry" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            ]
+          }
+        }
+      );
+      return;
+    }
+
+    // 2. Conflicto de agenda médica (especialista ocupado)
     if (hasPsyAppointmentConflict(therapist, cleanDate)) {
       await ctx.reply(
         `⚠️ *Conflicto de horario:* ${therapist} ya cuenta con una cita en el horario "${cleanDate}".\n\nPor favor escribe otro horario o día para tu consulta (ej: 1 hora más tarde o al día siguiente):`,
