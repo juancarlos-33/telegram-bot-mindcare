@@ -582,6 +582,15 @@ export function cancelPsyAppointment(id: string): boolean {
   return updatePsyAppointmentStatus(id, "Cancelada");
 }
 
+export function deletePsyAppointment(id: string): boolean {
+  const index = psyAppointments.findIndex(a => a.id === id);
+  if (index === -1) return false;
+  const removed = psyAppointments.splice(index, 1)[0];
+  saveJsonFile("appointments.json", psyAppointments);
+  broadcastRealtime("APPOINTMENT_DELETED", removed);
+  return true;
+}
+
 export function normalizeDateTimeToCanonical(dateTime: string): string {
   const raw = dateTime.trim().toLowerCase();
   

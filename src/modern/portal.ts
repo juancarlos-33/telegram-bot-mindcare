@@ -19,6 +19,7 @@ import {
   getPsyAppointmentsByDocument,
   updatePsyAppointmentStatus,
   cancelPsyAppointment,
+  deletePsyAppointment,
   PSYCHOLOGY_SPECIALTIES,
   PSYCHOLOGY_THERAPISTS,
   getAllTherapists,
@@ -1748,17 +1749,18 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         }
 
         input.addEventListener('input', function() {
+          const cleanVal = this.value.replace(/\d+/g, '');
+          if (cleanVal !== this.value) {
+            this.value = cleanVal;
+          }
           const val = this.value.trim();
           if (!val) {
             feedback.innerHTML = '';
             input.style.borderColor = '';
             return;
           }
-          if (/\d/.test(val)) {
-            feedback.innerHTML = '<span style="color:#f87171;">❌ El nombre no puede contener números</span>';
-            input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (val.length < 2) {
-            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Escribe al menos 2 letras</span>';
+          if (val.length < 2) {
+            feedback.innerHTML = '<span style="color:#fbbf24;">ℹ️ Escribe al menos 2 letras</span>';
             input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
           } else {
             feedback.innerHTML = '<span style="color:#34d399;">✅ Nombre válido</span>';
@@ -1892,16 +1894,11 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             return false;
           }
 
-          // 1. Pre-validación de Nombre (no números, mínimo 2 palabras)
+          // 1. Pre-validación de Nombre (limpieza silenciosa de números)
           const nameInput = form.querySelector('input[name="patientName"], input[name="name"]');
           if (nameInput) {
+            nameInput.value = nameInput.value.replace(/\d+/g, '').trim();
             const nameVal = nameInput.value.trim();
-            if (/\d/.test(nameVal)) {
-              e.preventDefault();
-              alert('⚠️ El nombre del paciente no puede contener números (ej: Juan Carlos Gutiérrez). Por favor verifica e inténtalo de nuevo.');
-              nameInput.focus();
-              return false;
-            }
             if (nameVal.length < 2) {
               e.preventDefault();
               alert('⚠️ Por favor escribe el nombre del paciente (ej: Valentina Gutiérrez).');
@@ -3281,6 +3278,7 @@ portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
   const confirmed = appointments.filter(a => a.status === "Confirmada").length;
   const pending = appointments.filter(a => a.status === "Pendiente").length;
   const canceled = appointments.filter(a => a.status === "Cancelada").length;
+  const activeCount = confirmed + pending;
   const moods = getAllMoodEntries();
   const tests = getAllTestResults();
   const therapists = getAllTherapists(true);
@@ -3288,7 +3286,8 @@ portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
   res.json({
     status: "ok",
     stats: {
-      totalAppointments: appointments.length,
+      totalAppointments: activeCount,
+      allTotalAppointments: appointments.length,
       confirmedAppointments: confirmed,
       pendingAppointments: pending,
       canceledAppointments: canceled,
@@ -3780,9 +3779,9 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
     <div id="admin-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px;">
       <!-- Card 1: Total Citas -->
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('TODAS')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.12); position:relative; background:linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver todas las citas registradas">
-        <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
-        <div id="kpi-num-total" style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${appointments.length}</div>
-        <span style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">Registradas en MindCare</span>
+        <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Citas Activas</span>
+        <div id="kpi-num-total" style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${confirmed + pending}</div>
+        <span style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">${appointments.length} en historial (${canceled} canceladas)</span>
         <span class="badge" style="font-size:0.68rem; background:rgba(255,255,255,0.08); color:#cbd5e1; border:1px solid rgba(255,255,255,0.15);">Ver detalle 👁️</span>
       </div>
 
@@ -3989,6 +3988,10 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
                         <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" title="Cancelar turno">✕</button>
                       </form>
                     ` : ''}
+                    <form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm('¿Seguro que deseas eliminar definitivamente esta cita de la base de datos?');">
+                      <input type="hidden" name="id" value="${a.id}">
+                      <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem; background:#dc2626; border-color:#ef4444;" title="Eliminar cita definitivamente">🗑️</button>
+                    </form>
                   </div>
                 </td>
               </tr>
@@ -4226,6 +4229,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         if (cita.status !== 'Cancelada') {
           actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
         }
+        actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm(\'¿Seguro que deseas eliminar definitivamente esta cita de la base de datos?\');"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
         modal.style.display = 'flex';
       }
 
@@ -4270,17 +4274,13 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 // Endpoint POST para agendar cita desde la web
 portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   const { patientName, documentNumber, specialty, dateTime, notes, motive } = req.body;
-  const cleanName = String(patientName || "").trim();
+  const cleanName = String(patientName || "").replace(/\d+/g, "").trim() || String(patientName || "").trim();
   const cleanDoc = String(documentNumber || "").trim();
   const cleanDate = String(dateTime || "").trim();
   const consultationMotive = String(motive || notes || "").trim();
 
   if (!cleanName || cleanName.length < 2) {
     res.redirect("/citas?error=" + encodeURIComponent("Por favor escribe el nombre del paciente (ej: Valentina Gutiérrez)."));
-    return;
-  }
-  if (/\d/.test(cleanName)) {
-    res.redirect("/citas?error=" + encodeURIComponent("El nombre del paciente no puede contener números. Por favor escribe un nombre real."));
     return;
   }
 
@@ -4365,6 +4365,20 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
     res.redirect("/admin?updated=true");
   } else {
     res.redirect("/citas?updated=true");
+  }
+});
+
+// Endpoint POST para eliminar cita definitivamente
+portalRouter.post("/api/citas/eliminar", (req: Request, res: Response) => {
+  const { id } = req.body;
+  if (id) {
+    deletePsyAppointment(String(id));
+  }
+  const referer = req.header("Referer") || "";
+  if (referer.includes("/admin")) {
+    res.redirect("/admin?deleted=true");
+  } else {
+    res.redirect("/citas?deleted=true");
   }
 });
 

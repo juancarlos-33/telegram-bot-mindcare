@@ -2128,7 +2128,7 @@ bot.on("text", async (ctx) => {
   }
 
   if (bookingState.step === "ask_name" && !text.startsWith("!") && !text.startsWith("/")) {
-    const cleanName = text.trim();
+    let cleanName = text.trim();
     const lowerName = cleanName.toLowerCase();
 
     if (isGibberishOrGarbage(cleanName)) {
@@ -2152,12 +2152,9 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    if (/\d/.test(cleanName)) {
-      await ctx.reply("⚠️ El nombre no puede contener números (ej: 'Carlos123' o 'Juan 2'). Por favor escribe tu nombre y apellido reales sólo con letras 😊:", {
-        reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
-      });
-      return;
-    }
+    // Limpiar suavemente dígitos si el usuario ingresó números sin bloquearlo
+    cleanName = cleanName.replace(/\d+/g, "").trim() || cleanName;
+    const lowerNameSanitized = cleanName.toLowerCase();
 
     if (/^([a-záéíóúñA-ZÁÉÍÓÚÑ])\1+$/i.test(cleanName.replace(/\s+/g, ""))) {
       await ctx.reply("⚠️ El nombre ingresado no es válido (letras repetidas sin sentido). Por favor escribe tu nombre y apellido reales 😊:", {
