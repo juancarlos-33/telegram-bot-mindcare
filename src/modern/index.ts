@@ -1151,11 +1151,19 @@ bot.on("callback_query", async (ctx) => {
     setBookingState(userId, { ...state, step: "ask_date", therapist: th.name });
 
     await ctx.reply(
-      `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 ¿Qué día y horario prefieres para tu consulta?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_`,
+      `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno rápido con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):`,
       {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
+              { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
+            ],
+            [
+              { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
+              { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
+            ],
             [
               { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
               { text: "❌ Cancelar", callback_data: "cancel_booking" }
@@ -1226,13 +1234,134 @@ bot.on("callback_query", async (ctx) => {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_date", pendingDate: undefined });
     await ctx.reply(
-      "📅 ¿Qué día y horario prefieres para tu consulta?\n\n_Ejemplo: Mañana a las 10 AM / Viernes a las 3 PM_",
+      "📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno rápido con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):",
       {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
             [
+              { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
+              { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
+            ],
+            [
+              { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
+              { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
+            ],
+            [
               { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
+  // Manejo de botones de Fecha Rápida
+  if (data.startsWith("quick_date_")) {
+    const state = getBookingState(userId);
+    let chosenDate = "Mañana a las 10:00 AM";
+    if (data === "quick_date_manana_10am") chosenDate = "Mañana a las 10:00 AM";
+    else if (data === "quick_date_manana_3pm") chosenDate = "Mañana a las 3:00 PM";
+    else if (data === "quick_date_pasado_10am") chosenDate = "Pasado Mañana a las 10:00 AM";
+    else if (data === "quick_date_pasado_4pm") chosenDate = "Pasado Mañana a las 4:00 PM";
+
+    setBookingState(userId, { ...state, step: "ask_motive", date: chosenDate, pendingDate: undefined });
+    await ctx.reply(
+      `📌 Horario seleccionado: *${chosenDate}*.\n\n🩺 *¿Cuál es el motivo principal de tu consulta?*\nSelecciona un motivo con los botones o escribe uno personalizado en el chat:`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "😟 Ansiedad / Estrés", callback_data: "quick_motive_ansiedad" },
+              { text: "😢 Depresión / Ánimo", callback_data: "quick_motive_animo" }
+            ],
+            [
+              { text: "💔 Pareja / Relaciones", callback_data: "quick_motive_pareja" },
+              { text: "😴 Insomnio / Sueño", callback_data: "quick_motive_sueno" }
+            ],
+            [
+              { text: "💼 Agotamiento / Burnout", callback_data: "quick_motive_burnout" },
+              { text: "🎯 Autoestima y Metas", callback_data: "quick_motive_metas" }
+            ],
+            [
+              { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
+          ]
+        }
+      }
+    );
+    return;
+  }
+
+  // Manejo de botones de Motivo Rápido
+  if (data.startsWith("quick_motive_")) {
+    const state = getBookingState(userId);
+    const motiveMap: Record<string, string> = {
+      quick_motive_ansiedad: "Manejo de ansiedad y estrés",
+      quick_motive_animo: "Bajo estado de ánimo y tristeza",
+      quick_motive_pareja: "Dificultades de pareja y relaciones",
+      quick_motive_sueno: "Insomnio y trastornos del sueño",
+      quick_motive_burnout: "Agotamiento laboral / académico (Burnout)",
+      quick_motive_metas: "Autoestima, autoconocimiento y metas"
+    };
+    const chosenMotive = motiveMap[data] ?? "Consulta psicológica general";
+    const updated = { ...state, step: "confirm" as const, motive: chosenMotive };
+    setBookingState(userId, updated);
+    const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === updated.specialty) ?? PSYCHOLOGY_SPECIALTIES[0];
+
+    await ctx.reply([
+      "✅ *Resumen de tu cita:*",
+      "",
+      `👤 Paciente: ${updated.name}`,
+      updated.documentNumber ? `🪪 Documento: ${updated.documentNumber}` : "",
+      `${spec.icon} Especialidad: ${updated.specialty}`,
+      `👤 Terapeuta: ${updated.therapist}`,
+      `⏰ Horario: ${updated.date}`,
+      `📌 Motivo: ${updated.motive}`,
+      "",
+      "¿Confirmamos la cita?"
+    ].filter(Boolean).join("\n"), {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Confirmar Cita", callback_data: "confirm_booking" }],
+          [
+            { text: "⬅️ Cambiar Motivo", callback_data: "nav_back_motive" },
+            { text: "❌ Cancelar", callback_data: "cancel_booking" }
+          ]
+        ]
+      }
+    });
+    return;
+  }
+
+  if (data === "nav_back_motive") {
+    const state = getBookingState(userId);
+    setBookingState(userId, { ...state, step: "ask_motive" });
+    await ctx.reply(
+      `🩺 *¿Cuál es el motivo principal de tu consulta?*\nSelecciona un motivo con los botones o escribe uno personalizado en el chat:`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "😟 Ansiedad / Estrés", callback_data: "quick_motive_ansiedad" },
+              { text: "😢 Depresión / Ánimo", callback_data: "quick_motive_animo" }
+            ],
+            [
+              { text: "💔 Pareja / Relaciones", callback_data: "quick_motive_pareja" },
+              { text: "😴 Insomnio / Sueño", callback_data: "quick_motive_sueno" }
+            ],
+            [
+              { text: "💼 Agotamiento / Burnout", callback_data: "quick_motive_burnout" },
+              { text: "🎯 Autoestima y Metas", callback_data: "quick_motive_metas" }
+            ],
+            [
+              { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
               { text: "❌ Cancelar", callback_data: "cancel_booking" }
             ]
           ]
@@ -1304,11 +1433,23 @@ bot.on("callback_query", async (ctx) => {
 
     setBookingState(userId, { ...state, step: "ask_motive", date: combinedDate, pendingDate: undefined });
     await ctx.reply(
-      `📌 Perfecto, horario confirmado: *${combinedDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve, ej: 'Estrés laboral y ansiedad') 🌿:`,
+      `📌 Perfecto, horario confirmado: *${combinedDate}*.\n\n🩺 *¿Cuál es el motivo principal de tu consulta?*\nSelecciona un motivo con los botones o escribe uno personalizado en el chat:`,
       {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: "😟 Ansiedad / Estrés", callback_data: "quick_motive_ansiedad" },
+              { text: "😢 Depresión / Ánimo", callback_data: "quick_motive_animo" }
+            ],
+            [
+              { text: "💔 Pareja / Relaciones", callback_data: "quick_motive_pareja" },
+              { text: "😴 Insomnio / Sueño", callback_data: "quick_motive_sueno" }
+            ],
+            [
+              { text: "💼 Agotamiento / Burnout", callback_data: "quick_motive_burnout" },
+              { text: "🎯 Autoestima y Metas", callback_data: "quick_motive_metas" }
+            ],
             [
               { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
               { text: "❌ Cancelar", callback_data: "cancel_booking" }
@@ -2182,12 +2323,27 @@ bot.on("text", async (ctx) => {
     setBookingState(userId, { ...bookingState, step: "ask_motive", date: cleanDate, pendingDate: undefined });
 
     await ctx.reply(
-      `📌 Perfecto, anotado: *${cleanDate}*.\n\n¿Cuál es el motivo principal de tu consulta? (Puedes ser breve)`,
+      `📌 Perfecto, anotado: *${cleanDate}*.\n\n🩺 *¿Cuál es el motivo principal de tu consulta?*\nSelecciona un motivo con los botones o escribe uno personalizado en el chat:`,
       {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
-            [{ text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            [
+              { text: "😟 Ansiedad / Estrés", callback_data: "quick_motive_ansiedad" },
+              { text: "😢 Depresión / Ánimo", callback_data: "quick_motive_animo" }
+            ],
+            [
+              { text: "💔 Pareja / Relaciones", callback_data: "quick_motive_pareja" },
+              { text: "😴 Insomnio / Sueño", callback_data: "quick_motive_sueno" }
+            ],
+            [
+              { text: "💼 Agotamiento / Burnout", callback_data: "quick_motive_burnout" },
+              { text: "🎯 Autoestima y Metas", callback_data: "quick_motive_metas" }
+            ],
+            [
+              { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
+              { text: "❌ Cancelar", callback_data: "cancel_booking" }
+            ]
           ]
         }
       }
@@ -2227,25 +2383,6 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    // Validación inteligente con IA de Dra. PsiBot
-    await ctx.sendChatAction("typing");
-    try {
-      const aiVerdictRaw = await askAI(
-        `Evalúa si este texto es un motivo válido y genuino de consulta psicológica o salud mental: "${cleanMotive}".
-Si es un insulto, queja agresiva ("malagradecida", etc.), saludo, troleo, texto incoherente o no tiene relación con salud mental, responde: INVALIDO: <breve razón>.
-Si es un motivo aceptable de consulta (ej: ansiedad, insomnio, problemas de pareja, orientación, estrés, tristeza, problemas familiares, etc.), responde: VALIDO.
-Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
-        "Eres un clasificador estricto de triaje clínico de salud mental. Evalúa con ética y rigor."
-      );
-      if (aiVerdictRaw.toUpperCase().includes("INVALIDO")) {
-        const reason = aiVerdictRaw.replace(/^INVALIDO:?\s*/i, "").trim();
-        await ctx.reply(
-          `⚠️ El texto ingresado no es un motivo de consulta psicológica válido${reason ? ` (${reason})` : ""}.\n\nPara que tu terapeuta prepare tu sesión, por favor describe brevemente qué deseas tratar (ej: 'Ansiedad ante exámenes', 'Insomnio y estrés', 'Dificultades de pareja' o 'Duelo reciente') 🌿:`
-        );
-        return;
-      }
-    } catch (e) {}
-
     const updated = { ...bookingState, step: "confirm" as const, motive: cleanMotive };
     setBookingState(userId, updated);
     const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === updated.specialty) ?? PSYCHOLOGY_SPECIALTIES[0];
@@ -2267,7 +2404,7 @@ Responde ÚNICAMENTE en una línea con una de esas dos opciones.`,
         inline_keyboard: [
           [{ text: "✅ Confirmar Cita", callback_data: "confirm_booking" }],
           [
-            { text: "⬅️ Cambiar Horario", callback_data: "nav_back_date" },
+            { text: "⬅️ Cambiar Motivo", callback_data: "nav_back_motive" },
             { text: "❌ Cancelar", callback_data: "cancel_booking" }
           ]
         ]
