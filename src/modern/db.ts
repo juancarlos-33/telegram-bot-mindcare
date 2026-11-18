@@ -1,6 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
+import { EventEmitter } from "events";
+
+export const realtimeEvents = new EventEmitter();
+realtimeEvents.setMaxListeners(200);
+
+export function broadcastRealtime(type: string, payload: any) {
+  realtimeEvents.emit("change", {
+    type,
+    payload,
+    timestamp: new Date().toISOString()
+  });
+}
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) {
@@ -450,6 +462,7 @@ export function createTherapist(data: {
     description: `Atención profesional especializada con ${data.name.trim()}`
   });
 
+  broadcastRealtime("THERAPIST_CREATED", newTherapist);
   return newTherapist;
 }
 
@@ -458,14 +471,16 @@ export function toggleTherapistStatus(id: string): boolean {
   if (!th) return false;
   th.active = !th.active;
   saveJsonFile("therapists.json", psyTherapists);
+  broadcastRealtime("THERAPIST_UPDATED", th);
   return true;
 }
 
 export function deleteTherapist(id: string): boolean {
   const index = psyTherapists.findIndex(t => t.id === id);
   if (index === -1) return false;
-  psyTherapists.splice(index, 1);
+  const removed = psyTherapists.splice(index, 1)[0];
   saveJsonFile("therapists.json", psyTherapists);
+  broadcastRealtime("THERAPIST_DELETED", removed);
   return true;
 }
 
@@ -503,6 +518,7 @@ export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "c
     });
   } catch (_) {}
 
+  broadcastRealtime("APPOINTMENT_CREATED", newApp);
   return newApp;
 }
 
@@ -542,6 +558,7 @@ export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "P
   if (app) { 
     app.status = status; 
     saveJsonFile("appointments.json", psyAppointments);
+    broadcastRealtime("APPOINTMENT_UPDATED", app);
     return true; 
   }
   return false;
@@ -1183,6 +1200,7 @@ export function createPatient(data: Omit<ClinicalPatient, "id" | "totalSessions"
   };
   mockPatients.unshift(newPatient);
   saveJsonFile("patients.json", mockPatients);
+  broadcastRealtime("PATIENT_CREATED", newPatient);
   return newPatient;
 }
 
@@ -1507,6 +1525,7 @@ export function saveMoodEntry(userId: string, userName: string, mood: string, em
     createdAt: new Date()
   };
   moodEntries.unshift(entry);
+  broadcastRealtime("MOOD_CREATED", entry);
   return entry;
 }
 
@@ -1556,6 +1575,7 @@ export function saveTestResult(
     createdAt: new Date()
   };
   mentalTestResults.unshift(result);
+  broadcastRealtime("TEST_CREATED", result);
   return result;
 }
 

@@ -2181,8 +2181,8 @@ bot.on("text", async (ctx) => {
     const rawDoc = text.trim();
     const cleanDigits = rawDoc.replace(/\D/g, "");
 
-    if (isGibberishOrGarbage(rawDoc)) {
-      await ctx.reply("⚠️ El documento ingresado contiene símbolos repetidos o texto inválido. Por favor escribe tu número de cédula (únicamente 10 números, ej: 1020304050) 🪪:");
+    if (/[a-zA-Z]/.test(rawDoc)) {
+      await ctx.reply("⚠️ La cédula no debe contener letras. Por favor ingresa únicamente los 10 números de tu cédula (ej: 1020304050) 🪪:");
       return;
     }
 
@@ -2241,7 +2241,7 @@ bot.on("text", async (ctx) => {
       }
     }
 
-    if (isGibberishOrGarbage(cleanDate)) {
+    if (!/\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2}|\d{1,2}\s*(am|pm)/i.test(cleanDate) && isGibberishOrGarbage(cleanDate)) {
       await ctx.reply("⚠️ El formato de fecha ingresado no es válido. Por favor escribe un día y hora claro (ej: 'Mañana a las 10 AM', 'Viernes a las 3 PM') 📅:");
       return;
     }

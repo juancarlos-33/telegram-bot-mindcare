@@ -52,7 +52,9 @@ import {
   getAllStaffAccounts,
   getStaffById,
   authenticateStaff,
-  ensurePatientForAppointment
+  ensurePatientForAppointment,
+  realtimeEvents,
+  broadcastRealtime
 } from "./db.js";
 import {
   getClientIp,
@@ -797,6 +799,22 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       vertical-align: middle;
     }
 
+    .live-pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: livePulse 2s infinite;
+      display: inline-block;
+    }
+
+    @keyframes livePulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
     @media (max-width: 900px) {
       .navbar { flex-direction: column; gap: 14px; }
       .nav-links { flex-wrap: wrap; justify-content: center; }
@@ -835,6 +853,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         </div>
       </a>
       <nav class="nav-links">
+        <div id="mindcare-live-indicator" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:20px; padding:4px 10px; font-size:0.75rem; color:#34d399; font-weight:700;" title="Sincronización en tiempo real vía Server-Sent Events / SignalR Stream">
+          <span class="live-pulse-dot"></span>
+          <span>EN VIVO</span>
+        </div>
         ${isStaff ? `
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
             🏠 Inicio Clínico
@@ -1166,6 +1188,129 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       });
     }
 
+    // 8. Sincronización en Tiempo Real (SSE / Stream reactivo) para Citas, Especialistas y Métricas
+    function initRealtimeSync() {
+      const indicator = document.getElementById('mindcare-live-indicator');
+      let eventSource = null;
+      let reconnectTimer = null;
+
+      function showLiveToast(message, icon) {
+        let container = document.getElementById('live-toast-container');
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'live-toast-container';
+          container.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:99999; display:flex; flex-direction:column; gap:10px; max-width:380px; pointer-events:none;';
+          document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.style.cssText = 'background:rgba(15,23,42,0.96); border:1px solid rgba(56,189,248,0.5); border-radius:14px; padding:14px 18px; color:#fff; font-size:0.88rem; box-shadow:0 12px 30px rgba(0,0,0,0.6), 0 0 20px rgba(56,189,248,0.25); backdrop-filter:blur(12px); display:flex; align-items:center; gap:12px; transform:translateY(20px); opacity:0; transition:all 0.35s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:auto;';
+        toast.innerHTML = '<span style="font-size:1.4rem;">' + (icon || '🔔') + '</span><div style="flex:1;"><strong style="color:#38bdf8; display:block; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">Tiempo Real • MindCare</strong><div style="color:#e2e8f0; font-size:0.84rem; margin-top:3px; line-height:1.35;">' + message + '</div></div>';
+        container.appendChild(toast);
+        requestAnimationFrame(function() {
+          toast.style.transform = 'translateY(0)';
+          toast.style.opacity = '1';
+        });
+        setTimeout(function() {
+          toast.style.transform = 'translateY(20px)';
+          toast.style.opacity = '0';
+          setTimeout(function() { toast.remove(); }, 350);
+        }, 5000);
+      }
+
+      function refreshPageSection() {
+        const url = window.location.href;
+        fetch(url, { headers: { 'X-Requested-With': 'RealtimeUpdate' } })
+          .then(function(r) { return r.text(); })
+          .then(function(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const newTable = doc.querySelector('table');
+            const curTable = document.querySelector('table');
+            if (newTable && curTable) {
+              curTable.innerHTML = newTable.innerHTML;
+            }
+
+            const newMetrics = doc.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
+            const curMetrics = document.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
+            if (newMetrics && curMetrics) {
+              curMetrics.innerHTML = newMetrics.innerHTML;
+            }
+          })
+          .catch(function() {});
+      }
+
+      function connect() {
+        if (!window.EventSource) {
+          setInterval(function() {
+            fetch('/api/realtime/summary')
+              .then(function(r){ return r.json(); })
+              .then(function(){ refreshPageSection(); })
+              .catch(function(){});
+          }, 4000);
+          return;
+        }
+
+        try {
+          if (eventSource) { eventSource.close(); }
+          eventSource = new EventSource('/api/realtime/events');
+
+          eventSource.onopen = function() {
+            if (indicator) {
+              indicator.innerHTML = '<span class="live-pulse-dot"></span><span>EN VIVO</span>';
+              indicator.style.color = '#34d399';
+              indicator.style.borderColor = 'rgba(16,185,129,0.3)';
+            }
+          };
+
+          eventSource.onmessage = function(e) {
+            try {
+              const data = JSON.parse(e.data);
+              if (!data || data.type === 'CONNECTED' || data.type === 'PING') return;
+
+              if (data.type === 'APPOINTMENT_CREATED') {
+                const pat = data.payload && data.payload.patientName ? data.payload.patientName : 'Paciente';
+                const doc = data.payload && data.payload.documentNumber ? ' (C.C. ' + data.payload.documentNumber + ')' : '';
+                const th = data.payload && data.payload.therapist ? ' con ' + data.payload.therapist : '';
+                showLiveToast('Nueva cita agendada en vivo para <strong>' + pat + doc + '</strong>' + th + '.', '📅');
+                refreshPageSection();
+              } else if (data.type === 'APPOINTMENT_UPDATED') {
+                const id = data.payload && data.payload.id ? data.payload.id : 'Cita';
+                const st = data.payload && data.payload.status ? data.payload.status : '';
+                showLiveToast('Cita <strong>' + id + '</strong> actualizada a estado: <strong>' + st + '</strong>.', '🔄');
+                refreshPageSection();
+              } else if (data.type === 'THERAPIST_UPDATED' || data.type === 'THERAPIST_CREATED' || data.type === 'THERAPIST_DELETED') {
+                showLiveToast('Turnos y directorio de especialistas sincronizado en tiempo real.', '👨‍⚕️');
+                refreshPageSection();
+              } else if (data.type === 'MOOD_CREATED') {
+                showLiveToast('Nuevo chequeo de ánimo registrado desde el bot: ' + (data.payload && data.payload.mood ? data.payload.mood : ''), '🧠');
+                refreshPageSection();
+              } else if (data.type === 'TEST_CREATED') {
+                showLiveToast('Nuevo test ' + (data.payload && data.payload.testName ? data.payload.testName : 'clínico') + ' completado en vivo.', '📋');
+                refreshPageSection();
+              }
+            } catch(err) {}
+          };
+
+          eventSource.onerror = function() {
+            if (indicator) {
+              indicator.innerHTML = '<span style="width:8px;height:8px;background:#f59e0b;border-radius:50%;display:inline-block;"></span><span>RECONECTANDO</span>';
+              indicator.style.color = '#fbbf24';
+              indicator.style.borderColor = 'rgba(245,158,11,0.3)';
+            }
+            if (eventSource) { eventSource.close(); }
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connect, 3000);
+          };
+        } catch(err) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 4000);
+        }
+      }
+
+      connect();
+    }
+
     // Inicializar todos los validadores interactivos al cargar el DOM
     document.addEventListener('DOMContentLoaded', function() {
       initDocumentValidation();
@@ -1174,6 +1319,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       initTextareaCounters();
       initLicenseFormatting();
       initFormSubmitLock();
+      initRealtimeSync();
     });
   </script>
 </body>
@@ -2361,6 +2507,64 @@ portalRouter.post("/api/comandos", (req: Request, res: Response) => {
     addCustomCommand(String(command), String(response), "Juan Carlos (Admin)");
   }
   res.redirect("/comandos?created=true");
+});
+
+// =============================================================================
+// STREAM EN TIEMPO REAL (SERVER-SENT EVENTS / SIGNALR STREAM) — MINDCARE
+// =============================================================================
+portalRouter.get("/api/realtime/events", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  // Handshake inicial
+  res.write(`data: ${JSON.stringify({ type: "CONNECTED", message: "MindCare Realtime Stream Connected" })}\n\n`);
+
+  const onRealtimeChange = (event: any) => {
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch (_) {}
+  };
+
+  realtimeEvents.on("change", onRealtimeChange);
+
+  // Heartbeat keepalive cada 15s para evitar desconexiones en proxies como Railway
+  const keepAliveInterval = setInterval(() => {
+    try {
+      res.write(`: ping\n\n`);
+    } catch (_) {}
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(keepAliveInterval);
+    realtimeEvents.off("change", onRealtimeChange);
+  });
+});
+
+portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
+  const appointments = getAllPsyAppointments();
+  const confirmed = appointments.filter(a => a.status === "Confirmada").length;
+  const pending = appointments.filter(a => a.status === "Pendiente").length;
+  const canceled = appointments.filter(a => a.status === "Cancelada").length;
+  const moods = getAllMoodEntries();
+  const tests = getAllTestResults();
+  const therapists = getAllTherapists(true);
+
+  res.json({
+    status: "ok",
+    stats: {
+      totalAppointments: appointments.length,
+      confirmedAppointments: confirmed,
+      pendingAppointments: pending,
+      canceledAppointments: canceled,
+      totalMoods: moods.length,
+      totalTests: tests.length
+    },
+    recentAppointments: appointments.slice(0, 10),
+    activeTherapistsCount: therapists.filter(t => t.active).length
+  });
 });
 
 // =============================================================================
