@@ -54,7 +54,14 @@ import {
   authenticateStaff,
   ensurePatientForAppointment
 } from "./db.js";
-
+import {
+  getClientIp,
+  getLoginRateLimitStatus,
+  recordFailedLoginAttempt,
+  recordSuccessfulLogin,
+  resetLoginRateLimit,
+  RATE_LIMIT_CONFIG
+} from "./rateLimiter.js";
 
 export const portalRouter = Router();
 
@@ -937,25 +944,45 @@ function getInitials(name: string): string {
 // RUTA: LOGIN DE ADMINISTRADOR / PROPIETARIO DE LA CLÍNICA
 // =============================================================================
 portalRouter.get("/login", (req: Request, res: Response) => {
+  const clientIp = getClientIp(req);
+
+  // Soporte para pruebas docentes: restablecer rate limit con ?reset=1
+  if (req.query.reset === "1") {
+    resetLoginRateLimit(clientIp);
+    res.redirect("/login");
+    return;
+  }
+
+  const rateStatus = getLoginRateLimitStatus(clientIp);
+  res.setHeader("X-RateLimit-Limit", String(rateStatus.maxAttempts));
+  res.setHeader("X-RateLimit-Remaining", String(rateStatus.remainingAttempts));
+
+  if (rateStatus.isLocked) {
+    res.setHeader("Retry-After", String(rateStatus.retryAfterSeconds));
+    res.status(429);
+  }
+
   const error = req.query.error ? String(req.query.error) : "";
   const staffAccounts = getAllStaffAccounts();
+
+  const isLocked = rateStatus.isLocked;
 
   const content = `
     <div style="max-width: 540px; margin: 30px auto; padding: 0 16px;">
       <!-- Tarjeta Principal de Login -->
-      <div class="card" style="padding: 38px 32px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(20, 27, 48, 0.88) 0%, rgba(10, 15, 30, 0.96) 100%); backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(99, 102, 241, 0.15); position: relative; overflow: hidden;">
+      <div class="card" style="padding: 38px 32px; border: 1px solid ${isLocked ? 'rgba(239, 68, 68, 0.6)' : 'rgba(99, 102, 241, 0.4)'}; background: linear-gradient(180deg, rgba(20, 27, 48, 0.88) 0%, rgba(10, 15, 30, 0.96) 100%); backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px ${isLocked ? 'rgba(239, 68, 68, 0.25)' : 'rgba(99, 102, 241, 0.15)'}; position: relative; overflow: hidden;">
         
         <!-- Línea decorativa superior -->
-        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #10b981 100%);"></div>
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: ${isLocked ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 50%, #f59e0b 100%)' : 'linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #10b981 100%)'};"></div>
 
         <!-- Escudo / Icono Principal -->
-        <div style="width: 72px; height: 72px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%); border: 1.5px solid rgba(99, 102, 241, 0.5); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 2.2rem; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);">
-          🩺
+        <div style="width: 72px; height: 72px; background: ${isLocked ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.25) 100%)' : 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%)'}; border: 1.5px solid ${isLocked ? 'rgba(239, 68, 68, 0.6)' : 'rgba(99, 102, 241, 0.5)'}; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 2.2rem; box-shadow: 0 0 30px ${isLocked ? 'rgba(239, 68, 68, 0.35)' : 'rgba(99, 102, 241, 0.3)'};">
+          ${isLocked ? '🛡️' : '🩺'}
         </div>
 
         <div style="text-align: center; margin-bottom: 22px;">
-          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
-            🔒 Autenticación de Personal Clínico • Ley 1090
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: ${isLocked ? 'rgba(239, 68, 68, 0.16)' : 'rgba(99, 102, 241, 0.12)'}; border: 1px solid ${isLocked ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.3)'}; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: ${isLocked ? '#fca5a5' : '#a5b4fc'}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+            ${isLocked ? '⛔ Bloqueo por Fuerza Bruta Activo' : '🔒 Autenticación de Personal Clínico • Ley 1090'}
           </div>
           <h1 style="font-size: 1.75rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Portal de Acceso Profesional</h1>
           <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; margin: 0;">
@@ -963,14 +990,40 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </p>
         </div>
 
-        ${error ? `
-          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.2rem;">⚠️</span>
-            <span>${error}</span>
+        <!-- Banner de Bloqueo por Rate Limiting (Estándar OWASP ASVS / NIST SP 800-63B) -->
+        ${isLocked ? `
+          <div style="background: rgba(239, 68, 68, 0.16); border: 1.5px solid rgba(239, 68, 68, 0.55); border-radius: 16px; padding: 18px 20px; margin-bottom: 22px; color: #fca5a5; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 0.95rem; margin-bottom: 8px; color: #fecaca;">
+              <span style="font-size: 1.3rem;">🛡️</span>
+              <span>BLOQUEO DE SEGURIDAD CLÍNICA (OWASP ASVS / NIST SP 800-63B)</span>
+            </div>
+            <p style="font-size: 0.86rem; margin: 0 0 12px 0; color: #fca5a5; line-height: 1.55;">
+              Se ha superado el límite de <strong>${rateStatus.maxAttempts} intentos fallidos consecutivos</strong> de autenticación desde la dirección IP <code>${clientIp}</code>. Por política de ciberseguridad médica (Ley 1090 y Ley 1581 de 2012), el acceso ha sido suspendido temporalmente.
+            </p>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.35);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="spinner-inline" style="margin:0;"></span>
+                <span style="font-size: 0.84rem; color: #e2e8f0;">Tiempo de desbloqueo:</span>
+                <strong id="lockoutTimer" style="font-family: monospace; font-size: 1.15rem; color: #fbbf24;">${Math.floor(rateStatus.retryAfterSeconds / 60)}:${String(rateStatus.retryAfterSeconds % 60).padStart(2, '0')}</strong>
+              </div>
+              <a href="/login?reset=1" style="font-size: 0.78rem; color: #93c5fd; text-decoration: underline; font-weight: 700;">
+                🔄 Restablecer para prueba docente
+              </a>
+            </div>
           </div>
-        ` : ''}
+        ` : (error ? `
+          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+              <span style="font-size: 1.2rem;">⚠️</span>
+              <span>${error}</span>
+            </div>
+            <div style="font-size: 0.8rem; color: #fca5a5; font-weight: 500; margin-left: 28px; line-height: 1.4;">
+              🛡️ <strong>Control de Fuerza Bruta (OWASP ASVS):</strong> Intento fallido ${rateStatus.totalAttempts} de ${rateStatus.maxAttempts}. Te quedan <strong>${rateStatus.remainingAttempts} ${rateStatus.remainingAttempts === 1 ? 'intento restante' : 'intentos restantes'}</strong> antes del bloqueo temporal del consultorio.
+            </div>
+          </div>
+        ` : '')}
 
-        <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm" onsubmit="handleLoginSubmit(event)">
+        <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm" ${isLocked ? '' : 'onsubmit="handleLoginSubmit(event)"'}>
           <div style="margin-bottom: 16px;">
             <label for="credentialInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
               Usuario o Correo Institucional:
@@ -981,10 +1034,10 @@ portalRouter.get("/login", (req: Request, res: Response) => {
                 type="text" 
                 id="credentialInput" 
                 name="credential" 
-                style="width: 100%; padding: 12px 14px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none;" 
+                style="width: 100%; padding: 12px 14px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none; ${isLocked ? 'opacity: 0.5; cursor: not-allowed;' : ''}" 
                 placeholder="ej: admin o valentina@mindcare.clinic" 
                 value="admin"
-                required
+                ${isLocked ? 'disabled' : 'required'}
               >
             </div>
           </div>
@@ -999,10 +1052,9 @@ portalRouter.get("/login", (req: Request, res: Response) => {
                 type="password" 
                 id="passwordInput" 
                 name="password" 
-                style="width: 100%; padding: 12px 48px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none;" 
+                style="width: 100%; padding: 12px 48px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none; ${isLocked ? 'opacity: 0.5; cursor: not-allowed;' : ''}" 
                 placeholder="Ingresa la contraseña..." 
-                required 
-                autofocus
+                ${isLocked ? 'disabled' : 'required autofocus'}
               >
               <button 
                 type="button" 
@@ -1010,6 +1062,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
                 onclick="togglePasswordVisibility()" 
                 title="Mostrar u ocultar contraseña"
                 style="position: absolute; right: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+                ${isLocked ? 'disabled' : ''}
               >
                 <span id="eyeIcon">👁️</span>
               </button>
@@ -1020,11 +1073,12 @@ portalRouter.get("/login", (req: Request, res: Response) => {
             type="submit" 
             id="loginSubmitBtn"
             class="btn btn-primary" 
-            style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;"
+            style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: ${isLocked ? 'linear-gradient(135deg, #475569 0%, #334155 100%)' : 'linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%)'}; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease; ${isLocked ? 'opacity: 0.6; cursor: not-allowed;' : ''}"
+            ${isLocked ? 'disabled' : ''}
           >
             <span id="loginBtnSpinner" style="display: none;" class="spinner-inline"></span>
-            <span id="loginBtnText">Iniciar Sesión Clínica Segura</span>
-            <span id="loginBtnIcon">🚀</span>
+            <span id="loginBtnText">${isLocked ? '🔒 Acceso Bloqueado Temporalmente' : 'Iniciar Sesión Clínica Segura'}</span>
+            <span id="loginBtnIcon">${isLocked ? '⏳' : '🚀'}</span>
           </button>
 
           <!-- Banner de verificación interactivo al dar Enter o clic -->
@@ -1041,9 +1095,9 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             ${staffAccounts.map(s => `
-              <form action="/login" method="POST" style="margin:0;" onsubmit="handleQuickLogin(this, '${s.fullName}')">
+              <form action="/login" method="POST" style="margin:0;" ${isLocked ? '' : `onsubmit="handleQuickLogin(this, '${s.fullName}')"`}>
                 <input type="hidden" name="staffQuickLogin" value="${s.id}">
-                <button type="submit" style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; color: #e2e8f0; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;" onmouseover="this.style.background='rgba(99,102,241,0.2)'; this.style.borderColor='rgba(99,102,241,0.4)';" onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.08)';">
+                <button type="submit" ${isLocked ? 'disabled' : ''} style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; color: #e2e8f0; font-size: 0.76rem; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease; ${isLocked ? 'opacity: 0.4;' : ''}" onmouseover="${isLocked ? '' : "this.style.background='rgba(99,102,241,0.2)'; this.style.borderColor='rgba(99,102,241,0.4)';"}" onmouseout="${isLocked ? '' : "this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.08)';"}}">
                   <span class="quick-icon">${s.role === 'DIRECTOR_ADMIN' ? '👑' : s.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'}</span>
                   <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     <strong>${s.fullName.split(' ')[0]} ${s.fullName.split(' ')[1] || ''}</strong>
@@ -1058,7 +1112,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         <!-- Footer de Seguridad -->
         <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;">
           <span style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px;">
-            <span>🔒</span> Sesión clínica cifrada protegida por HTTP-Only cookies bajo Ley 1090.
+            <span>🔒</span> Sesión clínica protegida por Rate Limit (OWASP ASVS) y cookies HTTP-Only (Ley 1090).
           </span>
           <a href="/" style="color: #818cf8; text-decoration: none; font-size: 0.82rem; font-weight: 600;">
             ⬅️ Volver al Portal de Pacientes
@@ -1123,6 +1177,27 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           showGlobalLoader('Iniciando sesión como ' + name + '...');
         }
       }
+
+      // Cuenta regresiva en vivo si la IP está bloqueada por Rate Limit
+      ${isLocked ? `
+        (function() {
+          let remaining = ${rateStatus.retryAfterSeconds};
+          const timerEl = document.getElementById('lockoutTimer');
+          if (timerEl && remaining > 0) {
+            const intv = setInterval(function() {
+              remaining--;
+              if (remaining <= 0) {
+                clearInterval(intv);
+                window.location.href = '/login';
+              } else {
+                const m = Math.floor(remaining / 60);
+                const s = String(remaining % 60).padStart(2, '0');
+                timerEl.textContent = m + ':' + s;
+              }
+            }, 1000);
+          }
+        })();
+      ` : ''}
     </script>
   `;
 
@@ -1130,12 +1205,26 @@ portalRouter.get("/login", (req: Request, res: Response) => {
 });
 
 portalRouter.post("/login", (req: Request, res: Response) => {
+  const clientIp = getClientIp(req);
+  const rateStatus = getLoginRateLimitStatus(clientIp);
+
+  // 1. Verificación previa de bloqueo por Rate Limit (OWASP ASVS 2.2 / NIST SP 800-63B)
+  if (rateStatus.isLocked) {
+    res.setHeader("Retry-After", String(rateStatus.retryAfterSeconds));
+    res.setHeader("X-RateLimit-Limit", String(rateStatus.maxAttempts));
+    res.setHeader("X-RateLimit-Remaining", "0");
+    res.status(429);
+    res.redirect("/login");
+    return;
+  }
+
   const { credential, password, user, staffQuickLogin } = req.body;
 
-  // Si se usó el botón de acceso rápido de demostración docente
+  // 2. Si se usó el botón de acceso rápido de demostración docente
   if (staffQuickLogin) {
     const staff = getStaffById(String(staffQuickLogin));
     if (staff) {
+      recordSuccessfulLogin(clientIp); // Restablecer intentos al autenticar
       res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
       if (staff.role === "DIRECTOR_ADMIN") {
         res.redirect("/especialistas?login=success");
@@ -1146,15 +1235,19 @@ portalRouter.post("/login", (req: Request, res: Response) => {
     }
   }
 
-  // Retrocompatibilidad con el botón de propietario 1-click antiguo
+  // 3. Retrocompatibilidad con el botón de propietario 1-click antiguo
   if (user === "owner" || user === "juancarlos") {
+    recordSuccessfulLogin(clientIp);
     res.setHeader("Set-Cookie", "admin_session=staff-admin; Path=/; HttpOnly; Max-Age=86400");
     res.redirect("/especialistas?login=success");
     return;
   }
 
+  // 4. Verificación de credenciales (individuales por especialista o director)
   const staff = authenticateStaff(String(credential || "admin"), String(password || ""));
   if (staff) {
+    // ÉXITO: Limpiar contador de intentos fallidos según estándar OWASP
+    recordSuccessfulLogin(clientIp);
     res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
     if (staff.role === "DIRECTOR_ADMIN") {
       res.redirect("/especialistas?login=success");
@@ -1164,6 +1257,20 @@ portalRouter.post("/login", (req: Request, res: Response) => {
     return;
   }
 
+  // 5. FALLO DE AUTENTICACIÓN: Registrar intento fallido
+  const updatedStatus = recordFailedLoginAttempt(clientIp, String(credential || ""));
+
+  if (updatedStatus.isLocked) {
+    res.setHeader("Retry-After", String(updatedStatus.retryAfterSeconds));
+    res.setHeader("X-RateLimit-Limit", String(updatedStatus.maxAttempts));
+    res.setHeader("X-RateLimit-Remaining", "0");
+    res.status(429);
+    res.redirect("/login");
+    return;
+  }
+
+  res.setHeader("X-RateLimit-Limit", String(updatedStatus.maxAttempts));
+  res.setHeader("X-RateLimit-Remaining", String(updatedStatus.remainingAttempts));
   res.redirect("/login?error=Credenciales+incorrectas.+Verifica+usuario+o+correo+institucional.");
 });
 
