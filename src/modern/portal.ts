@@ -44,6 +44,7 @@ import {
   hasPsyAppointmentConflict,
   hasPatientAppointmentConflict,
   validateAppointmentDate,
+  validateBookingAvailability,
   flagPatientRisk
 } from "./db.js";
 
@@ -1806,44 +1807,46 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   const cleanDate = String(dateTime || "").trim();
   const consultationMotive = String(motive || notes || "").trim();
 
-  if (!cleanName || cleanName.length < 3) {
-    res.redirect("/citas?error=" + encodeURIComponent("El nombre del paciente debe tener al menos 3 caracteres."));
+  if (!cleanName || cleanName.length < 4 || cleanName.split(/\s+/).length < 2) {
+    res.redirect("/citas?error=" + encodeURIComponent("Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido con letras, ej: Juan Gutiérrez)."));
     return;
   }
+  if (/\d/.test(cleanName)) {
+    res.redirect("/citas?error=" + encodeURIComponent("El nombre del paciente no puede contener números. Por favor escribe un nombre real."));
+    return;
+  }
+
   const cleanDigitsDoc = cleanDoc.replace(/\D/g, "");
-  if (!cleanDigitsDoc || cleanDigitsDoc.length < 5) {
-    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (mínimo 5 dígitos numéricos)."));
+  if (!cleanDigitsDoc || cleanDigitsDoc.length < 5 || cleanDigitsDoc.length > 12) {
+    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (entre 5 y 12 dígitos numéricos)."));
     return;
   }
+  if (/^(\d)\1+$/.test(cleanDigitsDoc)) {
+    res.redirect("/citas?error=" + encodeURIComponent("El documento no puede consistir únicamente del mismo dígito repetido (ej: 000000)."));
+    return;
+  }
+  if (["12345", "123456", "1234567", "12345678", "0123456789", "987654321"].includes(cleanDigitsDoc)) {
+    res.redirect("/citas?error=" + encodeURIComponent("Has ingresado una secuencia numérica de prueba. Ingresa un documento oficial."));
+    return;
+  }
+
   if (!cleanDate || cleanDate.length < 4) {
     res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa una fecha y horario válidos (ej: Viernes 10:00 AM)."));
     return;
   }
 
-  // 1. Validación pesada de fechas pasadas y horario clínico
-  const dateValidation = validateAppointmentDate(cleanDate);
-  if (!dateValidation.valid) {
-    res.redirect("/citas?error=" + encodeURIComponent(dateValidation.reason || "Fecha u horario no válido para consulta clínica."));
-    return;
-  }
-
   const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === specialty) || PSYCHOLOGY_SPECIALTIES[0];
   const assignedTherapistName = getTherapistsBySpecialty(spec.name)[0]?.name || spec.therapist || "Especialista MindCare";
-  
-  // 2. Validación de conflicto del paciente (No permitir dos citas a la misma hora para el mismo paciente)
-  const patientConflict = hasPatientAppointmentConflict("", cleanDoc, cleanDate);
-  if (patientConflict) {
-    const isSame = patientConflict.therapist.toLowerCase() === assignedTherapistName.toLowerCase();
-    const errMsg = isSame 
-      ? `Cita duplicada: El paciente con documento ${cleanDoc} ya cuenta con una cita registrada con ${assignedTherapistName} en el horario "${cleanDate}".`
-      : `Conflicto de horario: El paciente con documento ${cleanDoc} ya tiene otra consulta médica en el horario "${cleanDate}" (con ${patientConflict.therapist}). No es posible agendar dos consultas al mismo tiempo.`;
-    res.redirect("/citas?error=" + encodeURIComponent(errMsg));
-    return;
-  }
 
-  // 3. Validación de conflicto del especialista (Doctor ocupado)
-  if (hasPsyAppointmentConflict(assignedTherapistName, cleanDate)) {
-    res.redirect("/citas?error=" + encodeURIComponent(`Conflicto de agenda médica: ${assignedTherapistName} ya cuenta con una cita en el horario "${cleanDate}". Por favor selecciona otro turno.`));
+  // Validación integral anti-colisión (médico ocupado, paciente duplicado, consultorio físico y fechas)
+  const availability = validateBookingAvailability({
+    therapistName: assignedTherapistName,
+    dateTime: cleanDate,
+    patientDocument: cleanDoc
+  });
+
+  if (!availability.valid) {
+    res.redirect("/citas?error=" + encodeURIComponent(availability.reason || "Horario no disponible para agendamiento."));
     return;
   }
 
@@ -1985,33 +1988,49 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
     <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(16, 185, 129, 0.4); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(13, 20, 36, 0.9) 100%);">
       <div class="card-header-styled">
         <div class="card-title" style="color: #34d399;">
-          <span>🎓</span> ¿Cómo sabe el sistema qué Doctor está disponible? (Algoritmo Anti-Colisión)
+          <span>🎓</span> ¿Cómo sabe el sistema qué Doctor está disponible? (Matriz de Anti-Colisión en 5 Capas)
         </div>
-        <span class="badge badge-success">Lógica de Disponibilidad</span>
+        <span class="badge badge-success">Motor Anti-Colisión Activo</span>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 10px;">
         <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
           <strong style="color: #38bdf8; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
             <span>1️⃣</span> Filtro de Estado Activo
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            La función <code>getAllTherapists(includeInactive=false)</code> descarta automáticamente a especialistas que hayan renunciado o tengan su turno pausado (vacaciones o licencia).
+            <code>getAllTherapists(includeInactive=false)</code> descarta automáticamente a especialistas inactivos o que hayan renunciado.
           </p>
         </div>
         <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
           <strong style="color: #a5b4fc; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
-            <span>2️⃣</span> Matriz de Especialidad
+            <span>2️⃣</span> Normalización Canónica
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            Al seleccionar un área en Telegram o Web (ej: <em>Terapia de Pareja</em>), <code>getTherapistsBySpecialty()</code> consulta los profesionales con esa competencia clínica y consultorio.
+            <code>normalizeDateTimeToCanonical()</code> unifica formatos coloquiales: "3:00 PM", "15:00", "3 de la tarde" y "3pm" resuelven a la misma clave única <code>YYYY-MM-DD_15:00</code>.
           </p>
         </div>
         <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
           <strong style="color: #fbbf24; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
-            <span>3️⃣</span> Detección de Conflictos de Horario
+            <span>3️⃣</span> Anti-Colisión Doctor (X vs Z)
           </strong>
           <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
-            Antes de confirmar, <code>hasPsyAppointmentConflict(therapist, dateTime)</code> escanea la base de datos de citas activas. Si el médico ya tiene turno en esa hora, bloquea el turno y exige seleccionar otra franja.
+            Si el Paciente X ya tiene turno con el Doctor A, y el Paciente Z intenta reservar al Doctor A en esa franja, el motor lo rechaza al instante.
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #f43f5e; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+            <span>4️⃣</span> Doble Agendamiento de Paciente
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            <code>hasPatientAppointmentConflict()</code> bloquea citas duplicadas y evita que un paciente agende dos citas simultáneas con diferentes doctores.
+          </p>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;">
+          <strong style="color: #34d399; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+            <span>5️⃣</span> Espacio Físico (Consultorios)
+          </strong>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 8px 0 0 0; line-height: 1.5;">
+            <code>hasOfficeAppointmentConflict()</code> garantiza que dos profesionales clínicos no sean programados en el mismo consultorio físico al mismo tiempo.
           </p>
         </div>
       </div>

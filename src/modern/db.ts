@@ -497,23 +497,127 @@ export function cancelPsyAppointment(id: string): boolean {
   return updatePsyAppointmentStatus(id, "Cancelada");
 }
 
-export function hasPsyAppointmentConflict(therapist: string, dateTime: string, excludeId?: string): boolean {
-  const normTime = dateTime.trim().toLowerCase();
-  return psyAppointments.some(a => 
-    a.therapist.toLowerCase() === therapist.toLowerCase() &&
-    a.dateTime.trim().toLowerCase() === normTime &&
-    a.status !== "Cancelada" &&
-    a.id !== excludeId
-  );
+export function normalizeDateTimeToCanonical(dateTime: string): string {
+  const raw = dateTime.trim().toLowerCase();
+  
+  // 1. Obtener fecha base en Colombia (UTC-5)
+  const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const todayStr = `${nowBogota.getFullYear()}-${String(nowBogota.getMonth() + 1).padStart(2, "0")}-${String(nowBogota.getDate()).padStart(2, "0")}`;
+  
+  const tomorrowBogota = new Date(nowBogota);
+  tomorrowBogota.setDate(tomorrowBogota.getDate() + 1);
+  const tomorrowStr = `${tomorrowBogota.getFullYear()}-${String(tomorrowBogota.getMonth() + 1).padStart(2, "0")}-${String(tomorrowBogota.getDate()).padStart(2, "0")}`;
+
+  const afterTomorrowBogota = new Date(nowBogota);
+  afterTomorrowBogota.setDate(afterTomorrowBogota.getDate() + 2);
+  const afterTomorrowStr = `${afterTomorrowBogota.getFullYear()}-${String(afterTomorrowBogota.getMonth() + 1).padStart(2, "0")}-${String(afterTomorrowBogota.getDate()).padStart(2, "0")}`;
+
+  // 2. Resolver componente de día/fecha
+  let dayKey = "";
+
+  // Fecha ISO explícita: YYYY-MM-DD
+  const isoMatch = raw.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (isoMatch) {
+    dayKey = `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+  } else {
+    // Fecha DD/MM/YYYY
+    const dmyMatch = raw.match(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b/);
+    if (dmyMatch) {
+      dayKey = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+    } else if (raw.includes("pasado mañana") || raw.includes("pasado manana")) {
+      dayKey = afterTomorrowStr;
+    } else if (raw.includes("mañana") || raw.includes("manana")) {
+      dayKey = tomorrowStr;
+    } else if (raw.includes("hoy")) {
+      dayKey = todayStr;
+    } else {
+      // Días de la semana
+      const dayMap: Record<string, number> = {
+        domingo: 0, lunes: 1, martes: 2, miercoles: 3, "miércoles": 3,
+        jueves: 4, viernes: 5, sabado: 6, "sábado": 6
+      };
+      for (const [dayName, targetDayNum] of Object.entries(dayMap)) {
+        if (new RegExp(`\\b${dayName}\\b`, "i").test(raw)) {
+          const currentDayNum = nowBogota.getDay();
+          let diffDays = targetDayNum - currentDayNum;
+          if (diffDays <= 0) diffDays += 7; // Próximo de la semana
+          const targetDate = new Date(nowBogota);
+          targetDate.setDate(targetDate.getDate() + diffDays);
+          dayKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Resolver componente de hora (HH:MM en 24h)
+  let timeKey = "";
+  const meridiemMatch = raw.match(/(am|pm|a\.m\.|p\.m\.|de la tarde|en la tarde|por la tarde|de la mañana|en la mañana|de la noche)/i);
+  const isPM = meridiemMatch ? /(pm|p\.m\.|tarde|noche)/i.test(meridiemMatch[0]) : false;
+  const isAM = meridiemMatch ? /(am|a\.m\.|mañana|madrugada)/i.test(meridiemMatch[0]) : false;
+
+  const h24Match = raw.match(/\b([0-2]?[0-9]):([0-5][0-9])\b/);
+  if (h24Match) {
+    let hh = parseInt(h24Match[1], 10);
+    const mm = h24Match[2];
+    if (isPM && hh < 12) hh += 12;
+    else if (isAM && hh === 12) hh = 0;
+    timeKey = `${String(hh).padStart(2, "0")}:${mm}`;
+  } else {
+    const hourOnlyMatch = raw.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\b/i);
+    if (hourOnlyMatch) {
+      let hh = parseInt(hourOnlyMatch[1], 10);
+      const mm = hourOnlyMatch[2] ? hourOnlyMatch[2] : "00";
+      if (isPM && hh < 12) hh += 12;
+      else if (isAM && hh === 12) hh = 0;
+      else if (!isAM && !isPM && hh < 7) hh += 12;
+      timeKey = `${String(hh).padStart(2, "0")}:${mm}`;
+    }
+  }
+
+  if (dayKey && timeKey) {
+    return `${dayKey}_${timeKey}`;
+  }
+
+  const cleanTokens = raw
+    .replace(/[^\w\sáéíóúñ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join("_");
+  return cleanTokens || raw;
 }
 
-/** Verifica si el paciente ya tiene una cita agendada en ese mismo horario */
-export function hasPatientAppointmentConflict(patientId: string, documentNumber: string | undefined, dateTime: string, excludeId?: string): PsyAppointment | undefined {
+export function hasPsyAppointmentConflict(therapist: string, dateTime: string, excludeId?: string): PsyAppointment | undefined {
   const normTime = dateTime.trim().toLowerCase();
-  const cleanDoc = documentNumber ? documentNumber.replace(/\D/g, "") : "";
+  const canonTime = normalizeDateTimeToCanonical(dateTime);
+  const normTherapist = therapist.trim().toLowerCase();
+
   return psyAppointments.find(a => {
     if (a.status === "Cancelada" || a.id === excludeId) return false;
-    if (a.dateTime.trim().toLowerCase() !== normTime) return false;
+    const aTherapist = a.therapist.trim().toLowerCase();
+    if (aTherapist !== normTherapist && !aTherapist.includes(normTherapist) && !normTherapist.includes(aTherapist)) {
+      return false;
+    }
+    const aNorm = a.dateTime.trim().toLowerCase();
+    const aCanon = normalizeDateTimeToCanonical(a.dateTime);
+    return aNorm === normTime || aCanon === canonTime;
+  });
+}
+
+/** Verifica si el paciente ya tiene una cita agendada en ese mismo horario (mismo especialista o diferente) */
+export function hasPatientAppointmentConflict(patientId: string, documentNumber: string | undefined, dateTime: string, excludeId?: string): PsyAppointment | undefined {
+  const normTime = dateTime.trim().toLowerCase();
+  const canonTime = normalizeDateTimeToCanonical(dateTime);
+  const cleanDoc = documentNumber ? documentNumber.replace(/\D/g, "") : "";
+
+  return psyAppointments.find(a => {
+    if (a.status === "Cancelada" || a.id === excludeId) return false;
+    const aNorm = a.dateTime.trim().toLowerCase();
+    const aCanon = normalizeDateTimeToCanonical(a.dateTime);
+    const timeMatches = aNorm === normTime || aCanon === canonTime;
+    if (!timeMatches) return false;
+
     // Mismo ID de Telegram o web
     if (patientId && a.patientId === patientId) return true;
     // Misma cédula / documento
@@ -522,7 +626,28 @@ export function hasPatientAppointmentConflict(patientId: string, documentNumber:
   });
 }
 
-/** Validación clínica robusta de fechas y horarios para evitar fechas pasadas y colisiones */
+/** Verifica si el consultorio físico ya está ocupado a esa hora por otro especialista */
+export function hasOfficeAppointmentConflict(office: string, dateTime: string, excludeId?: string): PsyAppointment | undefined {
+  const normTime = dateTime.trim().toLowerCase();
+  const canonTime = normalizeDateTimeToCanonical(dateTime);
+  const cleanOffice = office.trim().toLowerCase();
+
+  return psyAppointments.find(a => {
+    if (a.status === "Cancelada" || a.id === excludeId) return false;
+    const aNorm = a.dateTime.trim().toLowerCase();
+    const aCanon = normalizeDateTimeToCanonical(a.dateTime);
+    const timeMatches = aNorm === normTime || aCanon === canonTime;
+    if (!timeMatches) return false;
+
+    const th = psyTherapists.find(t => t.name.toLowerCase() === a.therapist.toLowerCase());
+    const spec = psySpecialties.find(s => s.name.toLowerCase() === a.specialty.toLowerCase());
+    const appOffice = (th?.office || spec?.office || "").trim().toLowerCase();
+
+    return appOffice && appOffice === cleanOffice;
+  });
+}
+
+/** Validación clínica robusta de fechas y horarios para evitar fechas pasadas y domingos */
 export function validateAppointmentDate(dateTime: string): { valid: boolean; reason?: string } {
   const clean = dateTime.trim();
   const lower = clean.toLowerCase();
@@ -568,9 +693,31 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
         reason: "La fecha seleccionada es anterior a hoy en el calendario. Por favor elige una fecha posterior." 
       };
     }
+    if (targetDate.getDay() === 0) {
+      return {
+        valid: false,
+        reason: "La fecha seleccionada cae en domingo. MindCare atiende de Lunes a Sábado."
+      };
+    }
+    const maxFuture = new Date();
+    maxFuture.setDate(maxFuture.getDate() + 90);
+    if (targetDate > maxFuture) {
+      return {
+        valid: false,
+        reason: "La fecha supera el límite máximo de programación (90 días). Las agendas se abren con hasta 3 meses de anticipación."
+      };
+    }
   }
 
-  // 4. Si menciona "hoy", verificar si la hora ya transcurrió en Colombia
+  // 4. Si menciona "domingo"
+  if (/\bdomingos?\b/i.test(lower)) {
+    return {
+      valid: false,
+      reason: "MindCare permanece cerrado los días domingo por descanso institucional. Por favor agenda tu cita de Lunes a Sábado entre las 7:00 AM y las 8:00 PM."
+    };
+  }
+
+  // 5. Si menciona "hoy", verificar si la hora ya transcurrió en Colombia
   if (lower.includes("hoy")) {
     const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
     const currentHour24 = nowBogota.getHours();
@@ -597,7 +744,7 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
     }
   }
 
-  // 5. Horario de atención clínica (7 AM a 8 PM)
+  // 6. Horario de atención clínica (7 AM a 8 PM)
   const timeCheck = lower.match(/(?:a\s+las?|\bhora:?|\b)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?/i);
   if (timeCheck) {
     let hour = parseInt(timeCheck[1], 10);
@@ -605,11 +752,90 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
     if (meridiem === "pm" && hour < 12) hour += 12;
     else if (meridiem === "am" && hour === 12) hour = 0;
 
-    // Madrugada entre 00:00 y 05:59 o noche después de las 21:00
-    if ((meridiem === "am" && (hour < 6 || hour === 0)) || hour > 21) {
+    // Madrugada entre 00:00 y 06:59 o noche después de las 20:00
+    if ((meridiem === "am" && (hour < 7 || hour === 0)) || hour > 20) {
       return { 
         valid: false, 
         reason: "Horario fuera de atención clínica. MindCare atiende de Lunes a Sábado entre las 7:00 AM y las 8:00 PM." 
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+export interface BookingAvailabilityCheck {
+  valid: boolean;
+  code?: "PAST_DATE" | "SUNDAY_CLOSED" | "OFF_HOURS" | "DOCTOR_BUSY" | "PATIENT_DUPLICATE" | "PATIENT_BUSY_OTHER" | "OFFICE_BUSY" | "DOCTOR_INACTIVE" | "INVALID_INPUT";
+  reason?: string;
+  conflictingAppointment?: PsyAppointment;
+}
+
+/** Validador maestro que evalúa la matriz exhaustiva de disponibilidad clínica */
+export function validateBookingAvailability(params: {
+  therapistName: string;
+  dateTime: string;
+  patientId?: string;
+  patientDocument?: string;
+  excludeId?: string;
+}): BookingAvailabilityCheck {
+  // 1. Validar fecha y horario básico (pasadas, domingos, horas clínicas)
+  const dateVal = validateAppointmentDate(params.dateTime);
+  if (!dateVal.valid) {
+    return { valid: false, code: "PAST_DATE", reason: dateVal.reason };
+  }
+
+  // 2. Validar que el especialista exista y esté activo
+  const th = psyTherapists.find(t => t.name.toLowerCase() === params.therapistName.toLowerCase());
+  if (th && !th.active) {
+    return {
+      valid: false,
+      code: "DOCTOR_INACTIVE",
+      reason: `El especialista ${params.therapistName} no se encuentra disponible actualmente (estado: inactivo o retirado). Por favor selecciona otro profesional activo.`
+    };
+  }
+
+  // 3. Validar colisión del paciente (doble cita a la misma hora o cita duplicada)
+  const patientConflict = hasPatientAppointmentConflict(params.patientId || "", params.patientDocument, params.dateTime, params.excludeId);
+  if (patientConflict) {
+    const isSameDoc = patientConflict.therapist.toLowerCase() === params.therapistName.toLowerCase();
+    if (isSameDoc) {
+      return {
+        valid: false,
+        code: "PATIENT_DUPLICATE",
+        conflictingAppointment: patientConflict,
+        reason: `Cita duplicada: Ya tienes una consulta programada con ${params.therapistName} para el turno "${params.dateTime}". No es posible agendar dos veces la misma cita.`
+      };
+    } else {
+      return {
+        valid: false,
+        code: "PATIENT_BUSY_OTHER",
+        conflictingAppointment: patientConflict,
+        reason: `Conflicto de agenda personal: Ya tienes otra cita médica programada en el horario "${params.dateTime}" con ${patientConflict.therapist}. Un paciente no puede asistir a dos consultas al mismo tiempo.`
+      };
+    }
+  }
+
+  // 4. Validar colisión del especialista (Doctor ocupado por otro paciente)
+  const doctorConflict = hasPsyAppointmentConflict(params.therapistName, params.dateTime, params.excludeId);
+  if (doctorConflict) {
+    return {
+      valid: false,
+      code: "DOCTOR_BUSY",
+      conflictingAppointment: doctorConflict,
+      reason: `Conflicto de agenda médica: ${params.therapistName} ya cuenta con una cita reservada en el horario "${params.dateTime}" (Turno ocupado por el paciente ${doctorConflict.patientName}). Por favor elige otro horario o día.`
+    };
+  }
+
+  // 5. Validar colisión de consultorio físico (Dos terapeutas en el mismo consultorio a la misma hora)
+  if (th?.office) {
+    const officeConflict = hasOfficeAppointmentConflict(th.office, params.dateTime, params.excludeId);
+    if (officeConflict && officeConflict.therapist.toLowerCase() !== params.therapistName.toLowerCase()) {
+      return {
+        valid: false,
+        code: "OFFICE_BUSY",
+        conflictingAppointment: officeConflict,
+        reason: `Conflicto de espacio físico: El consultorio ${th.office} ya está asignado a ${officeConflict.therapist} en ese horario. Por favor selecciona otro turno.`
       };
     }
   }

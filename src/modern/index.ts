@@ -14,7 +14,8 @@ import {
   saveTestResult, getUserTestResults, getAllTestResults,
   getActiveTest, setActiveTest, clearActiveTest, GAD2_QUESTIONS, PHQ9_QUESTIONS, PSS4_QUESTIONS, PSYCHO_TIPS,
   getAllPatients, getPatientById, createPatient, getCRMMetrics, getAllPayments, recordPatientPayment,
-  flagPatientRisk, hasPsyAppointmentConflict, hasPatientAppointmentConflict, validateAppointmentDate
+  flagPatientRisk, hasPsyAppointmentConflict, hasPatientAppointmentConflict, validateAppointmentDate,
+  hasOfficeAppointmentConflict, validateBookingAvailability, normalizeDateTimeToCanonical
 } from "./db.js";
 import { portalRouter } from "./portal.js";
 import { gamesMenu, handleGameCommand, maybeHandleGameAnswer } from "./games.js";
@@ -1304,6 +1305,41 @@ bot.on("callback_query", async (ctx) => {
     else if (data === "quick_date_pasado_10am") chosenDate = "Pasado Mañana a las 10:00 AM";
     else if (data === "quick_date_pasado_4pm") chosenDate = "Pasado Mañana a las 4:00 PM";
 
+    // Validación inmediata de disponibilidad para este turno rápido
+    const therapistName = state.therapist ?? "Dra. Valentina Ríos";
+    const availability = validateBookingAvailability({
+      therapistName,
+      dateTime: chosenDate,
+      patientId: userId,
+      patientDocument: state.documentNumber
+    });
+
+    if (!availability.valid) {
+      await ctx.reply(
+        `⚠️ ${availability.reason}\n\nPor favor selecciona otro de los turnos disponibles o escribe un horario personalizado en el chat 📅:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
+                { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
+              ],
+              [
+                { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
+                { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
+              ],
+              [
+                { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+                { text: "❌ Cancelar", callback_data: "cancel_booking" }
+              ]
+            ]
+          }
+        }
+      );
+      return;
+    }
+
     setBookingState(userId, { ...state, step: "ask_motive", date: chosenDate, pendingDate: undefined });
     await ctx.reply(
       `📌 Horario seleccionado: *${chosenDate}*.\n\n🩺 *¿Cuál es el motivo principal de tu consulta?*\nSelecciona un motivo con los botones o escribe uno personalizado en el chat:`,
@@ -1509,31 +1545,16 @@ bot.on("callback_query", async (ctx) => {
       return;
     }
 
-    // 1. Validación de fecha y hora válida (evitar fechas pasadas)
-    const dateVal = validateAppointmentDate(state.date);
-    if (!dateVal.valid) {
-      await ctx.reply(`⚠️ ${dateVal.reason || "La fecha u horario seleccionado no es válido."}\n\nPor favor escribe otro horario:`);
-      setBookingState(userId, { ...state, step: "ask_date" });
-      return;
-    }
+    // Validación integral anti-colisión (médico, paciente, consultorio físico y fechas)
+    const availability = validateBookingAvailability({
+      therapistName: state.therapist,
+      dateTime: state.date,
+      patientId: userId,
+      patientDocument: state.documentNumber
+    });
 
-    // 2. Validación de conflicto del paciente (Evitar que el mismo usuario/cédula agende doble cita a la misma hora)
-    const patientConflict = hasPatientAppointmentConflict(userId, state.documentNumber, state.date);
-    if (patientConflict) {
-      const isSameDoc = patientConflict.therapist.toLowerCase() === state.therapist.toLowerCase();
-      await ctx.reply(
-        isSameDoc
-          ? `⚠️ *Cita duplicada:* Ya tienes registrada una cita con ${state.therapist} para el horario *${state.date}*.\n\nNo es posible duplicar la misma cita. Revisa tus citas con /miscitas.`
-          : `⚠️ *Conflicto de horario:* Ya cuentas con otra consulta médica programada para *${state.date}* con ${patientConflict.therapist}.\n\nNo puedes estar en dos citas a la vez. Elige otro horario para esta consulta:`,
-        { parse_mode: "Markdown" }
-      );
-      setBookingState(userId, { ...state, step: "ask_date" });
-      return;
-    }
-
-    // 3. Validación de conflicto del especialista médico (Doctor ocupado)
-    if (hasPsyAppointmentConflict(state.therapist, state.date)) {
-      await ctx.reply(`⚠️ *Conflicto de agenda médica:* ${state.therapist} ya cuenta con una cita en el horario "${state.date}".\n\nPor favor selecciona otro horario o día:`);
+    if (!availability.valid) {
+      await ctx.reply(`⚠️ ${availability.reason}\n\nPor favor selecciona otro horario o día para tu consulta:`, { parse_mode: "Markdown" });
       setBookingState(userId, { ...state, step: "ask_date" });
       return;
     }
@@ -2125,7 +2146,17 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    if (cleanName.length < 3 || /^\d+$/.test(cleanName) || cleanName.split(/\s+/).length < 2) {
+    if (/\d/.test(cleanName)) {
+      await ctx.reply("⚠️ El nombre no puede contener números (ej: 'Carlos123' o 'Juan 2'). Por favor escribe tu nombre y apellido reales sólo con letras 😊:");
+      return;
+    }
+
+    if (/^([a-záéíóúñA-ZÁÉÍÓÚÑ])\1+$/i.test(cleanName.replace(/\s+/g, ""))) {
+      await ctx.reply("⚠️ El nombre ingresado no es válido (letras repetidas sin sentido). Por favor escribe tu nombre y apellido reales 😊:");
+      return;
+    }
+
+    if (cleanName.length < 4 || cleanName.split(/\s+/).length < 2) {
       await ctx.reply("⚠️ Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido, ej: 'Andrés López') para registrarte en la ficha clínica 😊:");
       return;
     }
@@ -2162,6 +2193,18 @@ bot.on("text", async (ctx) => {
 
     if (cleanDigits.length < 5 || cleanDigits.length > 12) {
       await ctx.reply("⚠️ El número de documento debe contener entre 5 y 12 dígitos numéricos válidos (ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:");
+      return;
+    }
+
+    // Validación novato: dígitos idénticos repetidos (ej: 00000000, 11111111)
+    if (/^(\d)\1+$/.test(cleanDigits)) {
+      await ctx.reply("⚠️ El número de documento no puede consistir únicamente del mismo dígito repetido (ej: '00000000', '11111111'). Por favor ingresa tu número de cédula o DNI oficial 🪪:");
+      return;
+    }
+
+    // Validación novato: secuencias numéricas de prueba obvias
+    if (["12345", "123456", "1234567", "12345678", "0123456789", "987654321"].includes(cleanDigits)) {
+      await ctx.reply("⚠️ Has ingresado una secuencia numérica de prueba. Por favor ingresa tu número de documento de identidad oficial 🪪:");
       return;
     }
 
@@ -2372,30 +2415,17 @@ bot.on("text", async (ctx) => {
 
     const therapist = bookingState.therapist ?? "Dra. Valentina Ríos";
 
-    // 1. Conflicto del paciente (no permitir que el paciente agende dos citas a la misma hora o duplique la misma cita)
-    const patientConflict = hasPatientAppointmentConflict(userId, bookingState.documentNumber, cleanDate);
-    if (patientConflict) {
-      const isSameDoc = patientConflict.therapist.toLowerCase() === therapist.toLowerCase();
-      await ctx.reply(
-        isSameDoc
-          ? `⚠️ *Cita duplicada:* Ya tienes registrada una cita con ${therapist} para el horario *${cleanDate}*.\n\nNo es posible duplicar la misma cita. Revisa tus citas con /miscitas o elige otro horario:`
-          : `⚠️ *Conflicto de horario:* Ya cuentas con otra consulta médica programada para *${cleanDate}* con ${patientConflict.therapist}.\n\nNo puedes estar en dos citas a la vez. Por favor elige otro horario:`,
-        {
-          parse_mode: "Markdown",
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "📅 Elegir otro horario", callback_data: "ask_date_retry" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
-            ]
-          }
-        }
-      );
-      return;
-    }
+    // Validación integral anti-colisión (médico, paciente, consultorio físico y franja horaria)
+    const availability = validateBookingAvailability({
+      therapistName: therapist,
+      dateTime: cleanDate,
+      patientId: userId,
+      patientDocument: bookingState.documentNumber
+    });
 
-    // 2. Conflicto de agenda médica (especialista ocupado)
-    if (hasPsyAppointmentConflict(therapist, cleanDate)) {
+    if (!availability.valid) {
       await ctx.reply(
-        `⚠️ *Conflicto de horario:* ${therapist} ya cuenta con una cita en el horario "${cleanDate}".\n\nPor favor escribe otro horario o día para tu consulta (ej: 1 hora más tarde o al día siguiente):`,
+        `⚠️ ${availability.reason}`,
         {
           parse_mode: "Markdown",
           reply_markup: {
