@@ -283,10 +283,11 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     }
 
     .nav-link.active {
-      color: #fff;
-      background: rgba(14, 165, 233, 0.15);
-      border: 1px solid rgba(14, 165, 233, 0.35);
-      box-shadow: 0 0 16px rgba(14, 165, 233, 0.15);
+      color: #38bdf8 !important;
+      font-weight: 800 !important;
+      background: rgba(14, 165, 233, 0.22) !important;
+      border: 1px solid rgba(56, 189, 248, 0.55) !important;
+      box-shadow: 0 0 18px rgba(14, 165, 233, 0.3) !important;
     }
 
     .nav-btn-tg {
@@ -854,10 +855,6 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         </div>
       </a>
       <nav class="nav-links">
-        <div id="mindcare-live-indicator" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:20px; padding:4px 10px; font-size:0.75rem; color:#34d399; font-weight:700;" title="Sincronización en tiempo real vía Server-Sent Events / SignalR Stream">
-          <span class="live-pulse-dot"></span>
-          <span>EN VIVO</span>
-        </div>
         ${isStaff ? `
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
             🌐 Ver Sitio Web
@@ -882,13 +879,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
             🏠 Inicio
           </a>
-          <a href="/citas#agendar-paciente" class="nav-link ${activeTab === 'agendar' ? 'active' : ''}">
+          <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
             📅 Agendar Cita
           </a>
           <a href="/#especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
             👨‍⚕️ Especialistas
           </a>
-          <a href="/citas#consultar-cita" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
+          <a href="/citas#consultar-cita" class="nav-link ${activeTab === 'consultar' ? 'active' : ''}">
             🔎 Consultar Mi Cita
           </a>
           <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(99,102,241,0.4);">
@@ -899,6 +896,46 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <span class="status-dot"></span> Bot Telegram 💬
         </a>
       </nav>
+      <script>
+        (function() {
+          function updateActiveNavState() {
+            const currentPath = window.location.pathname.replace(/\\/+$/, '') || '/';
+            const currentHash = window.location.hash;
+            const links = document.querySelectorAll('.nav-links .nav-link:not(.nav-btn-tg)');
+            
+            links.forEach(function(link) {
+              const href = link.getAttribute('href');
+              if (!href) return;
+              try {
+                const target = new URL(href, window.location.origin);
+                const targetPath = target.pathname.replace(/\\/+$/, '') || '/';
+                const targetHash = target.hash;
+
+                let matches = false;
+                if (targetHash && currentHash) {
+                  matches = (targetPath === currentPath && targetHash === currentHash);
+                } else if (!currentHash) {
+                  if (targetPath === '/' && currentPath === '/') {
+                    matches = !targetHash;
+                  } else if (targetPath !== '/' && currentPath === targetPath) {
+                    matches = !targetHash;
+                  }
+                }
+
+                if (matches) {
+                  link.classList.add('active');
+                } else if (targetHash !== currentHash || targetPath !== currentPath) {
+                  link.classList.remove('active');
+                }
+              } catch(e) {}
+            });
+          }
+          window.addEventListener('hashchange', updateActiveNavState);
+          window.addEventListener('popstate', updateActiveNavState);
+          window.addEventListener('DOMContentLoaded', updateActiveNavState);
+          updateActiveNavState();
+        })();
+      </script>
     </div>
   </header>
 
@@ -1904,7 +1941,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </p>
 
       <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-        <a href="/citas#agendar-paciente" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
+        <a href="/citas" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
           📅 Agendar Mi Consulta
         </a>
         <a href="/citas#consultar-cita" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
