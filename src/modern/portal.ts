@@ -855,8 +855,51 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       }
     }
 
+    /* Botón Hamburguesa de Navegación Móvil */
+    .mobile-menu-btn {
+      display: none;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      width: 40px;
+      height: 40px;
+      padding: 9px 8px;
+      cursor: pointer;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      transition: all 0.25s ease;
+      z-index: 1002;
+    }
+
+    .mobile-menu-btn .bar {
+      width: 22px;
+      height: 2.2px;
+      background: #f8fafc;
+      border-radius: 2px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .mobile-menu-btn.open .bar-1 {
+      transform: translateY(7.5px) rotate(45deg);
+      background: #38bdf8;
+    }
+    .mobile-menu-btn.open .bar-2 {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    .mobile-menu-btn.open .bar-3 {
+      transform: translateY(-7.5px) rotate(-45deg);
+      background: #38bdf8;
+    }
+
     @media (max-width: 768px) {
-      /* Encabezado y Barra de Navegación */
+      /* Botón hamburguesa visible en móvil */
+      .mobile-menu-btn {
+        display: flex !important;
+      }
+
+      /* Barra de navegación móvil de altura compacta y fija */
       header {
         position: sticky;
         top: 0;
@@ -864,107 +907,172 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         padding: 0;
       }
       .navbar {
-        padding: 10px 12px;
-        gap: 10px;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 8px 14px !important;
+        height: 58px !important;
+        position: relative;
       }
       .brand {
-        gap: 10px;
+        gap: 8px !important;
       }
       .brand-icon {
-        width: 36px;
-        height: 36px;
+        width: 34px !important;
+        height: 34px !important;
       }
       .brand-icon svg {
-        width: 20px;
-        height: 20px;
+        width: 18px !important;
+        height: 18px !important;
       }
       .brand-text h1 {
-        font-size: 1.05rem;
+        font-size: 1.05rem !important;
       }
       .brand-text span {
-        font-size: 0.65rem;
-      }
-      .nav-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        justify-content: center;
-      }
-      .nav-link {
-        font-size: 0.78rem !important;
-        padding: 6px 9px !important;
-        gap: 5px;
-      }
-      .nav-btn-tg {
-        font-size: 0.78rem !important;
-        padding: 6px 12px !important;
-      }
-      .admin-pill {
-        font-size: 0.75rem !important;
-        padding: 4px 10px !important;
+        font-size: 0.62rem !important;
       }
 
-      /* Contenedor principal sin desbordes */
+      /* Menú desplegable móvil tipo drawer con efecto glassmorphic */
+      .nav-links {
+        display: none !important;
+        position: absolute;
+        top: 58px;
+        left: 0;
+        right: 0;
+        background: rgba(6, 10, 20, 0.98) !important;
+        backdrop-filter: blur(25px) !important;
+        -webkit-backdrop-filter: blur(25px) !important;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.35) !important;
+        padding: 14px 16px 20px !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.85);
+        z-index: 1001;
+      }
+
+      .nav-links.mobile-open {
+        display: flex !important;
+        animation: mobileNavSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes mobileNavSlide {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .nav-link {
+        width: 100% !important;
+        padding: 11px 14px !important;
+        font-size: 0.9rem !important;
+        border-radius: 10px !important;
+        justify-content: flex-start !important;
+        box-sizing: border-box !important;
+      }
+
+      .nav-btn-tg {
+        width: 100% !important;
+        padding: 11px 14px !important;
+        font-size: 0.9rem !important;
+        justify-content: center !important;
+        margin-top: 4px !important;
+      }
+
+      .admin-pill {
+        width: 100% !important;
+        justify-content: space-between !important;
+        padding: 10px 14px !important;
+      }
+
+      /* Contenedor principal sin desbordes laterales */
       main {
         padding: 14px 10px 40px !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
 
-      /* Tarjetas y Contenedores */
-      .card {
+      /* Sobrescritura inteligente de tarjetas con paddings inflados */
+      .card,
+      [style*="padding: 44px"],
+      [style*="padding: 40px"],
+      [style*="padding: 36px"],
+      [style*="padding: 34px"],
+      [style*="padding: 32px"],
+      [style*="padding: 26px"] {
         padding: 18px 14px !important;
         border-radius: 16px !important;
         margin-bottom: 16px !important;
       }
       .card-title {
-        font-size: 1.1rem !important;
-      }
-
-      /* Títulos y textos principales */
-      h1 {
-        font-size: 1.55rem !important;
-        line-height: 1.25 !important;
-        letter-spacing: -0.015em !important;
-      }
-      h2 {
-        font-size: 1.35rem !important;
-      }
-      h3 {
         font-size: 1.05rem !important;
       }
-      p {
+
+      /* Jerarquía tipográfica móvil equilibrada */
+      h1,
+      [style*="font-size: 2.45rem"],
+      [style*="font-size: 2.25rem"],
+      [style*="font-size: 2.1rem"],
+      [style*="font-size: 2rem"] {
+        font-size: 1.45rem !important;
+        line-height: 1.25 !important;
+        letter-spacing: -0.015em !important;
+        margin-bottom: 12px !important;
+      }
+      h2, [style*="font-size: 1.8rem"] {
+        font-size: 1.25rem !important;
+      }
+      h3, [style*="font-size: 1.25rem"] {
+        font-size: 1.05rem !important;
+      }
+      p,
+      [style*="font-size: 1.05rem"],
+      [style*="font-size: 1.02rem"],
+      [style*="font-size: 0.98rem"] {
         font-size: 0.88rem !important;
-        line-height: 1.5 !important;
+        line-height: 1.52 !important;
+        margin-bottom: 16px !important;
       }
 
-      /* Botones amigables al tacto */
+      /* Botones amigables al tacto y apilados en móvil */
       .btn {
-        padding: 10px 16px !important;
+        padding: 11px 16px !important;
         font-size: 0.88rem !important;
       }
 
-      /* Contenedores de botones apilados en móvil */
+      /* Contenedores de botones de acción rápida */
       .hero-banner [style*="display: flex"],
-      .card [style*="display: flex; gap: 12px"],
+      .card [style*="display: flex; gap: 12px; flex-wrap: wrap"],
       .card [style*="display:flex; gap:12px"],
-      [style*="display:flex; justify-content:space-between; align-items:center"] {
+      .card [style*="display: flex; gap: 12px"] {
         flex-direction: column !important;
         align-items: stretch !important;
-        gap: 10px !important;
+        gap: 8px !important;
       }
 
-      .card [style*="display: flex; gap: 12px"] a.btn,
-      .card [style*="display:flex; gap:12px"] a.btn,
-      .card [style*="display: flex; gap: 10px"] a.btn,
-      .card [style*="display:flex; gap:10px"] a.btn {
+      .card [style*="display: flex; gap: 12px; flex-wrap: wrap"] a,
+      .card [style*="display:flex; gap:12px"] a,
+      .card [style*="display: flex; gap: 10px"] a,
+      .card [style*="display:flex; gap:10px; flex-wrap:wrap"] a {
         width: 100% !important;
         text-align: center !important;
         justify-content: center !important;
         box-sizing: border-box !important;
       }
 
-      /* Formularios e inputs (evitar auto-zoom en iOS Safari con font-size: 16px) */
+      /* Formularios de búsqueda y filtros en móvil */
+      #consultar-cita form,
+      form[style*="display:flex; gap:12px; flex-wrap:wrap"],
+      form[style*="display: flex; gap: 12px; flex-wrap: wrap"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+      #consultar-cita form .input-wrapper,
+      #consultar-cita form .btn {
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      /* Formularios e inputs (font-size: 16px previene auto-zoom molesto en iOS Safari) */
       input[type="text"],
       input[type="date"],
       input[type="number"],
@@ -982,16 +1090,26 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         padding-left: 42px !important;
       }
 
-      /* Tablas con scroll horizontal suave en móvil */
-      .table-responsive, [style*="overflow-x: auto"], table {
+      /* Botones rápidos de horario (quick slots) */
+      .quick-slot-btn {
+        flex: 1 1 calc(50% - 6px) !important;
+        padding: 7px 4px !important;
+        font-size: 0.74rem !important;
+        text-align: center !important;
+      }
+
+      /* Tablas con scroll horizontal suave y táctil en móvil */
+      .table-responsive, [style*="overflow-x: auto"] {
         width: 100% !important;
+        max-width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         display: block !important;
+        border-radius: 12px !important;
       }
       table {
-        min-width: 520px !important;
-        font-size: 0.82rem !important;
+        min-width: 500px !important;
+        font-size: 0.8rem !important;
       }
       th, td {
         padding: 9px 8px !important;
@@ -1002,24 +1120,52 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       [id^="modal-"] > div {
         width: 95% !important;
         max-width: 95% !important;
-        margin: 16px auto !important;
+        margin: 14px auto !important;
         padding: 18px 14px !important;
         max-height: 88vh !important;
         overflow-y: auto !important;
         border-radius: 16px !important;
       }
 
-      /* Grillas de estadísticas y métricas KPI */
-      [style*="grid-template-columns: repeat(auto-fit, minmax"] {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 10px !important;
+      /* Grillas de estadísticas (4 cards) y KPIs (6 cards) en 2 columnas en teléfonos */
+      [style*="grid-template-columns: repeat(auto-fit, minmax(210px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(180px"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        margin-bottom: 20px !important;
+      }
+      [style*="grid-template-columns: repeat(auto-fit, minmax(210px"] .card,
+      [style*="grid-template-columns: repeat(auto-fit, minmax(180px"] .card {
+        padding: 14px 10px !important;
+      }
+      [style*="grid-template-columns: repeat(auto-fit, minmax(210px"] [style*="font-size: 2.2rem"] {
+        font-size: 1.55rem !important;
+      }
+      [style*="grid-template-columns: repeat(auto-fit, minmax(180px"] h3 {
+        font-size: 1.45rem !important;
+      }
+
+      /* Grillas de contenido adaptables a 1 columna en móvil */
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      [style*="grid-template-columns: repeat(auto-fit, minmax(240px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(250px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(260px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(280px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(300px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(320px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(350px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(360px"] {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
       }
 
       /* Barra de estado staff superior */
       [style*="background: linear-gradient(90deg, rgba(99, 102, 241"] {
         flex-direction: column !important;
         align-items: stretch !important;
-        gap: 10px !important;
+        gap: 8px !important;
         padding: 12px 14px !important;
       }
       [style*="background: linear-gradient(90deg, rgba(99, 102, 241"] a.btn {
@@ -1029,37 +1175,34 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
       /* Pie de página */
       footer {
-        padding: 22px 14px 34px !important;
+        padding: 20px 14px 30px !important;
       }
       footer > div {
         flex-direction: column !important;
-        gap: 10px !important;
+        gap: 8px !important;
         text-align: center !important;
       }
     }
 
-    @media (max-width: 480px) {
+    @media (max-width: 420px) {
       .navbar {
-        padding: 8px 10px;
+        padding: 6px 10px !important;
       }
       .brand-text h1 {
-        font-size: 1rem;
+        font-size: 0.98rem !important;
       }
-      .nav-links {
-        gap: 3px;
-      }
-      .nav-link {
-        font-size: 0.74rem !important;
-        padding: 5px 7px !important;
-      }
-      h1 {
-        font-size: 1.38rem !important;
+      h1, [style*="font-size: 2.45rem"] {
+        font-size: 1.35rem !important;
       }
       .card {
-        padding: 16px 12px !important;
+        padding: 15px 10px !important;
       }
-      [style*="grid-template-columns: repeat(auto-fit, minmax"] {
+      [style*="grid-template-columns: repeat(auto-fit, minmax(210px"],
+      [style*="grid-template-columns: repeat(auto-fit, minmax(180px"] {
         grid-template-columns: 1fr !important;
+      }
+      .quick-slot-btn {
+        flex: 1 1 100% !important;
       }
     }
   </style>
@@ -1092,7 +1235,14 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <span>Centro Clínico & CRM Pro</span>
         </div>
       </a>
-      <nav class="nav-links">
+      <!-- Botón de Menú Móvil Hamburger -->
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú" onclick="toggleMobileNav(event)">
+        <span class="bar bar-1"></span>
+        <span class="bar bar-2"></span>
+        <span class="bar bar-3"></span>
+      </button>
+
+      <nav class="nav-links" id="mainNavLinks">
         ${isStaff ? `
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
             🌐 Ver Sitio Web
@@ -1135,6 +1285,28 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         </a>
       </nav>
       <script>
+        function toggleMobileNav(e) {
+          if (e) e.stopPropagation();
+          const btn = document.getElementById('mobileMenuBtn');
+          const nav = document.getElementById('mainNavLinks');
+          if (btn && nav) {
+            btn.classList.toggle('open');
+            nav.classList.toggle('mobile-open');
+          }
+        }
+
+        // Cerrar menú móvil al hacer clic fuera
+        document.addEventListener('click', function(e) {
+          const nav = document.getElementById('mainNavLinks');
+          const btn = document.getElementById('mobileMenuBtn');
+          if (nav && nav.classList.contains('mobile-open')) {
+            if (!nav.contains(e.target) && !btn.contains(e.target)) {
+              nav.classList.remove('mobile-open');
+              if (btn) btn.classList.remove('open');
+            }
+          }
+        });
+
         (function() {
           function updateActiveNavState() {
             const currentPath = window.location.pathname.replace(/\\/+$/, '') || '/';
@@ -1142,6 +1314,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const links = document.querySelectorAll('.nav-links .nav-link:not(.nav-btn-tg)');
             
             links.forEach(function(link) {
+              link.addEventListener('click', function() {
+                const nav = document.getElementById('mainNavLinks');
+                const btn = document.getElementById('mobileMenuBtn');
+                if (nav) nav.classList.remove('mobile-open');
+                if (btn) btn.classList.remove('open');
+              });
+
               const href = link.getAttribute('href');
               if (!href) return;
               try {
@@ -2337,13 +2516,9 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <a href="/admin" class="btn btn-primary" style="flex:1; text-align:center;">
               👑 Panel Admin
             </a>
-          ` : `
-            <a href="/login" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
-              🔐 Acceso Personal
-            </a>
-          `}
+          ` : ''}
           <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">
-            Abrir Dra. PsiBot 💬
+            Abrir Dra. PsiBot en Telegram 💬
           </a>
         </div>
       </div>
