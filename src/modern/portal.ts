@@ -935,12 +935,12 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     // VALIDACIONES Y MICRO-INTERACCIONES INTERACTIVAS MINDCARE (ESTÁNDAR WEB)
     // =========================================================================
 
-    // 1. Validador interactivo de Cédula / Documento de Identidad en vivo
+    // 1. Validador interactivo de Cédula / Documento de Identidad en vivo (Estrictamente 10 números)
     function initDocumentValidation() {
-      const inputs = document.querySelectorAll('input[name="documentNumber"], input[name="consultar_doc"], input[id="documentNumber"]');
+      const inputs = document.querySelectorAll('input[name="documentNumber"], input[name="consultar_doc"], input[name="document"], input[id="documentNumber"]');
       inputs.forEach(function(input) {
         input.setAttribute('inputmode', 'numeric');
-        input.setAttribute('maxlength', '12');
+        input.setAttribute('maxlength', '10');
 
         let feedback = input.parentElement.querySelector('.doc-feedback-badge');
         if (!feedback) {
@@ -963,20 +963,37 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             return;
           }
 
-          if (val.length < 6) {
-            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Cédula incompleta (' + val.length + '/6 dígitos mínimos)</span>';
+          if (val.length < 10) {
+            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ La cédula debe tener exactamente 10 números (' + val.length + '/10)</span>';
             input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
-          } else if (val.length >= 6 && val.split('').every(function(c){ return c === val[0]; })) {
+          } else if (val.length === 10 && val.split('').every(function(c){ return c === val[0]; })) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ No se permiten dígitos idénticos repetidos (' + val + ')</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (['12345', '123456', '1234567', '12345678', '0123456789', '987654321'].includes(val)) {
+          } else if (['1234567890', '0123456789', '9876543210'].includes(val)) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ Secuencia de prueba inválida</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else {
-            feedback.innerHTML = '<span style="color:#34d399;">✅ Documento válido para expediente clínico</span>';
+          } else if (val.length === 10) {
+            feedback.innerHTML = '<span style="color:#34d399;">✅ Cédula válida (10 dígitos exactos)</span>';
             input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
           }
         });
+
+        const form = input.closest('form');
+        if (form && !form.dataset.docValidationAttached) {
+          form.dataset.docValidationAttached = 'true';
+          form.addEventListener('submit', function(e) {
+            const docInput = form.querySelector('input[name="documentNumber"], input[name="consultar_doc"], input[name="document"], input[id="documentNumber"]');
+            if (docInput) {
+              const clean = docInput.value.replace(/\D/g, '');
+              if (clean.length !== 10) {
+                e.preventDefault();
+                alert('⚠️ La cédula debe tener exactamente 10 números (ej: 1020304050).');
+                docInput.focus();
+                return false;
+              }
+            }
+          });
+        }
       });
     }
 
@@ -2730,16 +2747,16 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   }
 
   const cleanDigitsDoc = cleanDoc.replace(/\D/g, "");
-  if (!cleanDigitsDoc || cleanDigitsDoc.length < 5 || cleanDigitsDoc.length > 12) {
-    res.redirect("/citas?error=" + encodeURIComponent("Por favor ingresa un número de documento de identidad válido (entre 5 y 12 dígitos numéricos)."));
+  if (!cleanDigitsDoc || cleanDigitsDoc.length !== 10) {
+    res.redirect("/citas?error=" + encodeURIComponent("El número de cédula debe tener exactamente 10 números (ej: 1020304050)."));
     return;
   }
   if (/^(\d)\1+$/.test(cleanDigitsDoc)) {
-    res.redirect("/citas?error=" + encodeURIComponent("El documento no puede consistir únicamente del mismo dígito repetido (ej: 000000)."));
+    res.redirect("/citas?error=" + encodeURIComponent("El documento no puede consistir únicamente del mismo dígito repetido (ej: 0000000000)."));
     return;
   }
-  if (["12345", "123456", "1234567", "12345678", "0123456789", "987654321"].includes(cleanDigitsDoc)) {
-    res.redirect("/citas?error=" + encodeURIComponent("Has ingresado una secuencia numérica de prueba. Ingresa un documento oficial."));
+  if (["1234567890", "0123456789", "9876543210"].includes(cleanDigitsDoc)) {
+    res.redirect("/citas?error=" + encodeURIComponent("Has ingresado una secuencia numérica de prueba. Ingresa un documento oficial de 10 dígitos."));
     return;
   }
 
@@ -3129,9 +3146,18 @@ portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
     return;
   }
 
+  let cleanDocNum: string | undefined = undefined;
+  if (documentNumber && String(documentNumber).trim()) {
+    cleanDocNum = String(documentNumber).replace(/\D/g, "");
+    if (cleanDocNum.length !== 10) {
+      res.redirect("/especialistas?error=" + encodeURIComponent("La cédula del especialista debe tener exactamente 10 números (ej: 1020304050)."));
+      return;
+    }
+  }
+
   createTherapist({
     name: String(name).trim(),
-    documentNumber: documentNumber ? String(documentNumber).trim() : undefined,
+    documentNumber: cleanDocNum,
     specialty: String(finalSpecialty).trim(),
     office: String(office).trim(),
     licenseNumber: licenseNumber ? String(licenseNumber).trim() : undefined,
@@ -3733,8 +3759,9 @@ portalRouter.post("/api/crm/paciente", (req: Request, res: Response) => {
     res.redirect("/crm?error=" + encodeURIComponent("El nombre completo debe tener al menos 3 caracteres."));
     return;
   }
-  if (!cleanDoc || cleanDoc.length < 5) {
-    res.redirect("/crm?error=" + encodeURIComponent("El documento de identidad debe tener al menos 5 caracteres."));
+  const cleanDigitsDoc = cleanDoc.replace(/\D/g, "");
+  if (!cleanDigitsDoc || cleanDigitsDoc.length !== 10) {
+    res.redirect("/crm?error=" + encodeURIComponent("El número de cédula debe tener exactamente 10 números (ej: 1020304050)."));
     return;
   }
   if (patientExistsByDocument(cleanDoc)) {

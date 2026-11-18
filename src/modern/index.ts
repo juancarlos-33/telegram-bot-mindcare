@@ -1226,7 +1226,7 @@ bot.on("callback_query", async (ctx) => {
   if (data === "nav_back_doc") {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_document" });
-    await ctx.reply("⬅️ Vamos a corregir tu número de documento.\n\nPor favor ingresa tu número de documento de identidad (Cédula de Ciudadanía, T.I. o DNI) 🪪:", {
+    await ctx.reply("⬅️ Vamos a corregir tu número de documento.\n\nPor favor ingresa tu número de cédula (únicamente 10 números, ej: 1020304050) 🪪:", {
       reply_markup: {
         inline_keyboard: [
           [{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }, { text: "❌ Cancelar", callback_data: "cancel_booking" }]
@@ -2164,7 +2164,7 @@ bot.on("text", async (ctx) => {
     setBookingState(userId, { ...bookingState, step: "ask_document", name: cleanName });
 
     await ctx.reply(
-      `Gracias, *${cleanName}* 😊\n\n🪪 Ahora, por favor ingresa tu *número de documento de identidad* (Cédula de Ciudadanía, Tarjeta de Identidad o DNI):\n\n_💡 Con este número queda registrada tu cita en el sistema y podrás consultar para cuándo quedó si se te llega a olvidar._`,
+      `Gracias, *${cleanName}* 😊\n\n🪪 Ahora, por favor ingresa tu *número de cédula* (únicamente 10 números, ej: \`1020304050\`):\n\n_💡 Con este número queda registrada tu cita en el sistema y podrás consultar para cuándo quedó si se te llega a olvidar._`,
       {
         parse_mode: "Markdown",
         reply_markup: {
@@ -2182,33 +2182,33 @@ bot.on("text", async (ctx) => {
     const cleanDigits = rawDoc.replace(/\D/g, "");
 
     if (isGibberishOrGarbage(rawDoc)) {
-      await ctx.reply("⚠️ El documento ingresado contiene símbolos repetidos o texto inválido. Por favor escribe tu número de documento de identidad (ej: 1020304050) 🪪:");
+      await ctx.reply("⚠️ El documento ingresado contiene símbolos repetidos o texto inválido. Por favor escribe tu número de cédula (únicamente 10 números, ej: 1020304050) 🪪:");
       return;
     }
 
     if (PROFANITY_PATTERN.test(rawDoc)) {
-      await ctx.reply("⚠️ Por favor ingresa un número de documento de identidad válido y con respeto 🪪:");
+      await ctx.reply("⚠️ Por favor ingresa un número de cédula válido y con respeto 🪪:");
       return;
     }
 
-    if (cleanDigits.length < 5 || cleanDigits.length > 12) {
-      await ctx.reply("⚠️ El número de documento debe contener entre 5 y 12 dígitos numéricos válidos (ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:");
+    if (cleanDigits.length !== 10) {
+      await ctx.reply("⚠️ El número de cédula debe contener únicamente 10 dígitos numéricos (ej: 1020304050). Por favor verifica e ingrésalo de nuevo 🪪:");
       return;
     }
 
-    // Validación novato: dígitos idénticos repetidos (ej: 00000000, 11111111)
+    // Validación novato: dígitos idénticos repetidos (ej: 0000000000, 1111111111)
     if (/^(\d)\1+$/.test(cleanDigits)) {
-      await ctx.reply("⚠️ El número de documento no puede consistir únicamente del mismo dígito repetido (ej: '00000000', '11111111'). Por favor ingresa tu número de cédula o DNI oficial 🪪:");
+      await ctx.reply("⚠️ El número de cédula no puede consistir únicamente del mismo dígito repetido (ej: '0000000000', '1111111111'). Por favor ingresa tu cédula real de 10 dígitos 🪪:");
       return;
     }
 
     // Validación novato: secuencias numéricas de prueba obvias
-    if (["12345", "123456", "1234567", "12345678", "0123456789", "987654321"].includes(cleanDigits)) {
-      await ctx.reply("⚠️ Has ingresado una secuencia numérica de prueba. Por favor ingresa tu número de documento de identidad oficial 🪪:");
+    if (["1234567890", "0123456789", "9876543210"].includes(cleanDigits)) {
+      await ctx.reply("⚠️ Has ingresado una secuencia numérica de prueba. Por favor ingresa tu número de cédula oficial de 10 dígitos 🪪:");
       return;
     }
 
-    const docNumber = cleanDigits || rawDoc;
+    const docNumber = cleanDigits;
     setBookingState(userId, { ...bookingState, step: "ask_specialty", documentNumber: docNumber });
 
     const keyboard = PSYCHOLOGY_SPECIALTIES.map(s => ([{
