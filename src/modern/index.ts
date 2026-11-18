@@ -2166,8 +2166,8 @@ bot.on("text", async (ctx) => {
       return;
     }
 
-    if (cleanName.length < 4 || cleanName.split(/\s+/).length < 2) {
-      await ctx.reply("⚠️ Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido, ej: 'Andrés López') para registrarte en la ficha clínica 😊:", {
+    if (cleanName.length < 2) {
+      await ctx.reply("⚠️ Por favor escribe tu nombre (ej: 'Valentina' o 'Valentina Gutiérrez') 😊:", {
         reply_markup: { inline_keyboard: [[{ text: "❌ Cancelar", callback_data: "cancel_booking" }]] }
       });
       return;

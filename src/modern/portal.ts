@@ -1762,8 +1762,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           if (/\d/.test(val)) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ El nombre no puede contener números</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (val.split(/\s+/).length < 2 || val.length < 5) {
-            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Ingresa nombre y apellido completos (ej: Juan Gutiérrez)</span>';
+          } else if (val.length < 2) {
+            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Escribe al menos 2 letras</span>';
             input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
           } else {
             feedback.innerHTML = '<span style="color:#34d399;">✅ Nombre válido</span>';
@@ -1907,9 +1907,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               nameInput.focus();
               return false;
             }
-            if (nameVal.split(/\s+/).length < 2 || nameVal.length < 4) {
+            if (nameVal.length < 2) {
               e.preventDefault();
-              alert('⚠️ Por favor escribe tu nombre y apellido completos (mínimo 2 palabras).');
+              alert('⚠️ Por favor escribe el nombre del paciente (ej: Valentina Gutiérrez).');
               nameInput.focus();
               return false;
             }
@@ -4235,8 +4235,8 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   const cleanDate = String(dateTime || "").trim();
   const consultationMotive = String(motive || notes || "").trim();
 
-  if (!cleanName || cleanName.length < 4 || cleanName.split(/\s+/).length < 2) {
-    res.redirect("/citas?error=" + encodeURIComponent("Por favor escribe tu nombre y apellido completos (mínimo nombre y apellido con letras, ej: Juan Gutiérrez)."));
+  if (!cleanName || cleanName.length < 2) {
+    res.redirect("/citas?error=" + encodeURIComponent("Por favor escribe el nombre del paciente (ej: Valentina Gutiérrez)."));
     return;
   }
   if (/\d/.test(cleanName)) {
