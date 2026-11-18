@@ -820,7 +820,7 @@ export function validateAppointmentDate(dateTime: string): { valid: boolean; rea
 
 export interface BookingAvailabilityCheck {
   valid: boolean;
-  code?: "PAST_DATE" | "SUNDAY_CLOSED" | "OFF_HOURS" | "DOCTOR_BUSY" | "PATIENT_DUPLICATE" | "PATIENT_BUSY_OTHER" | "OFFICE_BUSY" | "DOCTOR_INACTIVE" | "INVALID_INPUT";
+  code?: "PAST_DATE" | "SUNDAY_CLOSED" | "OFF_HOURS" | "DOCTOR_BUSY" | "PATIENT_DUPLICATE" | "PATIENT_BUSY_OTHER" | "OFFICE_BUSY" | "DOCTOR_INACTIVE" | "DOCTOR_NOT_FOUND" | "INVALID_INPUT";
   reason?: string;
   conflictingAppointment?: PsyAppointment;
 }
@@ -839,13 +839,20 @@ export function validateBookingAvailability(params: {
     return { valid: false, code: "PAST_DATE", reason: dateVal.reason };
   }
 
-  // 2. Validar que el especialista exista y esté activo
+  // 2. Validar que el especialista exista en la clínica y tenga su turno activo
   const th = psyTherapists.find(t => t.name.toLowerCase() === params.therapistName.toLowerCase());
-  if (th && !th.active) {
+  if (!th) {
+    return {
+      valid: false,
+      code: "DOCTOR_NOT_FOUND",
+      reason: `El especialista "${params.therapistName}" no se encuentra registrado en el cuerpo médico de la clínica (o fue dado de baja por renuncia). Por favor selecciona un especialista activo.`
+    };
+  }
+  if (!th.active) {
     return {
       valid: false,
       code: "DOCTOR_INACTIVE",
-      reason: `El especialista ${params.therapistName} no se encuentra disponible actualmente (estado: inactivo o retirado). Por favor selecciona otro profesional activo.`
+      reason: `El especialista ${params.therapistName} tiene su turno pausado actualmente (fuera de servicio o descanso). Por favor selecciona otro profesional activo.`
     };
   }
 
