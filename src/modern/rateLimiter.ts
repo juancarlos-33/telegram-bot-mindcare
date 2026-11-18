@@ -138,6 +138,13 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
     };
   }
 
+  // Anti-rebote / Anti-spam: Si el último intento fue hace menos de 1200ms
+  // (por ejemplo, múltiples Enter invisibles mientras viajaba la petición anterior),
+  // no duplicar la penalización de intentos.
+  if (record.timestamps.length > 0 && (now - record.lastAttemptAt < 1200)) {
+    return getLoginRateLimitStatus(ip);
+  }
+
   // Agregar nuevo intento fallido
   record.timestamps.push(now);
   record.lastAttemptAt = now;

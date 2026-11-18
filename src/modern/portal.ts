@@ -59,7 +59,6 @@ import {
   getLoginRateLimitStatus,
   recordFailedLoginAttempt,
   recordSuccessfulLogin,
-  resetLoginRateLimit,
   RATE_LIMIT_CONFIG
 } from "./rateLimiter.js";
 
@@ -946,13 +945,6 @@ function getInitials(name: string): string {
 portalRouter.get("/login", (req: Request, res: Response) => {
   const clientIp = getClientIp(req);
 
-  // Soporte para pruebas docentes: restablecer rate limit con ?reset=1
-  if (req.query.reset === "1") {
-    resetLoginRateLimit(clientIp);
-    res.redirect("/login");
-    return;
-  }
-
   const rateStatus = getLoginRateLimitStatus(clientIp);
   res.setHeader("X-RateLimit-Limit", String(rateStatus.maxAttempts));
   res.setHeader("X-RateLimit-Remaining", String(rateStatus.remainingAttempts));
@@ -1000,15 +992,12 @@ portalRouter.get("/login", (req: Request, res: Response) => {
             <p style="font-size: 0.86rem; margin: 0 0 12px 0; color: #fca5a5; line-height: 1.55;">
               Se ha superado el límite de <strong>${rateStatus.maxAttempts} intentos fallidos consecutivos</strong> de autenticación desde la dirección IP <code>${clientIp}</code>. Por política de ciberseguridad médica (Ley 1090 y Ley 1581 de 2012), el acceso ha sido suspendido temporalmente.
             </p>
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.35);">
-              <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.4);">
+              <div style="display: flex; align-items: center; gap: 10px;">
                 <span class="spinner-inline" style="margin:0;"></span>
-                <span style="font-size: 0.84rem; color: #e2e8f0;">Tiempo de desbloqueo:</span>
-                <strong id="lockoutTimer" style="font-family: monospace; font-size: 1.15rem; color: #fbbf24;">${Math.floor(rateStatus.retryAfterSeconds / 60)}:${String(rateStatus.retryAfterSeconds % 60).padStart(2, '0')}</strong>
+                <span style="font-size: 0.88rem; color: #e2e8f0; font-weight: 600;">Tiempo de espera para desbloqueo:</span>
+                <strong id="lockoutTimer" style="font-family: monospace; font-size: 1.25rem; color: #fbbf24; letter-spacing: 0.05em;">${Math.floor(rateStatus.retryAfterSeconds / 60)}:${String(rateStatus.retryAfterSeconds % 60).padStart(2, '0')}</strong>
               </div>
-              <a href="/login?reset=1" style="font-size: 0.78rem; color: #93c5fd; text-decoration: underline; font-weight: 700;">
-                🔄 Restablecer para prueba docente
-              </a>
             </div>
           </div>
         ` : (error ? `
@@ -1122,7 +1111,19 @@ portalRouter.get("/login", (req: Request, res: Response) => {
     </div>
 
     <script>
+      let isLoginSubmitting = false;
+
+      // Suprimir Enter adicional o repetido si el formulario ya se está enviando
+      document.addEventListener('keydown', function(e) {
+        if (isLoginSubmitting && (e.key === 'Enter' || e.keyCode === 13)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }, true);
+
       function togglePasswordVisibility() {
+        if (isLoginSubmitting) return;
         const input = document.getElementById('passwordInput');
         const eye = document.getElementById('eyeIcon');
         const btn = document.getElementById('togglePassBtn');
@@ -1140,19 +1141,52 @@ portalRouter.get("/login", (req: Request, res: Response) => {
       }
 
       function handleLoginSubmit(e) {
+        if (isLoginSubmitting) {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          return false;
+        }
+        isLoginSubmitting = true;
+
         const btn = document.getElementById('loginSubmitBtn');
         const spinner = document.getElementById('loginBtnSpinner');
         const btnText = document.getElementById('loginBtnText');
         const btnIcon = document.getElementById('loginBtnIcon');
         const banner = document.getElementById('loginFeedbackBanner');
+        const passInput = document.getElementById('passwordInput');
+        const credInput = document.getElementById('credentialInput');
+        const toggleBtn = document.getElementById('togglePassBtn');
 
-        if (btn && spinner && btnText) {
-          spinner.style.display = 'inline-block';
-          btnText.textContent = 'Verificando credenciales...';
-          if (btnIcon) btnIcon.style.display = 'none';
-          btn.style.opacity = '0.85';
-          btn.style.pointerEvents = 'none';
+        // Bloquear campos inmediatamente para evitar que se sigan enviando peticiones invisibles
+        if (passInput) {
+          passInput.readOnly = true;
+          passInput.style.pointerEvents = 'none';
+          passInput.style.opacity = '0.7';
         }
+        if (credInput) {
+          credInput.readOnly = true;
+          credInput.style.pointerEvents = 'none';
+          credInput.style.opacity = '0.7';
+        }
+        if (toggleBtn) {
+          toggleBtn.style.pointerEvents = 'none';
+        }
+
+        if (btn) {
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.85';
+          if (spinner) spinner.style.display = 'inline-block';
+          if (btnText) btnText.textContent = 'Verificando credenciales...';
+          if (btnIcon) btnIcon.style.display = 'none';
+        }
+
+        // Bloquear todos los botones de acceso rápido para evitar concurrencia
+        document.querySelectorAll('form[action="/login"] button').forEach(function(b) {
+          b.style.pointerEvents = 'none';
+          b.style.opacity = '0.5';
+        });
 
         if (banner) {
           banner.style.display = 'block';
@@ -1164,10 +1198,19 @@ portalRouter.get("/login", (req: Request, res: Response) => {
       }
 
       function handleQuickLogin(form, name) {
+        if (isLoginSubmitting) {
+          return false;
+        }
+        isLoginSubmitting = true;
+
+        // Deshabilitar todos los botones e inputs de inmediato
+        document.querySelectorAll('form[action="/login"] button, #passwordInput, #credentialInput').forEach(function(el) {
+          el.style.pointerEvents = 'none';
+        });
+
         const btn = form.querySelector('button');
         if (btn) {
           btn.style.opacity = '0.75';
-          btn.style.pointerEvents = 'none';
           const icon = btn.querySelector('.quick-icon');
           if (icon) {
             icon.innerHTML = '<span class="spinner-inline" style="margin:0;"></span>';
