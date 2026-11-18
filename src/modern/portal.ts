@@ -285,9 +285,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     .nav-link.active {
       color: #38bdf8 !important;
       font-weight: 800 !important;
-      background: rgba(14, 165, 233, 0.22) !important;
-      border: 1px solid rgba(56, 189, 248, 0.55) !important;
-      box-shadow: 0 0 18px rgba(14, 165, 233, 0.3) !important;
+      background: rgba(14, 165, 233, 0.14) !important;
+      border: none !important;
+      box-shadow: none !important;
     }
 
     .nav-btn-tg {
@@ -888,7 +888,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <a href="/citas#consultar-cita" class="nav-link ${activeTab === 'consultar' ? 'active' : ''}">
             🔎 Consultar Mi Cita
           </a>
-          <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(99,102,241,0.4);">
+          <a href="/login" class="nav-link ${activeTab === 'login' ? 'active' : ''}" style="border: none !important; background: transparent !important; box-shadow: none !important;">
             🔐 Acceso Profesional
           </a>
         `}
