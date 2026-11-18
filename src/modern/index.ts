@@ -2199,8 +2199,28 @@ bot.on("text", async (ctx) => {
     ];
 
     if (/[a-zA-Z]/.test(rawDoc)) {
+      const words = rawDoc.trim().split(/\s+/);
+      if (words.length >= 2 && !/\d/.test(rawDoc)) {
+        // El usuario escribió su nombre (ej: "ventilador gutierrez") en vez del número de cédula
+        const updatedName = rawDoc.trim();
+        setBookingState(userId, { ...bookingState, name: updatedName });
+        await ctx.reply(
+          `✅ ¡Perfecto! He guardado tu nombre como: *${updatedName}* 😊\n\n🪪 Ahora, por favor ingresa tu *número de cédula* (únicamente 10 números, ej: \`1020304050\`):`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "⬅️ Cambiar Nombre", callback_data: "nav_back_name" }],
+                [{ text: "❌ Cancelar Agendamiento", callback_data: "cancel_booking" }]
+              ]
+            }
+          }
+        );
+        return;
+      }
+
       await ctx.reply(
-        "⚠️ La cédula no debe contener letras. Por favor ingresa únicamente los 10 números de tu cédula (ej: 1020304050) 🪪:\n\n_💡 Si deseas corregir tu nombre o reiniciar, usa los botones de abajo:_",
+        "⚠️ La cédula debe contener únicamente 10 números (sin letras, ej: 1020304050) 🪪:\n\n_💡 Si deseas corregir tu nombre o reiniciar, usa los botones de abajo:_",
         {
           parse_mode: "Markdown",
           reply_markup: { inline_keyboard: docActionButtons }
