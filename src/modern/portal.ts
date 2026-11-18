@@ -860,10 +860,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         </div>
         ${isStaff ? `
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
-            🏠 Inicio Clínico
+            🌐 Ver Sitio Web
           </a>
-          <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
-            📅 Agenda Médica
+          <a href="/admin" class="nav-link ${activeTab === 'admin' ? 'active' : ''}" style="color:#38bdf8; font-weight:700;">
+            👑 Panel Admin
           </a>
           <a href="/especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
             👨‍⚕️ Especialistas
@@ -882,13 +882,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
             🏠 Inicio
           </a>
-          <a href="/#agendar" class="nav-link ${activeTab === 'agendar' ? 'active' : ''}">
+          <a href="/citas#agendar-paciente" class="nav-link ${activeTab === 'agendar' ? 'active' : ''}">
             📅 Agendar Cita
           </a>
           <a href="/#especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
             👨‍⚕️ Especialistas
           </a>
-          <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
+          <a href="/citas#consultar-cita" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
             🔎 Consultar Mi Cita
           </a>
           <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(99,102,241,0.4);">
@@ -1692,11 +1692,7 @@ portalRouter.post("/login", (req: Request, res: Response) => {
     if (staff) {
       recordSuccessfulLogin(clientIp); // Restablecer intentos al autenticar
       res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
-      if (staff.role === "DIRECTOR_ADMIN") {
-        res.redirect("/especialistas?login=success");
-      } else {
-        res.redirect("/crm?login=success");
-      }
+      res.redirect("/admin?login=success");
       return;
     }
   }
@@ -1705,7 +1701,7 @@ portalRouter.post("/login", (req: Request, res: Response) => {
   if (user === "owner" || user === "juancarlos") {
     recordSuccessfulLogin(clientIp);
     res.setHeader("Set-Cookie", "admin_session=staff-admin; Path=/; HttpOnly; Max-Age=86400");
-    res.redirect("/especialistas?login=success");
+    res.redirect("/admin?login=success");
     return;
   }
 
@@ -1715,11 +1711,7 @@ portalRouter.post("/login", (req: Request, res: Response) => {
     // ÉXITO: Limpiar contador de intentos fallidos según estándar OWASP
     recordSuccessfulLogin(clientIp);
     res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
-    if (staff.role === "DIRECTOR_ADMIN") {
-      res.redirect("/especialistas?login=success");
-    } else {
-      res.redirect("/crm?login=success");
-    }
+    res.redirect("/admin?login=success");
     return;
   }
 
@@ -1820,99 +1812,83 @@ portalRouter.get("/", async (req: Request, res: Response) => {
   const staffSession = getStaffSession(req);
   const isStaff = staffSession.isStaff;
   const isAdmin = staffSession.isAdmin;
-  const users = await getAllUsers();
-  const appointments = getAllPsyAppointments();
-  const confirmedCount = appointments.filter(a => a.status === "Confirmada").length;
-  const pendingCount = appointments.filter(a => a.status === "Pendiente").length;
 
   const content = `
+    ${isStaff ? `
+      <!-- Banner de Acceso Rápido para Personal Autenticado -->
+      <div style="background: linear-gradient(90deg, rgba(99, 102, 241, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%); border: 1px solid rgba(99, 102, 241, 0.5); border-radius: 16px; padding: 14px 22px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 1.5rem;">👑</span>
+          <div>
+            <strong style="color: #fff; font-size: 0.96rem;">Sesión de Personal Médico Activa: ${staffSession.fullName}</strong>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">Estás visualizando el sitio web tal como lo ven los pacientes. Para acceder a la agenda confidencial y métricas de gestión, ingresa al Panel Admin.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <a href="/admin" class="btn btn-primary" style="padding: 8px 18px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+            👑 Ir al Panel Admin ↗
+          </a>
+          <a href="/logout" class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.85rem; color:#f87171;">
+            Cerrar Sesión ✕
+          </a>
+        </div>
+      </div>
+    ` : ''}
+
     <!-- HERO BANNER CLÍNICO DE ALTO NIVEL -->
     <div class="hero-banner">
       <div class="hero-badge">
         <span class="status-dot"></span>
-        <span>${isStaff ? 'Consola Médica & Terapéutica Activa' : 'Portal de Atención al Paciente • 6 Especialistas Disponibles'}</span>
+        <span>Centro Clínico de Excelencia en Psicología & Salud Mental Integrada</span>
       </div>
-      <h1>${isStaff ? 'MindCare — Panel Médico & Gestión Operativa' : 'MindCare — Centro Clínico & Salud Mental Integrada'}</h1>
+      <h1>MindCare — Centro Clínico & Salud Mental Integrada</h1>
       <p>
-        ${isStaff 
-          ? 'Consola institucional para dirección médica y psicólogos clínicos. Supervisión de agenda en tiempo real, expedientes SOAP confidenciales, métricas de atención y sincronización con Telegram Bot @' + BOT_USERNAME + '.'
-          : 'Ecosistema médico digital para reserva inmediata de consultas presenciales y virtuales, orientación terapéutica asistida por Dra. PsiBot en Telegram y cumplimiento estricto de la Ley 1090 de 2006 y Ley 1581 de 2012 (Habeas Data).'
-        }
+        Ecosistema médico digital para reserva inmediata de consultas presenciales y virtuales, orientación terapéutica asistida por Dra. PsiBot en Telegram y cumplimiento estricto de la Ley 1090 de 2006 y Ley 1581 de 2012 (Habeas Data).
       </p>
 
       <div class="hero-metrics">
         <div class="hero-metric-item">
           <span class="status-dot"></span>
-          <span>Dra. PsiBot: <strong>@${BOT_USERNAME}</strong> (Online)</span>
+          <span>Dra. PsiBot: <strong>@${BOT_USERNAME}</strong> (Online 24/7)</span>
         </div>
-        ${isStaff ? `
-          <div class="hero-metric-item">
-            <span>📅 <strong>${appointments.length}</strong> Citas (${confirmedCount} Confirmadas)</span>
-          </div>
-          <div class="hero-metric-item">
-            <span>👥 <strong>${users.length}</strong> Pacientes Registrados</span>
-          </div>
-        ` : `
-          <div class="hero-metric-item">
-            <span>🩺 <strong>6</strong> Consultorios Activos (201-206)</span>
-          </div>
-          <div class="hero-metric-item">
-            <span>🔒 Privacidad Médica: <strong>Ley 1581 / Habeas Data</strong></span>
-          </div>
-        `}
         <div class="hero-metric-item">
-          <span>${isStaff ? '🩺' : '🌐'} Sesión: <strong>${isStaff ? (staffSession.fullName || 'Personal Clínico') : 'Portal Pacientes (Público)'}</strong></span>
+          <span>🩺 <strong>6</strong> Consultorios Privados (201-206)</span>
+        </div>
+        <div class="hero-metric-item">
+          <span>🔒 Confidencialidad: <strong>Ley 1090 & Ley 1581</strong></span>
+        </div>
+        <div class="hero-metric-item">
+          <span>👥 <strong>+1,500</strong> Pacientes Acompañados</span>
         </div>
       </div>
 
       <div style="display:flex; gap:12px; margin-top:26px; flex-wrap:wrap;">
-        ${isStaff ? `
-          <a href="/citas" class="btn btn-primary">
-            📅 Agenda Médica Completa
-          </a>
-          <a href="/crm" class="btn btn-secondary" style="border:1px solid rgba(99,102,241,0.4);">
-            💼 Expedientes & CRM SOAP
-          </a>
-          <a href="/reportes" class="btn btn-secondary" style="border:1px solid rgba(16,185,129,0.35); color:#6ee7b7;">
-            📊 Facturación & Métricas
-          </a>
-        ` : `
-          <a href="#agendar" class="btn btn-primary">
-            📅 Agendar Cita de Psicología
-          </a>
-          <a href="/citas" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8;">
-            🔎 Consultar Mi Cita Programada
-          </a>
-        `}
-        <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8;">
+        <a href="/citas#agendar-paciente" class="btn btn-primary" style="padding:12px 24px; font-weight:700;">
+          📅 Agendar Cita de Psicología
+        </a>
+        <a href="/citas#consultar-cita" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8; padding:12px 20px; font-weight:600;">
+          🔎 Consultar Mi Cita Programada
+        </a>
+        <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8; padding:12px 20px; font-weight:600;">
           <span class="status-dot"></span> Abrir Chat en Telegram 💬
         </a>
       </div>
     </div>
 
     ${!isStaff ? `
-      <div class="alert alert-info" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+      <div class="alert alert-info" style="justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom: 24px;">
         <div>
-          <strong>🔒 Privacidad y Protección de Datos (Ley 1581 de 2012):</strong> MindCare protege la confidencialidad de tu consulta psicológica. Las citas son estrictamente privadas. Para acceder a expedientes SOAP y gestión de consultorios, inicia sesión con tu cuenta institucional.
+          <strong>🔒 Privacidad y Protección de Datos (Ley 1581 de 2012):</strong> MindCare protege la confidencialidad de tu consulta psicológica. Las citas son estrictamente privadas.
         </div>
         <a href="/login" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;">
           Acceso Profesional 🔐
         </a>
       </div>
-    ` : `
-      <div class="alert alert-success" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
-        <div>
-          <strong>🩺 Sesión Clínica Iniciada:</strong> Conectado como <strong>${staffSession.fullName}</strong> (${staffSession.role === 'DIRECTOR_ADMIN' ? 'Director Médico' : 'Psicólogo Clínico'}). Auditoría activa según Ley 1090 de 2006.
-        </div>
-        <a href="/logout" class="btn btn-secondary" style="padding:6px 14px; font-size:0.85rem; color:#f87171;">
-          Cerrar Sesión Segura ✕
-        </a>
-      </div>
-    `}
+    ` : ''}
 
     <!-- SECCIÓN INTERACTIVA 1: AGENDAMIENTO RÁPIDO & ECOSISTEMA TERAPÉUTICO -->
     <div class="grid-2">
-      <!-- Tarjeta 1: Agendamiento Rápido de Citas (CU-01) -->
+      <!-- Tarjeta 1: Agendamiento Rápido de Citas -->
       <div class="card" id="agendar" style="border:1px solid rgba(14,165,233,0.35);">
         <div class="card-header-styled">
           <div class="card-title">
@@ -1934,10 +1910,10 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             </div>
           </div>
           <div class="form-group">
-            <label for="documentNumber">Documento de Identidad / Cédula (C.C.)</label>
+            <label for="documentNumber">Documento de Identidad / Cédula (C.C. 10 dígitos)</label>
             <div class="input-wrapper">
               <span class="input-icon">🪪</span>
-              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" required>
+              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" maxlength="10" required>
             </div>
           </div>
           <div class="form-group">
@@ -1974,7 +1950,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             </label>
           </div>
 
-          <button type="submit" class="btn btn-primary" style="width: 100%;">
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: 700;">
             Confirmar y Reservar Cita 📅
           </button>
         </form>
@@ -1998,7 +1974,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
               <span style="font-size:1.3rem;">🧠</span>
               <div>
                 <strong style="color:#fff;">Triaje Emocional IA Dra. PsiBot (Telegram):</strong>
-                <div style="color:var(--text-muted); font-size:0.83rem;">Envía <code>!mensaje</code> o notas de voz para orientación empática con LLaMA 3.1.</div>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Envía <code>!mensaje</code> o notas de voz para orientación empática con IA clínica.</div>
               </div>
             </div>
             <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
@@ -2016,25 +1992,25 @@ portalRouter.get("/", async (req: Request, res: Response) => {
               </div>
             </div>
             <div style="display:flex; align-items:flex-start; gap:12px; font-size:0.9rem; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
-              <span style="font-size:1.3rem;">💼</span>
+              <span style="font-size:1.3rem;">🔒</span>
               <div>
-                <strong style="color:#fff;">Expedientes Clínicos Confidenciales SOAP:</strong>
-                <div style="color:var(--text-muted); font-size:0.83rem;">Notas de evolución, fórmulas conductuales con QR y control contable.</div>
+                <strong style="color:#fff;">Confidencialidad Médica & Código Deontológico:</strong>
+                <div style="color:var(--text-muted); font-size:0.83rem;">Custodia blindada de datos sensibles bajo la Ley 1090 de 2006 y Ley 1581 de 2012.</div>
               </div>
             </div>
           </div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a href="/citas" class="btn btn-secondary" style="flex:1; text-align:center;">
+          <a href="/citas#consultar-cita" class="btn btn-secondary" style="flex:1; text-align:center;">
             🔎 Consultar Mi Cita
           </a>
           ${isStaff ? `
-            <a href="/crm" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
-              💼 CRM Clínico
+            <a href="/admin" class="btn btn-primary" style="flex:1; text-align:center;">
+              👑 Panel Admin
             </a>
           ` : `
             <a href="/login" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
-              🔐 Acceso Staff
+              🔐 Acceso Personal
             </a>
           `}
           <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">
@@ -2054,7 +2030,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           </div>
           <span style="color:var(--text-dim); font-size:0.85rem;">Profesionales acreditados en psicología clínica, neurociencias y terapia integral</span>
         </div>
-        <a href="#agendar" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
+        <a href="/citas#agendar-paciente" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
           Reservar Turno con un Especialista ↗
         </a>
       </div>
@@ -2077,7 +2053,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
                 <span class="badge badge-success" style="font-size:0.7rem; padding:2px 8px;">● Activo</span>
               </div>
             </div>
-            <a href="#agendar" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
+            <a href="/citas#agendar-paciente" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
               Agendar con ${th.name.split(' ')[0]} 📅
             </a>
           </div>
@@ -2085,157 +2061,75 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- SECCIÓN 3: PROTECCIÓN LEGAL HABEAS DATA (LEY 1581 DE 2012 Y LEY 1090 DE 2006) -->
-    ${isStaff ? `
-      <!-- VISTA PRIVADA EXCLUSIVA PARA PROFESIONALES CLÍNICOS / DIRECTORES -->
-      <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.22) 0%, rgba(13, 20, 36, 0.85) 100%);">
-        <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
-          <div>
-            <div class="card-title" style="color: #c7d2fe; font-size: 1.25rem;">
-              <span>📅</span>
-              Agenda Médica en Tiempo Real (${appointments.length} Citas Registradas)
-            </div>
-            <span style="color:var(--text-dim); font-size:0.85rem;">Vista confidencial protegida por credenciales de profesional de la salud</span>
+    <!-- SECCIÓN 3: DISPONIBILIDAD DE CONSULTORIOS FÍSICOS (100% PÚBLICA Y ANONIMIZADA) -->
+    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.35); background: linear-gradient(180deg, rgba(14, 165, 233, 0.05) 0%, rgba(13, 20, 36, 0.85) 100%);">
+      <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
+        <div>
+          <div class="card-title" style="color: #7dd3fc; font-size: 1.25rem;">
+            <span>🩺</span>
+            Disponibilidad de Consultorios Físicos en Tiempo Real
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
-              Gestionar Citas Completas ↗
-            </a>
-            <a href="/crm" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
-              Ver en CRM Clínico ↗
-            </a>
-          </div>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Cumplimiento estricto del Secreto Profesional (Ley 1090) y Protección de Datos Sensibles (Ley 1581)</span>
         </div>
-
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Paciente</th>
-                <th>Especialidad</th>
-                <th>Terapeuta</th>
-                <th>Horario Canónico</th>
-                <th>Motivo</th>
-                <th>Estado</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${appointments.length === 0 ? `
-                <tr>
-                  <td colspan="8" style="text-align:center; padding:28px; color:var(--text-muted);">
-                    Aún no hay citas registradas en el sistema.
-                  </td>
-                </tr>
-              ` : appointments.map(a => `
-                <tr>
-                  <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
-                  <td>
-                    <strong style="color:#fff;">${a.patientName}</strong>
-                    <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
-                  </td>
-                  <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
-                  <td>${a.therapist}</td>
-                  <td>
-                    <strong style="color:#38bdf8;">${a.dateTime}</strong>
-                    ${a.scheduledAt ? `<div style="font-size:0.72rem; color:var(--text-dim);">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
-                  </td>
-                  <td style="color:var(--text-muted); font-size:0.84rem; max-width:240px;">${a.motive ?? '—'}</td>
-                  <td>
-                    <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
-                      ● ${a.status}
-                    </span>
-                  </td>
-                  <td>
-                    <a href="/citas" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;">
-                      Gestionar ↗
-                    </a>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
+        <a href="/citas#consultar-cita" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
+          🔎 Consultar Mi Cita con Cédula
+        </a>
       </div>
-    ` : `
-      <!-- VISTA PÚBLICA 100% CUMPLIENDO HABEAS DATA (LEY 1581 DE 2012) -->
-      <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.35); background: linear-gradient(180deg, rgba(14, 165, 233, 0.05) 0%, rgba(13, 20, 36, 0.85) 100%);">
-        <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
-          <div>
-            <div class="card-title" style="color: #7dd3fc; font-size: 1.25rem;">
-              <span>🩺</span>
-              Disponibilidad de Consultorios Físicos en Tiempo Real (100% Anonimizada)
-            </div>
-            <span style="color:var(--text-dim); font-size:0.85rem;">Cumplimiento estricto del Secreto Profesional (Ley 1090) y Protección de Datos Sensibles (Ley 1581)</span>
-          </div>
-          <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
-            🔎 Consultar Mi Cita con Cédula
-          </a>
-        </div>
 
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
-          Para proteger la privacidad de los pacientes, los nombres, documentos y motivos de consulta psicológica son privados. A continuación se muestra la disponibilidad de turnos por consultorio:
-        </p>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+        A continuación se muestra la disponibilidad de turnos por consultorio en nuestras instalaciones bioclimáticas (Edificio MindCare, Consultorios 201-206):
+      </p>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px;">
-          ${getAllTherapists().map(th => {
-            const thAppointments = appointments.filter(a => a.therapist === th.name && a.status === 'Confirmada');
-            return `
-              <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong style="color: #38bdf8; font-size: 0.9rem;">📍 ${th.office}</strong>
-                    <span class="badge badge-success" style="font-size: 0.72rem;">● Disponible</span>
-                  </div>
-                  <strong style="color: #fff; font-size: 0.95rem; display: block;">${th.name}</strong>
-                  <div style="color: #a5b4fc; font-size: 0.8rem; margin-bottom: 8px;">${th.specialty}</div>
-                </div>
-                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                  <span style="font-size: 0.76rem; color: var(--text-dim);">Agenda Digital:</span>
-                  <a href="#agendar" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">Reservar ↗</a>
-                </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        ${getAllTherapists().map(th => `
+          <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="color: #38bdf8; font-size: 0.9rem;">📍 ${th.office}</strong>
+                <span class="badge badge-success" style="font-size: 0.72rem;">● Disponible</span>
               </div>
-            `;
-          }).join('')}
-        </div>
-
-        <!-- Acceso Seguro a Consulta de Cita Propia -->
-        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 14px; padding: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-          <div>
-            <strong style="color: #fff; font-size: 0.95rem; display: block; margin-bottom: 2px;">
-              ¿Ya tienes una cita programada y deseas verificar tu horario?
-            </strong>
-            <span style="color: var(--text-muted); font-size: 0.84rem;">
-              Digita tu número de documento en el buscador seguro para ver únicamente tus turnos asignados.
-            </span>
+              <strong style="color: #fff; font-size: 0.95rem; display: block;">${th.name}</strong>
+              <div style="color: #a5b4fc; font-size: 0.8rem; margin-bottom: 8px;">${th.specialty}</div>
+            </div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.76rem; color: var(--text-dim);">Agenda Digital:</span>
+              <a href="/citas#agendar-paciente" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">Reservar ↗</a>
+            </div>
           </div>
-          <a href="/citas" class="btn btn-primary" style="padding: 9px 18px; font-size: 0.85rem;">
-            Consultar Mi Cita por C.C. 🔍
-          </a>
-        </div>
+        `).join('')}
       </div>
-    `}
 
-    <!-- SECCIÓN 4: GESTIÓN OPERATIVA & CERTIFICACIONES CLÍNICAS -->
+      <!-- Acceso Seguro a Consulta de Cita Propia -->
+      <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 14px; padding: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <div>
+          <strong style="color: #fff; font-size: 0.95rem; display: block; margin-bottom: 2px;">
+            ¿Ya tienes una cita programada y deseas verificar tu horario?
+          </strong>
+          <span style="color: var(--text-muted); font-size: 0.84rem;">
+            Digita tu número de cédula en el buscador seguro para ver únicamente tus turnos asignados de forma privada.
+          </span>
+        </div>
+        <a href="/citas#consultar-cita" class="btn btn-primary" style="padding: 9px 18px; font-size: 0.85rem;">
+          Consultar Mi Cita por C.C. 🔍
+        </a>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 4: CERTIFICACIONES Y GARANTÍA CLÍNICA -->
     <div class="card" style="margin-top:24px; border:1px solid rgba(14,165,233,0.25);">
       <div class="card-header-styled">
         <div>
           <div class="card-title" style="font-size:1.15rem;">
-            <span>💼</span>
-            ${isStaff ? 'Gestión Operativa de la Clínica' : 'Ecosistema de Salud Mental MindCare'}
+            <span>💼</span> Ecosistema de Calidad Médica MindCare
           </div>
           <span style="color:var(--text-dim); font-size:0.85rem;">
-            ${isStaff ? 'Accesos directos de administración clínica y control de personal' : 'Estándares de calidad médica, código deontológico y atención 24/7'}
+            Estándares de calidad médica, código deontológico y atención 24/7
           </span>
         </div>
         <div style="display:flex; gap:8px;">
           ${isStaff ? `
-            <a href="/especialistas" class="btn btn-primary" style="padding:7px 14px; font-size:0.82rem;">
-              👨‍⚕️ Panel de Especialistas ↗
-            </a>
-            <a href="/crm" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
-              📂 Historias Clínicas SOAP ↗
+            <a href="/admin" class="btn btn-primary" style="padding:7px 14px; font-size:0.82rem;">
+              👑 Panel de Administración ↗
             </a>
           ` : `
             <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
@@ -2245,7 +2139,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         </div>
       </div>
       <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.6; margin-bottom:16px;">
-        Plataforma médica integral diseñada para consultorios y clínicas de psicología. Controla el registro de pacientes, agenda en tiempo real sincronizada con Telegram Bot, emisión de prescripciones conductuales, consentimientos informados bajo la Ley 1090 y control de honorarios médicos.
+        Centro clínico de psicología enfocado en la salud mental integrada. Prestamos servicios terapéuticos bajo la Ley 1090 de 2006 y Ley 1581 de 2012, con un equipo interdisciplinario de psicólogos colegiados y asistencia digital continua.
       </p>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px;">
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
@@ -2279,7 +2173,12 @@ portalRouter.get("/", async (req: Request, res: Response) => {
 // RUTA 2: AUDITORÍA DE GRUPOS Y CHATS DEL BOT
 // =============================================================================
 portalRouter.get("/grupos", (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido al personal administrativo. Inicia sesión con tus credenciales."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const chats = getAllChats();
   const totalMiembros = chats.reduce((acc, c) => acc + c.membersCount, 0);
 
@@ -2378,7 +2277,12 @@ portalRouter.get("/grupos", (req: Request, res: Response) => {
 // RUTA 3: GESTOR DE COMANDOS Y AUTOMATIZACIÓN DESDE LA WEB
 // =============================================================================
 portalRouter.get("/comandos", (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido al personal administrativo. Inicia sesión con tus credenciales."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const customCommands = getCustomCommands();
   const commandStats = getCommandStats();
 
@@ -2575,12 +2479,6 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
   const staffSession = getStaffSession(req);
   const isStaff = staffSession.isStaff;
   const isAdmin = staffSession.isAdmin;
-  const isPublicView = !isStaff || req.query.view === "public";
-
-  const appointments = getAllPsyAppointments();
-  const confirmed = appointments.filter(a => a.status === "Confirmada").length;
-  const pending = appointments.filter(a => a.status === "Pendiente").length;
-  const canceled = appointments.filter(a => a.status === "Cancelada").length;
 
   const consultarDoc = (req.query.consultar_doc as string)?.trim() || "";
   const searchedAppointments = consultarDoc ? getPsyAppointmentsByDocument(consultarDoc) : [];
@@ -2613,31 +2511,24 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     `;
   }
 
-  const allMoods = getAllMoodEntries();
-  const allTests = getAllTestResults();
+  const therapists = getAllTherapists();
 
-  // ===========================================================================
-  // 1. VISTA PÚBLICA PARA PACIENTES Y VISITANTES (SHOWCASE SUPERCOOL DE LA CLÍNICA)
-  // ===========================================================================
-  if (isPublicView) {
-    const therapists = getAllTherapists();
-
-    const publicContent = `
-      ${isStaff ? `
-        <!-- Barra Flotante de Vista Previa para Personal Clínico -->
-        <div style="background: linear-gradient(90deg, rgba(99, 102, 241, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%); border: 1px solid rgba(99, 102, 241, 0.5); border-radius: 16px; padding: 12px 20px; margin-bottom: 26px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.4rem;">👑</span>
-            <div>
-              <strong style="color: #fff; font-size: 0.95rem;">Modo de Previsualización: Vista Pública de Pacientes Activa</strong>
-              <div style="color: #cbd5e1; font-size: 0.8rem;">Así es como los pacientes y visitantes externos ven MindCare. Cero acceso a datos o métricas privadas.</div>
-            </div>
+  const publicContent = `
+    ${isStaff ? `
+      <!-- Barra de Acceso Rápido para Personal Autenticado -->
+      <div style="background: linear-gradient(90deg, rgba(99, 102, 241, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%); border: 1px solid rgba(99, 102, 241, 0.5); border-radius: 16px; padding: 12px 20px; margin-bottom: 26px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.4rem;">👑</span>
+          <div>
+            <strong style="color: #fff; font-size: 0.95rem;">Sesión de Personal Médico Activa: ${staffSession.fullName}</strong>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">Estás visualizando el portal público de pacientes. Para ver la agenda confidencial y métricas operativas, ingresa al Panel Admin.</div>
           </div>
-          <a href="/citas" class="btn btn-primary" style="padding: 7px 18px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
-            ← Volver a la Consola Médica
-          </a>
         </div>
-      ` : ''}
+        <a href="/admin" class="btn btn-primary" style="padding: 7px 18px; font-size: 0.85rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
+          👑 Ir al Panel Admin ↗
+        </a>
+      </div>
+    ` : ''}
 
       ${alertBanner}
 
@@ -2957,17 +2848,68 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     `;
 
     res.send(layout("Portal de Pacientes & Servicios Clínicos — MindCare", publicContent, "citas", isAdmin, staffSession));
+});
+
+// =============================================================================
+// RUTA 3.6: PANEL DE ADMINISTRACIÓN CLÍNICA & GESTIÓN MÉDICA (SOLO STAFF)
+// =============================================================================
+portalRouter.get("/admin", async (req: Request, res: Response) => {
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso exclusivo para el personal médico y administrativo de MindCare. Inicia sesión con tus credenciales."));
     return;
   }
+  const isAdmin = staffSession.isAdmin;
+  const appointments = getAllPsyAppointments();
+  const confirmed = appointments.filter(a => a.status === "Confirmada").length;
+  const pending = appointments.filter(a => a.status === "Pendiente").length;
+  const canceled = appointments.filter(a => a.status === "Cancelada").length;
 
-  // ===========================================================================
-  // 2. VISTA PRIVADA: CONSOLA MÉDICA DE ADMINISTRACIÓN (SOLO PERSONAL AUTORIZADO)
-  // ===========================================================================
+  const consultarDoc = (req.query.consultar_doc as string)?.trim() || "";
+  const searchedAppointments = consultarDoc ? getPsyAppointmentsByDocument(consultarDoc) : [];
+
+  const maskDoc = (doc?: string) => {
+    if (!doc) return "Doc: Registrado";
+    const clean = doc.replace(/\D/g, "");
+    if (clean.length <= 4) return clean;
+    return clean.slice(0, 3) + "****" + clean.slice(-2);
+  };
+
+  let alertBanner = "";
+  if (req.query.login === "success") {
+    alertBanner = `
+      <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">👑</span> Bienvenido al Panel de Control Clínico, <strong>${staffSession.fullName}</strong>. Sesión autenticada bajo Ley 1090 de 2006.
+      </div>
+    `;
+  } else if (req.query.created === "true") {
+    alertBanner = `
+      <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 600;">
+        ✅ Cita de psicología registrada con éxito y sincronizada en tiempo real. 💙
+      </div>
+    `;
+  } else if (req.query.updated === "true") {
+    alertBanner = `
+      <div style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #38bdf8; font-weight: 600;">
+        🔄 Estado de la cita actualizado correctamente en la agenda médica.
+      </div>
+    `;
+  } else if (req.query.error) {
+    alertBanner = `
+      <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #f87171; font-weight: 600;">
+        ⚠️ ${String(req.query.error)}
+      </div>
+    `;
+  }
+
+  const allMoods = getAllMoodEntries();
+  const allTests = getAllTestResults();
+
   const staffContent = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
         <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(99, 102, 241, 0.15); border:1px solid rgba(99, 102, 241, 0.35); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:#a5b4fc; margin-bottom:8px; text-transform:uppercase;">
-          👑 MindCare — Consola Médica de Citas & Terapia
+          👑 MindCare — Consola Médica & Panel de Control Clínico
         </div>
         <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">
           Agenda Médica de Psicología & Supervisión Clínica
@@ -2977,8 +2919,8 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         </p>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <a href="/citas?view=public" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8;" title="Ver cómo visualizan los pacientes esta sección">
-          👁️ Vista Pública de Pacientes
+        <a href="/citas" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8;" title="Ver cómo visualizan los pacientes el portal público">
+          🌐 Ver Portal de Pacientes (Público)
         </a>
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
           💬 Dra. PsiBot en Telegram
@@ -3526,7 +3468,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     </script>
   `;
 
-  res.send(layout("Agenda Médica de Psicología — Consola Clínica", staffContent, "citas", isAdmin, staffSession));
+  res.send(layout("Panel de Control Clínico & Administración — MindCare", staffContent, "admin", isAdmin, staffSession));
 });
 
 // Endpoint POST para agendar cita desde la web
@@ -3608,7 +3550,12 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   }
 
   await saveLog("citas_psi", "INFO", `Cita ${newApp.id} agendada para ${cleanName} (Doc: ${cleanDoc}) con ${assignedTherapistName}`);
-  res.redirect(`/citas?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
+  const referer = req.header("Referer") || "";
+  if (referer.includes("/admin")) {
+    res.redirect(`/admin?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
+  } else {
+    res.redirect(`/citas?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
+  }
 });
 
 // Endpoint POST para cambiar estado de cita
@@ -3617,7 +3564,12 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
   if (id && status) {
     updatePsyAppointmentStatus(String(id), status as any);
   }
-  res.redirect("/citas?updated=true");
+  const referer = req.header("Referer") || "";
+  if (referer.includes("/admin")) {
+    res.redirect("/admin?updated=true");
+  } else {
+    res.redirect("/citas?updated=true");
+  }
 });
 
 // =============================================================================
@@ -3625,6 +3577,10 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
 // =============================================================================
 portalRouter.get("/especialistas", async (req: Request, res: Response) => {
   const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso exclusivo para el personal médico y administrativo de MindCare. Inicia sesión con tus credenciales."));
+    return;
+  }
   const isAdmin = staffSession.isAdmin;
   const therapists = getAllTherapists(true); // Super Admin ve activos e inactivos
   const activeCount = therapists.filter(t => t.active).length;
@@ -4680,6 +4636,11 @@ portalRouter.post("/api/crm/pago", (req: Request, res: Response) => {
 
 // Endpoint GET para exportar el CRM completo a CSV / Excel
 portalRouter.get("/api/crm/export/csv", (req: Request, res: Response) => {
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.status(403).send("No autorizado. Acceso exclusivo para personal médico y administrativo de MindCare.");
+    return;
+  }
   const patients = getAllPatients();
   const headers = [
     "ID_Expediente",
@@ -5683,7 +5644,12 @@ portalRouter.get("/paciente/:id/consentimiento", (req: Request, res: Response) =
 // RUTA 4: AUTORIZAR APLICACIONES & CONEXIONES REALES
 // =============================================================================
 portalRouter.get("/autorizar", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido a configuraciones del sistema. Inicia sesión con tus credenciales."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const users = await getAllUsers();
   const selectedUserId = (req.query.userId as string) || (users[0]?.id ?? "");
   const selectedUser = users.find(u => u.id === selectedUserId) || users[0];
