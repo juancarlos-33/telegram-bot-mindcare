@@ -8,7 +8,7 @@ import {
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments, getPsyAppointmentsByDocument,
-  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getTherapistsBySpecialty,
+  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getAllTherapists, getTherapistsBySpecialty,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
   saveTestResult, getUserTestResults, getAllTestResults,
@@ -652,10 +652,21 @@ bot.on("callback_query", async (ctx) => {
   }
 
   if (data === "show_therapists") {
-    const lines = PSYCHOLOGY_SPECIALTIES.map(s =>
-      `${s.icon} *${s.name}*\n  👤 ${s.therapist} · ${s.office}\n  🕐 Espera: ${s.waitTime}\n  📌 ${s.description}`
+    const therapists = getAllTherapists();
+    const lines = therapists.map(t =>
+      `${t.icon || "👨‍⚕️"} *${t.name}*\n  🩺 *Especialidad:* ${t.specialty}\n  📍 ${t.office} · ${t.licenseNumber || "Colpsic"}`
     ).join("\n\n");
-    await ctx.reply(`🧠 *NUESTROS ESPECIALISTAS — MINDCARE*\n\n${lines}`, { parse_mode: "Markdown" });
+    await ctx.reply(
+      `🧠 *NUESTROS ESPECIALISTAS ACTIVOS — MINDCARE*\n\n${lines || "No hay terapeutas registrados actualmente."}\n\nPara agendar tu consulta, presiona el botón abajo o escribe /cita.`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📅 Agendar Cita Ahora", callback_data: "book_start" }]
+          ]
+        }
+      }
+    );
     return;
   }
 
@@ -1121,10 +1132,27 @@ bot.on("callback_query", async (ctx) => {
     const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.id === specId);
     if (!spec) return;
 
+    const availableTherapists = getTherapistsBySpecialty(spec.name);
+    if (availableTherapists.length === 0) {
+      await ctx.reply(
+        `⚠️ Actualmente no hay especialistas con turnos activos disponibles para *${spec.name}*.\nPor favor selecciona otra especialidad o consúltanos nuevamente pronto.`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "⬅️ Cambiar Especialidad", callback_data: "nav_back_specialty" }],
+              [{ text: "❌ Cancelar", callback_data: "cancel_booking" }]
+            ]
+          }
+        }
+      );
+      return;
+    }
+
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_therapist", specialty: spec.name });
 
-    const therapistButtons = getTherapistsBySpecialty(spec.name).map(t => ([{
+    const therapistButtons = availableTherapists.map(t => ([{
       text: `${t.icon} ${t.name} (${t.specialty})`, callback_data: `therapist_${t.id}`
     }]));
     therapistButtons.push([
@@ -1744,11 +1772,15 @@ bot.command("cancelarcita", async (ctx) => {
 });
 
 bot.command(["terapeutas", "especialidades", "psicologos"], async (ctx) => {
-  const lines = PSYCHOLOGY_SPECIALTIES.map(s =>
-    `${s.icon} *${s.name}*\n  👤 ${s.therapist} · ${s.office}\n  🕐 ${s.waitTime}\n  📌 ${s.description}`
+  const therapists = getAllTherapists();
+  const lines = therapists.map(t =>
+    `${t.icon || "👨‍⚕️"} *${t.name}*\n  🩺 *Especialidad:* ${t.specialty}\n  📍 ${t.office} · ${t.licenseNumber || "Colpsic"}`
   ).join("\n\n");
 
-  await ctx.reply(`🧠 DIRECTORIO DE TERAPEUTAS — MINDCARE\n\n${lines}\n\nAgenda con /cita`, { parse_mode: "Markdown" });
+  await ctx.reply(
+    `🧠 *DIRECTORIO DE TERAPEUTAS ACTIVOS — MINDCARE*\n\n${lines || "No hay terapeutas registrados actualmente."}\n\nAgenda tu consulta con /cita`,
+    { parse_mode: "Markdown" }
+  );
 });
 
 bot.command("crisis", async (ctx) => {

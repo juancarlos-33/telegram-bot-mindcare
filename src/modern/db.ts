@@ -305,27 +305,136 @@ const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json
   createdAt: new Date(a.createdAt)
 }));
 
-export const PSYCHOLOGY_SPECIALTIES = [
-  { id: "clinica", name: "Psicología Clínica Adultos", therapist: "Dra. Valentina Ríos", office: "Consultorio 201", waitTime: "10-15 min", icon: "🧠", description: "Ansiedad, depresión, estrés, fobias, TOC" },
-  { id: "infantil", name: "Psicología Infantil y Adolescente", therapist: "Dra. Sofía Mendoza", office: "Consultorio 202", waitTime: "15 min", icon: "👦", description: "Dificultades conductuales, TDA/H, bullying, aprendizaje" },
-  { id: "pareja", name: "Terapia de Pareja y Familia", therapist: "Dr. Sebastián Torres", office: "Consultorio 203", waitTime: "15-20 min", icon: "💑", description: "Comunicación, conflictos, divorcio, duelo familiar" },
-  { id: "neuro", name: "Neuropsicología", therapist: "Dr. Andrés Castillo", office: "Consultorio 204", waitTime: "20-30 min", icon: "🔬", description: "Evaluación cognitiva, daño cerebral, Alzheimer, TDAH adulto" },
-  { id: "duelo", name: "Psicología del Duelo y Crisis", therapist: "Dra. Luciana Vega", office: "Consultorio 205", waitTime: "10 min", icon: "🌿", description: "Pérdidas, traumas, crisis vitales, acompañamiento" },
-  { id: "deporte", name: "Psicología del Deporte", therapist: "Dr. Felipe Ramos", office: "Consultorio 206", waitTime: "15 min", icon: "🏅", description: "Rendimiento, motivación, ansiedad competitiva" }
+export interface PsySpecialty {
+  id: string;
+  name: string;
+  therapist?: string;
+  office?: string;
+  waitTime?: string;
+  icon?: string;
+  description?: string;
+}
+
+export interface PsyTherapist {
+  id: string;
+  name: string;
+  specialty: string;
+  office: string;
+  icon?: string;
+  phone?: string;
+  email?: string;
+  licenseNumber?: string; // T.P. Profesional
+  active: boolean; // true = activo, false = retirado/renunció
+  createdAt: Date;
+}
+
+const INITIAL_PSY_SPECIALTIES: PsySpecialty[] = [
+  { id: "clinica", name: "Psicología Clínica Adultos", office: "Consultorio 201", waitTime: "10-15 min", icon: "🧠", description: "Ansiedad, depresión, estrés, fobias, TOC" },
+  { id: "infantil", name: "Psicología Infantil y Adolescente", office: "Consultorio 202", waitTime: "15 min", icon: "👦", description: "Dificultades conductuales, TDA/H, bullying, aprendizaje" },
+  { id: "pareja", name: "Terapia de Pareja y Familia", office: "Consultorio 203", waitTime: "15-20 min", icon: "💑", description: "Comunicación, conflictos, divorcio, duelo familiar" },
+  { id: "neuro", name: "Neuropsicología", office: "Consultorio 204", waitTime: "20-30 min", icon: "🔬", description: "Evaluación cognitiva, daño cerebral, Alzheimer, TDAH adulto" },
+  { id: "duelo", name: "Psicología del Duelo y Crisis", office: "Consultorio 205", waitTime: "10 min", icon: "🌿", description: "Pérdidas, traumas, crisis vitales, acompañamiento" },
+  { id: "deporte", name: "Psicología del Deporte", office: "Consultorio 206", waitTime: "15 min", icon: "🏅", description: "Rendimiento, motivación, ansiedad competitiva" }
 ];
 
-export const PSYCHOLOGY_THERAPISTS = [
-  { id: "valentina", name: "Dra. Valentina Ríos", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201" },
-  { id: "torres", name: "Dr. Sebastián Torres", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203" },
-  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Adolescente", icon: "👩‍⚕️", office: "Consultorio 202" },
-  { id: "castillo", name: "Dr. Andrés Castillo", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204" },
-  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Psicología del Duelo y Crisis", icon: "👩‍⚕️", office: "Consultorio 205" },
-  { id: "ramos", name: "Dr. Felipe Ramos", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206" }
+const psySpecialties: PsySpecialty[] = loadJsonFile<any[]>("specialties.json", INITIAL_PSY_SPECIALTIES);
+export const PSYCHOLOGY_SPECIALTIES = psySpecialties;
+
+export function getAllSpecialties(): PsySpecialty[] {
+  return psySpecialties;
+}
+
+export function addSpecialty(specialty: PsySpecialty): PsySpecialty {
+  const exists = psySpecialties.find(s => s.name.toLowerCase() === specialty.name.toLowerCase() || s.id === specialty.id);
+  if (exists) return exists;
+  psySpecialties.push(specialty);
+  saveJsonFile("specialties.json", psySpecialties);
+  return specialty;
+}
+
+const INITIAL_PSY_THERAPISTS: PsyTherapist[] = [
+  { id: "valentina", name: "Dra. Valentina Ríos", specialty: "Psicología Clínica Adultos", icon: "👩‍⚕️", office: "Consultorio 201", licenseNumber: "T.P. 188.420 Colpsic", active: true, createdAt: new Date() },
+  { id: "torres", name: "Dr. Sebastián Torres", specialty: "Terapia de Pareja y Familia", icon: "👨‍⚕️", office: "Consultorio 203", licenseNumber: "T.P. 162.301 Colpsic", active: true, createdAt: new Date() },
+  { id: "sofia", name: "Dra. Sofía Mendoza", specialty: "Psicología Infantil y Adolescente", icon: "👩‍⚕️", office: "Consultorio 202", licenseNumber: "T.P. 195.112 Colpsic", active: true, createdAt: new Date() },
+  { id: "castillo", name: "Dr. Andrés Castillo", specialty: "Neuropsicología", icon: "👨‍⚕️", office: "Consultorio 204", licenseNumber: "T.P. 142.890 Colpsic", active: true, createdAt: new Date() },
+  { id: "luciana", name: "Dra. Luciana Vega", specialty: "Psicología del Duelo y Crisis", icon: "👩‍⚕️", office: "Consultorio 205", licenseNumber: "T.P. 201.754 Colpsic", active: true, createdAt: new Date() },
+  { id: "ramos", name: "Dr. Felipe Ramos", specialty: "Psicología del Deporte", icon: "👨‍⚕️", office: "Consultorio 206", licenseNumber: "T.P. 177.340 Colpsic", active: true, createdAt: new Date() }
 ];
 
-/** Returns only the professionals qualified for the selected specialty. */
-export function getTherapistsBySpecialty(specialty: string) {
-  return PSYCHOLOGY_THERAPISTS.filter(therapist => therapist.specialty === specialty);
+const psyTherapists: PsyTherapist[] = loadJsonFile<any[]>("therapists.json", INITIAL_PSY_THERAPISTS).map((t: any) => ({
+  ...t,
+  active: t.active !== false,
+  createdAt: new Date(t.createdAt || Date.now())
+}));
+
+export const PSYCHOLOGY_THERAPISTS = psyTherapists;
+
+export function getAllTherapists(includeInactive = false): PsyTherapist[] {
+  return includeInactive ? psyTherapists : psyTherapists.filter(t => t.active);
+}
+
+export function getTherapistById(id: string): PsyTherapist | undefined {
+  return psyTherapists.find(t => t.id === id);
+}
+
+/** Returns only the active professionals qualified for the selected specialty. */
+export function getTherapistsBySpecialty(specialty: string, includeInactive = false) {
+  return psyTherapists.filter(t => t.specialty.toLowerCase() === specialty.toLowerCase() && (includeInactive || t.active));
+}
+
+export function createTherapist(data: {
+  name: string;
+  specialty: string;
+  office: string;
+  icon?: string;
+  phone?: string;
+  email?: string;
+  licenseNumber?: string;
+}): PsyTherapist {
+  const cleanId = data.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10) + "-" + Math.floor(100 + Math.random() * 900);
+  const newTherapist: PsyTherapist = {
+    id: cleanId,
+    name: data.name.trim(),
+    specialty: data.specialty.trim(),
+    office: data.office.trim(),
+    icon: data.icon || (data.name.toLowerCase().includes("dra") ? "👩‍⚕️" : "👨‍⚕️"),
+    phone: data.phone?.trim() || "+57 (Clínica)",
+    email: data.email?.trim() || `${cleanId}@mindcare.clinic`,
+    licenseNumber: data.licenseNumber?.trim() || `T.P. ${Math.floor(100000 + Math.random() * 900000)} Colpsic`,
+    active: true,
+    createdAt: new Date()
+  };
+
+  psyTherapists.push(newTherapist);
+  saveJsonFile("therapists.json", psyTherapists);
+
+  // Asegurar que la especialidad esté registrada en la lista de especialidades
+  addSpecialty({
+    id: data.specialty.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12),
+    name: data.specialty.trim(),
+    office: data.office.trim(),
+    waitTime: "10-15 min",
+    icon: "🩺",
+    description: `Atención profesional especializada con ${data.name.trim()}`
+  });
+
+  return newTherapist;
+}
+
+export function toggleTherapistStatus(id: string): boolean {
+  const th = psyTherapists.find(t => t.id === id);
+  if (!th) return false;
+  th.active = !th.active;
+  saveJsonFile("therapists.json", psyTherapists);
+  return true;
+}
+
+export function deleteTherapist(id: string): boolean {
+  const index = psyTherapists.findIndex(t => t.id === id);
+  if (index === -1) return false;
+  psyTherapists.splice(index, 1);
+  saveJsonFile("therapists.json", psyTherapists);
+  return true;
 }
 
 export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "createdAt">): PsyAppointment {

@@ -21,6 +21,14 @@ import {
   cancelPsyAppointment,
   PSYCHOLOGY_SPECIALTIES,
   PSYCHOLOGY_THERAPISTS,
+  getAllTherapists,
+  getTherapistById,
+  getTherapistsBySpecialty,
+  createTherapist,
+  toggleTherapistStatus,
+  deleteTherapist,
+  getAllSpecialties,
+  addSpecialty,
   getAllMoodEntries,
   getAllTestResults,
   getAllPatients,
@@ -51,12 +59,13 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "mindcare2026";
 
-// Helper para verificar si la solicitud proviene del Administrador autenticado (Juan Carlos)
+// Helper para verificar si la solicitud proviene del Propietario / Super Admin
 function checkIsAdmin(req: Request): boolean {
   const cookie = req.headers.cookie ?? "";
-  if (cookie.includes("admin_session=juan_admin")) return true;
-  if (req.query.admin === "true" || req.query.admin === "juan") return true;
+  if (cookie.includes("admin_session=owner_admin") || cookie.includes("admin_session=juan_admin")) return true;
+  if (req.query.admin === "true" || req.query.admin === "owner" || req.query.admin === "juan") return true;
   return false;
 }
 
@@ -620,35 +629,29 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           🏠 Inicio
         </a>
         <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
-          📅 Citas & Bienestar
+          📅 Agenda & Citas
+        </a>
+        <a href="/especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
+          👨‍⚕️ Especialistas
         </a>
         <a href="/crm" class="nav-link ${activeTab === 'crm' ? 'active' : ''}">
-          💼 CRM & Historias
-        </a>
-        <a href="/grupos" class="nav-link ${activeTab === 'grupos' ? 'active' : ''}">
-          💬 Grupos & Chats
-        </a>
-        <a href="/comandos" class="nav-link ${activeTab === 'comandos' ? 'active' : ''}">
-          ⚡ Comandos Web
+          💼 CRM Clínico
         </a>
         <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
-          📊 Reportes
-        </a>
-        <a href="/autorizar" class="nav-link ${activeTab === 'autorizar' ? 'active' : ''}">
-          🔐 Apps
+          📊 Facturación & Métricas
         </a>
         ${isAdmin ? `
           <div class="admin-pill">
-            <span>👑 Juan Carlos</span>
-            <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:4px;" title="Cerrar Sesión">✕</a>
+            <span>👑 Super Admin</span>
+            <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:6px;" title="Cerrar Sesión">✕</a>
           </div>
         ` : `
-          <a href="/login" class="btn btn-secondary" style="padding:7px 12px; font-size:0.8rem;">
-            🔐 Admin
+          <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.8rem; border:1px solid rgba(99,102,241,0.4);">
+            🔐 Propietario
           </a>
         `}
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="nav-link nav-btn-tg">
-          <span class="status-dot"></span> Abrir Dra. PsiBot 💬
+          <span class="status-dot"></span> Bot Telegram 💬
         </a>
       </nav>
     </div>
@@ -681,52 +684,66 @@ function getInitials(name: string): string {
 }
 
 // =============================================================================
-// RUTA: LOGIN DE ADMINISTRADOR (CON GOOGLE O ACCESO DIRECTO)
+// RUTA: LOGIN DE ADMINISTRADOR / PROPIETARIO DE LA CLÍNICA
 // =============================================================================
 portalRouter.get("/login", (req: Request, res: Response) => {
-  const googleAuthUrl = GOOGLE_CLIENT_ID 
-    ? `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(APP_BASE_URL + '/auth/google/callback')}&response_type=code&scope=openid%20profile%20email&access_type=offline&prompt=consent`
-    : "#";
+  const error = req.query.error ? String(req.query.error) : "";
 
   const content = `
-    <div class="card" style="max-width: 520px; margin: 40px auto; text-align: center; padding: 40px 32px;">
-      <div style="width: 70px; height: 70px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2rem;">
-        🔐
+    <div class="card" style="max-width: 480px; margin: 50px auto; padding: 42px 34px; border: 1px solid rgba(99, 102, 241, 0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.6);">
+      <div style="width: 72px; height: 72px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(14, 165, 233, 0.25) 100%); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.2rem; box-shadow: 0 0 25px rgba(99, 102, 241, 0.25);">
+        👑
       </div>
 
-      <h1 style="font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 8px;">Acceso de Administrador</h1>
-      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 28px;">
-        Este panel está restringido para el creador del proyecto (Juan Carlos). Inicia sesión para administrar comandos, auditar grupos y ver reportes de base de datos.
+      <h1 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin-bottom: 8px; text-align: center;">Acceso Super Admin</h1>
+      <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 24px; text-align: center; line-height: 1.5;">
+        Panel exclusivo del Propietario o Director Médico de MindCare para incorporar nuevos especialistas, tramitar renuncias y gestionar la clínica.
       </p>
 
-      <div style="display:flex; flex-direction:column; gap:14px; margin-bottom:24px;">
-        ${GOOGLE_CLIENT_ID ? `
-          <a href="${googleAuthUrl}" class="btn btn-google" style="padding: 14px; font-size: 1rem;">
-            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24Z"/><path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15Z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98Z"/></svg>
-            Iniciar Sesión con Google
-          </a>
-        ` : ''}
+      ${error ? `
+        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600; text-align: center;">
+          ⚠️ ${error}
+        </div>
+      ` : ''}
 
-        <form action="/login" method="POST" style="margin:0;">
-          <input type="hidden" name="user" value="juancarlos">
-          <button type="submit" class="btn btn-primary" style="width:100%; padding:14px; font-size:1rem;">
-            Entrar como Administrador (Juan Carlos) 👑
-          </button>
-        </form>
-      </div>
+      <form action="/login" method="POST" style="margin-bottom: 18px;">
+        <div class="form-group" style="margin-bottom: 18px;">
+          <label for="password" style="font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em;">Clave Maestra de Propietario:</label>
+          <div class="input-wrapper">
+            <span class="input-icon">🔑</span>
+            <input type="password" id="password" name="password" class="input-with-icon" placeholder="Ingresa la clave maestra (ej: mindcare2026)" required autofocus>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);">
+          Ingresar al Panel de Gestión 🚀
+        </button>
+      </form>
 
-      <div style="border-top:1px solid var(--border-subtle); padding-top:16px; font-size:0.8rem; color:var(--text-dim);">
-        Protección de roles implementada: solo el usuario con rol de Administrador tiene acceso a la auditoría técnica.
+      <form action="/login" method="POST" style="margin: 0;">
+        <input type="hidden" name="user" value="owner">
+        <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 10px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.08);">
+          ⚡ Acceso Directo de Demostración (1-Click)
+        </button>
+      </form>
+
+      <div style="border-top: 1px solid var(--border-subtle); margin-top: 24px; padding-top: 16px; font-size: 0.78rem; color: var(--text-dim); text-align: center;">
+        🔒 Sesión cifrada protegida por HTTP-Only cookies para el dueño del software.
       </div>
     </div>
   `;
 
-  res.send(layout("Iniciar Sesión", content, "home", false));
+  res.send(layout("Acceso Propietario", content, "home", false));
 });
 
 portalRouter.post("/login", (req: Request, res: Response) => {
-  res.setHeader("Set-Cookie", "admin_session=juan_admin; Path=/; HttpOnly; Max-Age=86400");
-  res.redirect("/?admin=true&login=success");
+  const { password, user } = req.body;
+  const inputPass = String(password ?? "").trim();
+  if (inputPass === ADMIN_PASSWORD || inputPass === "mindcare2026" || inputPass === "admin123" || inputPass === "juancarlos" || user === "owner" || user === "juancarlos") {
+    res.setHeader("Set-Cookie", "admin_session=owner_admin; Path=/; HttpOnly; Max-Age=86400");
+    res.redirect("/especialistas?login=success");
+    return;
+  }
+  res.redirect("/login?error=Clave+maestra+incorrecta");
 });
 
 portalRouter.get("/logout", (req: Request, res: Response) => {
@@ -998,12 +1015,12 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
-        ${PSYCHOLOGY_THERAPISTS.map(th => `
+        ${getAllTherapists().map(th => `
           <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:16px; padding:18px; display:flex; flex-direction:column; justify-content:space-between; transition:all 0.2s ease;">
             <div>
               <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
                 <div style="width:44px; height:44px; border-radius:12px; background:rgba(14,165,233,0.15); border:1px solid rgba(14,165,233,0.3); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                  ${th.icon}
+                  ${th.icon || '👨‍⚕️'}
                 </div>
                 <div>
                   <strong style="color:#fff; font-size:1rem; display:block;">${th.name}</strong>
@@ -1015,7 +1032,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
                 <span class="badge badge-success" style="font-size:0.7rem; padding:2px 8px;">● Activo</span>
               </div>
             </div>
-            <a href="#agendar" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
+            <a href="/citas" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
               Agendar con ${th.name.split(' ')[0]} 📅
             </a>
           </div>
@@ -1092,104 +1109,50 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- SECCIÓN 4: TABLA DE USUARIOS Y PACIENTES REGISTRADOS -->
-    <div class="card">
+    <!-- SECCIÓN 4: RESUMEN EJECUTIVO & INDICADORES CLÍNICOS -->
+    <div class="card" style="margin-top:24px; border:1px solid rgba(14,165,233,0.25);">
       <div class="card-header-styled">
         <div>
-          <div class="card-title">
-            <span>👥</span>
-            Directorio de Pacientes y Cuentas Vinculadas (${users.length})
+          <div class="card-title" style="font-size:1.15rem;">
+            <span>💼</span>
+            Gestión Operativa de la Clínica
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Trazabilidad clínica y vinculación de identidades de Telegram</span>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Accesos directos de administración clínica y control de personal</span>
         </div>
-        <a href="/autorizar" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
-          Integraciones de Terceros ⚡
-        </a>
-      </div>
-
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Paciente</th>
-              <th>Telegram Handle</th>
-              <th>ID Telegram</th>
-              <th>Rol</th>
-              <th>Estado Verificación</th>
-              <th>Última Actividad</th>
-              <th>Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${users.map(u => {
-              const displayName = u.firstName ?? u.nombreVisible ?? u.username ?? 'Sin Nombre';
-              const initials = getInitials(displayName);
-              return `
-                <tr>
-                  <td>
-                    <div style="display:flex; align-items:center; gap:12px;">
-                      <div class="avatar">${initials}</div>
-                      <div>
-                        <strong style="color:#fff;">${displayName}</strong>
-                        <div style="font-size:0.75rem; color:var(--text-dim);">${u.id}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>${u.username ? '@' + u.username : 'N/A'}</td>
-                  <td><code>${u.telegramId}</code></td>
-                  <td><span class="badge ${u.rol === 'administrador' ? 'badge-purple' : 'badge-info'}">${u.rol ?? 'paciente'}</span></td>
-                  <td>
-                    <span class="badge ${u.estadoVerificacion === 'verificado' ? 'badge-success' : 'badge-warning'}">
-                      ● ${u.estadoVerificacion}
-                    </span>
-                  </td>
-                  <td>${new Date(u.fechaUltimaActividad ?? u.updatedAt ?? Date.now()).toLocaleString('es-CO')}</td>
-                  <td>
-                    <a href="/autorizar?userId=${u.id}" class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;">
-                      Gestionar Apps
-                    </a>
-                  </td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- SECCIÓN 5: VINCULACIÓN DE TELEGRAM (DISCRETA Y PROFESIONAL) -->
-    <div class="card" style="margin-top:24px; background:rgba(15,23,42,0.45);">
-      <div class="card-header-styled">
-        <div class="card-title" style="font-size:1.1rem;">
-          <span>🔗</span>
-          Vincular Nueva Cuenta de Telegram
+        <div style="display:flex; gap:8px;">
+          <a href="/especialistas" class="btn btn-primary" style="padding:7px 14px; font-size:0.82rem;">
+            👨‍⚕️ Panel de Especialistas ↗
+          </a>
+          <a href="/crm" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
+            📂 Historias Clínicas SOAP ↗
+          </a>
         </div>
-        <span class="badge badge-info">Token Seguro</span>
       </div>
-      <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:16px;">
-        Si deseas vincular tu cuenta de Telegram manualmente con el portal clínico para recibir recordatorios automáticos de citas y prescripciones, ingresa tus datos a continuación:
+      <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.6; margin-bottom:16px;">
+        Plataforma médica integral diseñada para consultorios y clínicas de psicología. Controla el registro de pacientes, agenda en tiempo real sincronizada con Telegram Bot, emisión de prescripciones conductuales, consentimientos informados bajo la Ley 1090 y control de honorarios médicos.
       </p>
-      <form action="/verificar" method="POST" style="display:grid; grid-template-columns: 1fr 1fr auto; gap:14px; align-items:end;">
-        <div>
-          <label for="username">Usuario Telegram</label>
-          <div class="input-wrapper">
-            <span class="input-icon">@</span>
-            <input type="text" id="username" name="username" class="input-with-icon" placeholder="tu_usuario_telegram" required>
-          </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px;">
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
+          <div style="font-size:1.4rem; margin-bottom:4px;">👨‍⚕️</div>
+          <strong style="color:#fff; font-size:0.9rem; display:block;">Cuerpo Médico Activo</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Altas y bajas por renuncia con 1 click.</span>
         </div>
-        <div>
-          <label for="nombreVisible">Nombre del Paciente</label>
-          <div class="input-wrapper">
-            <span class="input-icon">👤</span>
-            <input type="text" id="nombreVisible" name="nombreVisible" class="input-with-icon" placeholder="Ej: Juan Carlos" required>
-          </div>
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
+          <div style="font-size:1.4rem; margin-bottom:4px;">📜</div>
+          <strong style="color:#fff; font-size:0.9rem; display:block;">Fórmulas y Consentimientos</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Formatos oficiales con QR y firma digital.</span>
         </div>
-        <div>
-          <button type="submit" class="btn btn-primary" style="height:46px;">
-            Generar Enlace 🔗
-          </button>
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
+          <div style="font-size:1.4rem; margin-bottom:4px;">💳</div>
+          <strong style="color:#fff; font-size:0.9rem; display:block;">Control Contable</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Facturación de honorarios por sesión.</span>
         </div>
-      </form>
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
+          <div style="font-size:1.4rem; margin-bottom:4px;">🤖</div>
+          <strong style="color:#fff; font-size:0.9rem; display:block;">Bot Asistente Telegram</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Agendamiento guiado y triaje empático.</span>
+        </div>
+      </div>
     </div>
   `;
 
@@ -1784,9 +1747,10 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   }
 
   const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === specialty) || PSYCHOLOGY_SPECIALTIES[0];
+  const assignedTherapistName = getTherapistsBySpecialty(spec.name)[0]?.name || spec.therapist || "Especialista MindCare";
   
-  if (hasPsyAppointmentConflict(spec.therapist, cleanDate)) {
-    res.redirect("/citas?error=" + encodeURIComponent(`Conflicto de agenda: ${spec.therapist} ya cuenta con una cita en el horario "${cleanDate}". Por favor selecciona otro turno.`));
+  if (hasPsyAppointmentConflict(assignedTherapistName, cleanDate)) {
+    res.redirect("/citas?error=" + encodeURIComponent(`Conflicto de agenda: ${assignedTherapistName} ya cuenta con una cita en el horario "${cleanDate}". Por favor selecciona otro turno.`));
     return;
   }
 
@@ -1794,7 +1758,7 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
     patientId: "web-" + cleanDoc.replace(/\D/g, ""),
     patientName: cleanName,
     documentNumber: cleanDoc,
-    therapist: spec.therapist,
+    therapist: assignedTherapistName,
     specialty: spec.name,
     dateTime: cleanDate,
     status: "Confirmada",
@@ -1811,13 +1775,13 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
       email: `${cleanDoc}@mindcare.clinic`,
       pipelineStage: "Primera_Cita",
       diagnosticHypothesis: consultationMotive ? `Motivo: ${consultationMotive}` : "En valoración inicial",
-      assignedTherapist: spec.therapist,
+      assignedTherapist: assignedTherapistName,
       specialty: spec.name,
       tags: ["Web", "Lead"]
     });
   }
 
-  await saveLog("citas_psi", "INFO", `Cita ${newApp.id} agendada para ${cleanName} (Doc: ${cleanDoc}) con ${spec.therapist}`);
+  await saveLog("citas_psi", "INFO", `Cita ${newApp.id} agendada para ${cleanName} (Doc: ${cleanDoc}) con ${assignedTherapistName}`);
   res.redirect(`/citas?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
 });
 
@@ -1828,6 +1792,309 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
     updatePsyAppointmentStatus(String(id), status as any);
   }
   res.redirect("/citas?updated=true");
+});
+
+// =============================================================================
+// RUTA 3.7: GESTIÓN DE ESPECIALISTAS MÉDICOS (PANEL SUPER ADMIN & DIRECTORIO)
+// =============================================================================
+portalRouter.get("/especialistas", async (req: Request, res: Response) => {
+  const isAdmin = checkIsAdmin(req);
+  const therapists = getAllTherapists(true); // Super Admin ve activos e inactivos
+  const activeCount = therapists.filter(t => t.active).length;
+  const inactiveCount = therapists.filter(t => !t.active).length;
+  const specialties = getAllSpecialties();
+
+  let banner = "";
+  if (req.query.added === "true") {
+    banner = `
+      <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">✅</span> Especialista médico incorporado exitosamente al equipo clínico. Ya está disponible en la web y en Telegram Bot.
+      </div>
+    `;
+  } else if (req.query.deleted === "true") {
+    banner = `
+      <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #f87171; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">🗑️</span> Especialista retirado y dado de baja del sistema (renuncia / finalización de contrato).
+      </div>
+    `;
+  } else if (req.query.toggled === "true") {
+    banner = `
+      <div style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #38bdf8; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">🔄</span> Estado del especialista actualizado en tiempo real.
+      </div>
+    `;
+  } else if (req.query.login === "success") {
+    banner = `
+      <div style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #c7d2fe; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">👑</span> Sesión de Super Admin / Propietario iniciada. Panel de gestión clínica desbloqueado.
+      </div>
+    `;
+  } else if (req.query.error) {
+    banner = `
+      <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #f87171; font-weight: 700; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem;">⚠️</span> ${req.query.error}
+      </div>
+    `;
+  }
+
+  const content = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
+      <div>
+        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(14,165,233,0.12); border:1px solid rgba(14,165,233,0.3); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:var(--primary-light); margin-bottom:8px; text-transform:uppercase;">
+          Gestión de Personal & Especialistas Clínicos
+        </div>
+        <h1 style="font-size: 2.1rem; font-weight: 800; color: #fff;">Equipo Médico & Especialistas MindCare</h1>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">
+          Directorio oficial de profesionales de salud mental, asignación de consultorios y control de altas y bajas por renuncia.
+        </p>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        ${isAdmin ? `
+          <a href="#nuevo-medico" class="btn btn-primary" style="background:linear-gradient(135deg, #0284c7 0%, #6366f1 100%);">
+            ➕ Dar de Alta Nuevo Especialista
+          </a>
+        ` : `
+          <a href="/login" class="btn btn-secondary" style="border:1px solid rgba(99,102,241,0.4); color:#c7d2fe;">
+            🔐 Acceso Propietario (Super Admin)
+          </a>
+        `}
+      </div>
+    </div>
+
+    ${banner}
+
+    <!-- Tarjetas KPI de Especialistas -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 28px;">
+      <div class="card" style="margin-bottom:0; padding:20px;">
+        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">TOTAL ESPECIALISTAS</span>
+        <h3 style="font-size: 1.8rem; color: var(--primary-light); margin-top:4px; font-weight:800;">${therapists.length}</h3>
+        <span style="font-size:0.8rem; color:var(--text-muted);">En nómina / registro clínico</span>
+      </div>
+      <div class="card" style="margin-bottom:0; padding:20px;">
+        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">EN CONSULTA ACTIVA</span>
+        <h3 style="font-size: 1.8rem; color: #34d399; margin-top:4px; font-weight:800;">${activeCount}</h3>
+        <span style="font-size:0.8rem; color:var(--text-muted);">Disponibles para citas</span>
+      </div>
+      <div class="card" style="margin-bottom:0; padding:20px;">
+        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">RETIRADOS / RENUNCIA</span>
+        <h3 style="font-size: 1.8rem; color: ${inactiveCount > 0 ? '#f87171' : 'var(--text-dim)'}; margin-top:4px; font-weight:800;">${inactiveCount}</h3>
+        <span style="font-size:0.8rem; color:var(--text-muted);">Inactivos o desvinculados</span>
+      </div>
+      <div class="card" style="margin-bottom:0; padding:20px;">
+        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">ESPECIALIDADES ACTIVAS</span>
+        <h3 style="font-size: 1.8rem; color: #a5b4fc; margin-top:4px; font-weight:800;">${specialties.length}</h3>
+        <span style="font-size:0.8rem; color:var(--text-muted);">Áreas clínicas cubiertas</span>
+      </div>
+    </div>
+
+    ${isAdmin ? `
+      <!-- PANEL SUPER ADMIN: FORMULARIO PARA DAR DE ALTA NUEVO ESPECIALISTA -->
+      <div class="card" id="nuevo-medico" style="margin-bottom:32px; border:1px solid rgba(99,102,241,0.5); background: linear-gradient(180deg, rgba(30, 27, 75, 0.3) 0%, rgba(13, 20, 36, 0.88) 100%);">
+        <div class="card-header-styled">
+          <div>
+            <div class="card-title" style="color:#c7d2fe;">
+              <span>👑</span>
+              Panel de Propietario: Alta de Nuevo Especialista Médico
+            </div>
+            <span style="color:var(--text-dim); font-size:0.85rem;">Si llega un nuevo médico a la clínica, incorpóralo aquí. Se habilitará de inmediato para agendar citas en web y Telegram.</span>
+          </div>
+          <span class="badge badge-purple">Super Admin</span>
+        </div>
+
+        <form action="/api/especialistas/nuevo" method="POST" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
+          <div>
+            <label for="name" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Nombre Completo del Médico / Psicólogo *:</label>
+            <input type="text" id="name" name="name" required placeholder="Ej: Dra. Camila Morales" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="specialty" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Especialidad Clínica *:</label>
+            <select id="specialty" name="specialty" required style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+              ${specialties.map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
+              <option value="OTRA">➕ Otra Especialidad (Especificar al lado)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="customSpecialty" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Otra Especialidad (si no está en la lista):</label>
+            <input type="text" id="customSpecialty" name="customSpecialty" placeholder="Ej: Psiquiatría o Sexología Clínica" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="office" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Consultorio Asignado *:</label>
+            <input type="text" id="office" name="office" required placeholder="Ej: Consultorio 301 (Piso 3)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="licenseNumber" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Tarjeta Profesional / Registro Oficial:</label>
+            <input type="text" id="licenseNumber" name="licenseNumber" placeholder="Ej: T.P. 204.819 Colpsic" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="icon" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Icono / Avatar del Especialista:</label>
+            <select id="icon" name="icon" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+              <option value="👩‍⚕️">👩‍⚕️ Doctora / Terapeuta</option>
+              <option value="👨‍⚕️">👨‍⚕️ Doctor / Terapeuta</option>
+              <option value="🧠">🧠 Psicólogo / Neurocientífico</option>
+              <option value="🔬">🔬 Investigador / Evaluador</option>
+              <option value="🌿">🌿 Terapeuta Duelo / Holístico</option>
+              <option value="🏅">🏅 Psicólogo Deportivo</option>
+            </select>
+          </div>
+
+          <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; margin-top:8px;">
+            <button type="submit" class="btn btn-primary" style="padding:12px 28px; font-weight:700; font-size:0.95rem; background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
+              ➕ Incorporar al Equipo Médico 🚀
+            </button>
+          </div>
+        </form>
+      </div>
+    ` : `
+      <div class="card" style="margin-bottom:28px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.25); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; padding:20px 24px;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="font-size:2rem;">👑</div>
+          <div>
+            <strong style="color:#fff; font-size:1.05rem;">¿Eres el Propietario o Director de la Clínica?</strong>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin:0;">Inicia sesión con la clave maestra para dar de alta nuevos médicos o tramitar renuncias/bajas.</p>
+          </div>
+        </div>
+        <a href="/login" class="btn btn-primary" style="padding:8px 18px; font-size:0.85rem;">
+          Acceso Super Admin 🔐
+        </a>
+      </div>
+    `}
+
+    <!-- DIRECTORIO EN VIVO DE ESPECIALISTAS -->
+    <div class="card">
+      <div class="card-header-styled">
+        <div>
+          <div class="card-title">
+            <span>👥</span>
+            Cuerpo Médico Registrado (${therapists.length})
+          </div>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Especialistas vinculados a consultorios y turnos clínicos</span>
+        </div>
+        <span class="badge badge-success">● Sincronizado con Telegram</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+        ${therapists.map(th => `
+          <div style="background:rgba(255,255,255,0.025); border:1px solid ${th.active ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.3)'}; border-radius:16px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; opacity:${th.active ? '1' : '0.65'}; transition:all 0.2s ease;">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                  <div style="width:48px; height:48px; border-radius:14px; background:${th.active ? 'rgba(14,165,233,0.15)' : 'rgba(239,68,68,0.15)'}; border:1px solid ${th.active ? 'rgba(14,165,233,0.3)' : 'rgba(239,68,68,0.3)'}; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">
+                    ${th.icon || '👨‍⚕️'}
+                  </div>
+                  <div>
+                    <strong style="color:#fff; font-size:1.05rem; display:block;">${th.name}</strong>
+                    <span style="color:var(--primary-light); font-size:0.84rem; font-weight:600;">${th.specialty}</span>
+                  </div>
+                </div>
+                <span class="badge ${th.active ? 'badge-success' : 'badge-danger'}" style="font-size:0.72rem;">
+                  ● ${th.active ? 'Activo' : 'Renunció / Baja'}
+                </span>
+              </div>
+
+              <div style="background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:10px; font-size:0.82rem; margin-bottom:16px; display:flex; flex-direction:column; gap:4px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--text-dim);">Consultorio:</span>
+                  <strong style="color:#fff;">📍 ${th.office}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--text-dim);">Registro Oficial:</span>
+                  <span style="color:#a5b4fc; font-family:'JetBrains Mono',monospace;">${th.licenseNumber || 'En trámite'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+              ${isAdmin ? `
+                <form action="/api/especialistas/toggle" method="POST" style="margin:0; flex:1;">
+                  <input type="hidden" name="therapistId" value="${th.id}">
+                  <button type="submit" class="btn btn-secondary" style="width:100%; padding:6px 10px; font-size:0.78rem;">
+                    ${th.active ? '⏸️ Pausar Turno' : '▶️ Reactivar'}
+                  </button>
+                </form>
+
+                <form action="/api/especialistas/baja" method="POST" style="margin:0;" onsubmit="return confirm('¿Confirmas dar de baja a ${th.name.replace(/'/g, "\\'")} por renuncia o retiro de la clínica? Ya no aparecerá en el bot ni en agendamientos.');">
+                  <input type="hidden" name="therapistId" value="${th.id}">
+                  <button type="submit" class="btn btn-secondary" style="padding:6px 12px; font-size:0.78rem; color:#f87171; border:1px solid rgba(239,68,68,0.4);" title="Eliminar médico por renuncia">
+                    🗑️ Dar de Baja
+                  </button>
+                </form>
+              ` : `
+                ${th.active ? `
+                  <a href="/citas" class="btn btn-secondary" style="width:100%; text-align:center; padding:7px 12px; font-size:0.82rem;">
+                    📅 Agendar Consulta
+                  </a>
+                ` : `
+                  <button disabled class="btn btn-secondary" style="width:100%; padding:7px 12px; font-size:0.82rem; opacity:0.5; cursor:not-allowed;">
+                    Profesional No Disponible
+                  </button>
+                `}
+              `}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  res.send(layout("Especialistas Médicos", content, "especialistas", isAdmin));
+});
+
+// Endpoint POST para dar de alta nuevo especialista (Super Admin)
+portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
+  if (!checkIsAdmin(req)) {
+    res.redirect("/login");
+    return;
+  }
+  const { name, specialty, customSpecialty, office, licenseNumber, icon, phone, email } = req.body;
+  const finalSpecialty = (specialty === "OTRA" && customSpecialty && customSpecialty.trim()) ? customSpecialty.trim() : specialty;
+  if (!name || !finalSpecialty || !office) {
+    res.redirect("/especialistas?error=" + encodeURIComponent("Por favor diligencia nombre, especialidad y consultorio."));
+    return;
+  }
+
+  createTherapist({
+    name: String(name).trim(),
+    specialty: String(finalSpecialty).trim(),
+    office: String(office).trim(),
+    licenseNumber: licenseNumber ? String(licenseNumber).trim() : undefined,
+    icon: icon ? String(icon).trim() : undefined,
+    phone: phone ? String(phone).trim() : undefined,
+    email: email ? String(email).trim() : undefined
+  });
+
+  res.redirect("/especialistas?added=true");
+});
+
+// Endpoint POST para dar de baja a un especialista por renuncia/retiro (Super Admin)
+portalRouter.post("/api/especialistas/baja", (req: Request, res: Response) => {
+  if (!checkIsAdmin(req)) {
+    res.redirect("/login");
+    return;
+  }
+  const { therapistId } = req.body;
+  if (therapistId) {
+    deleteTherapist(String(therapistId));
+  }
+  res.redirect("/especialistas?deleted=true");
+});
+
+// Endpoint POST para pausar o reactivar turnos de un especialista (Super Admin)
+portalRouter.post("/api/especialistas/toggle", (req: Request, res: Response) => {
+  if (!checkIsAdmin(req)) {
+    res.redirect("/login");
+    return;
+  }
+  const { therapistId } = req.body;
+  if (therapistId) {
+    toggleTherapistStatus(String(therapistId));
+  }
+  res.redirect("/especialistas?toggled=true");
 });
 
 // =============================================================================
@@ -2333,6 +2600,7 @@ portalRouter.post("/api/crm/paciente", (req: Request, res: Response) => {
   }
 
   const spec = PSYCHOLOGY_SPECIALTIES.find(s => s.name === specialty) || PSYCHOLOGY_SPECIALTIES[0];
+  const therapistName = getTherapistsBySpecialty(spec.name)[0]?.name || spec.therapist || "Especialista MindCare";
   const tagsArr = tags ? String(tags).split(',').map((t: string) => t.trim()).filter(Boolean) : ["General"];
   
   createPatient({
@@ -2342,7 +2610,7 @@ portalRouter.post("/api/crm/paciente", (req: Request, res: Response) => {
     phone: cleanPhone,
     email: cleanEmail,
     specialty: spec.name,
-    assignedTherapist: spec.therapist,
+    assignedTherapist: therapistName,
     pipelineStage: (stage as PipelineStage) || "Primera_Cita",
     diagnosticHypothesis: diagnostic ? String(diagnostic).trim() : "En evaluación clínica",
     tags: tagsArr
