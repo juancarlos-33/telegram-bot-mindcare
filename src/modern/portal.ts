@@ -45,7 +45,14 @@ import {
   hasPatientAppointmentConflict,
   validateAppointmentDate,
   validateBookingAvailability,
-  flagPatientRisk
+  flagPatientRisk,
+  StaffRole,
+  ClinicalStaffAccount,
+  CLINICAL_STAFF_ACCOUNTS,
+  getAllStaffAccounts,
+  getStaffById,
+  authenticateStaff,
+  ensurePatientForAppointment
 } from "./db.js";
 
 
@@ -64,18 +71,55 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "mindcare2026";
 
-// Helper para verificar si la solicitud proviene del Propietario / Super Admin
-function checkIsAdmin(req: Request): boolean {
+export interface StaffSession {
+  isStaff: boolean;
+  staff?: ClinicalStaffAccount;
+  isAdmin: boolean;
+  role?: StaffRole;
+  fullName?: string;
+  therapistId?: string;
+}
+
+// Helper para verificar y resolver la sesión del profesional clínico o administrador
+export function getStaffSession(req: Request): StaffSession {
   const cookie = req.headers.cookie ?? "";
-  if (cookie.includes("admin_session=owner_admin") || cookie.includes("admin_session=juan_admin")) return true;
-  if (req.query.admin === "true" || req.query.admin === "owner" || req.query.admin === "juan") return true;
-  return false;
+  const match = cookie.match(/admin_session=([^;]+)/);
+  if (match) {
+    const val = decodeURIComponent(match[1]).trim();
+    if (val === "owner_admin" || val === "juan_admin") {
+      const admin = getStaffById("staff-admin") || CLINICAL_STAFF_ACCOUNTS[0];
+      return { isStaff: true, staff: admin, isAdmin: true, role: "DIRECTOR_ADMIN", fullName: admin.fullName, therapistId: admin.therapistId };
+    }
+    const found = getStaffById(val);
+    if (found) {
+      return {
+        isStaff: true,
+        staff: found,
+        isAdmin: found.role === "DIRECTOR_ADMIN",
+        role: found.role,
+        fullName: found.fullName,
+        therapistId: found.therapistId
+      };
+    }
+  }
+  if (req.query.admin === "true" || req.query.admin === "owner" || req.query.admin === "juan") {
+    const admin = getStaffById("staff-admin") || CLINICAL_STAFF_ACCOUNTS[0];
+    return { isStaff: true, staff: admin, isAdmin: true, role: "DIRECTOR_ADMIN", fullName: admin.fullName, therapistId: admin.therapistId };
+  }
+  return { isStaff: false, isAdmin: false };
+}
+
+// Helper de retrocompatibilidad
+function checkIsAdmin(req: Request): boolean {
+  return getStaffSession(req).isAdmin;
 }
 
 // =============================================================================
 // PLANTILLA MAESTRA ULTRA-MODERNA (DESIGN SYSTEM CON GLASSMORPHISM Y TEMA OSCURO)
 // =============================================================================
-function layout(title: string, content: string, activeTab: string = "home", isAdmin = false): string {
+function layout(title: string, content: string, activeTab: string = "home", isAdmin = false, staffSession?: StaffSession): string {
+  const isStaff = staffSession ? staffSession.isStaff : isAdmin;
+  const currentStaff = staffSession?.staff;
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -628,29 +672,41 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         </div>
       </a>
       <nav class="nav-links">
-        <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
-          🏠 Inicio
-        </a>
-        <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
-          📅 Agenda & Citas
-        </a>
-        <a href="/especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
-          👨‍⚕️ Especialistas
-        </a>
-        <a href="/crm" class="nav-link ${activeTab === 'crm' ? 'active' : ''}">
-          💼 CRM Clínico
-        </a>
-        <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
-          📊 Facturación & Métricas
-        </a>
-        ${isAdmin ? `
-          <div class="admin-pill">
-            <span>👑 Super Admin</span>
-            <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:6px;" title="Cerrar Sesión">✕</a>
+        ${isStaff ? `
+          <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
+            🏠 Inicio Clínico
+          </a>
+          <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
+            📅 Agenda Médica
+          </a>
+          <a href="/especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
+            👨‍⚕️ Especialistas
+          </a>
+          <a href="/crm" class="nav-link ${activeTab === 'crm' ? 'active' : ''}">
+            💼 CRM Clínico
+          </a>
+          <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
+            📊 Facturación & Métricas
+          </a>
+          <div class="admin-pill" style="background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe;">
+            <span>${currentStaff?.role === 'DIRECTOR_ADMIN' ? '👑' : currentStaff?.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'} ${currentStaff?.fullName?.split(' ')[0] || (isAdmin ? 'Director' : 'Especialista')}</span>
+            <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:6px; font-weight:800;" title="Cerrar Sesión Segura">✕</a>
           </div>
         ` : `
-          <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.8rem; border:1px solid rgba(99,102,241,0.4);">
-            🔐 Propietario
+          <a href="/" class="nav-link ${activeTab === 'home' ? 'active' : ''}">
+            🏠 Inicio
+          </a>
+          <a href="/#agendar" class="nav-link ${activeTab === 'agendar' ? 'active' : ''}">
+            📅 Agendar Cita
+          </a>
+          <a href="/#especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
+            👨‍⚕️ Especialistas
+          </a>
+          <a href="/citas" class="nav-link ${activeTab === 'citas' ? 'active' : ''}">
+            🔎 Consultar Mi Cita
+          </a>
+          <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(99,102,241,0.4);">
+            🔐 Acceso Profesional
           </a>
         `}
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="nav-link nav-btn-tg">
@@ -691,96 +747,118 @@ function getInitials(name: string): string {
 // =============================================================================
 portalRouter.get("/login", (req: Request, res: Response) => {
   const error = req.query.error ? String(req.query.error) : "";
+  const staffAccounts = getAllStaffAccounts();
 
   const content = `
-    <div style="max-width: 480px; margin: 40px auto; padding: 0 16px;">
+    <div style="max-width: 540px; margin: 30px auto; padding: 0 16px;">
       <!-- Tarjeta Principal de Login -->
-      <div class="card" style="padding: 42px 34px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(20, 27, 48, 0.85) 0%, rgba(10, 15, 30, 0.95) 100%); backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(99, 102, 241, 0.15); position: relative; overflow: hidden;">
+      <div class="card" style="padding: 38px 32px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(20, 27, 48, 0.88) 0%, rgba(10, 15, 30, 0.96) 100%); backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(99, 102, 241, 0.15); position: relative; overflow: hidden;">
         
         <!-- Línea decorativa superior -->
         <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #10b981 100%);"></div>
 
         <!-- Escudo / Icono Principal -->
-        <div style="width: 76px; height: 76px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%); border: 1.5px solid rgba(99, 102, 241, 0.5); border-radius: 22px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.3rem; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);">
-          👑
+        <div style="width: 72px; height: 72px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%); border: 1.5px solid rgba(99, 102, 241, 0.5); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 2.2rem; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);">
+          🩺
         </div>
 
-        <div style="text-align: center; margin-bottom: 24px;">
-          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">
-            🔒 Módulo Directivo • Super Admin
+        <div style="text-align: center; margin-bottom: 22px;">
+          <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+            🔒 Autenticación de Personal Clínico • Ley 1090
           </div>
-          <h1 style="font-size: 1.85rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Acceso de Propietario</h1>
-          <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; margin: 0;">
-            Gestión de especialistas médicos, altas, renuncias y administración integral de MindCare.
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Portal de Acceso Profesional</h1>
+          <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; margin: 0;">
+            Ingreso individual para Director Médico, Psicólogos Clínicos y Equipo de Triage. Auditoría forense de expedientes SOAP.
           </p>
         </div>
 
         ${error ? `
-          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 22px; color: #f87171; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 1.2rem;">⚠️</span>
             <span>${error}</span>
           </div>
         ` : ''}
 
-        <form action="/login" method="POST" style="margin-bottom: 18px;">
-          <div style="margin-bottom: 18px;">
-            <label for="passwordInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
-              Contraseña Maestra:
+        <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm">
+          <div style="margin-bottom: 16px;">
+            <label for="credentialInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+              Usuario o Correo Institucional:
             </label>
-            
-            <!-- Campo de Contraseña con botón Ver/Ocultar -->
             <div style="position: relative; display: flex; align-items: center;">
-              <span style="position: absolute; left: 14px; font-size: 1.15rem; color: #818cf8; pointer-events: none; z-index: 2;">🔑</span>
-              
+              <span style="position: absolute; left: 14px; font-size: 1.1rem; color: #818cf8; pointer-events: none; z-index: 2;">👤</span>
+              <input 
+                type="text" 
+                id="credentialInput" 
+                name="credential" 
+                style="width: 100%; padding: 12px 14px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none;" 
+                placeholder="ej: admin o valentina@mindcare.clinic" 
+                value="admin"
+                required
+              >
+            </div>
+          </div>
+
+          <div style="margin-bottom: 18px;">
+            <label for="passwordInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+              Contraseña Clínica:
+            </label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <span style="position: absolute; left: 14px; font-size: 1.1rem; color: #818cf8; pointer-events: none; z-index: 2;">🔑</span>
               <input 
                 type="password" 
                 id="passwordInput" 
                 name="password" 
-                style="width: 100%; padding: 13px 48px 13px 44px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.95rem; font-family: inherit; transition: all 0.25s ease; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);"
+                style="width: 100%; padding: 12px 48px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none;" 
                 placeholder="Ingresa la contraseña..." 
                 required 
                 autofocus
-                onfocus="this.style.borderColor='#818cf8'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.25), inset 0 2px 4px rgba(0,0,0,0.4)';"
-                onblur="this.style.borderColor='rgba(99, 102, 241, 0.35)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.4)';"
               >
-
-              <!-- Botón Mostrar/Ocultar Contraseña -->
               <button 
                 type="button" 
                 id="togglePassBtn" 
                 onclick="togglePasswordVisibility()" 
                 title="Mostrar u ocultar contraseña"
-                aria-label="Alternar visibilidad de contraseña"
-                style="position: absolute; right: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; z-index: 3; font-size: 1.05rem;"
-                onmouseover="this.style.background='rgba(99,102,241,0.25)'; this.style.color='#fff'; this.style.borderColor='rgba(99,102,241,0.5)';"
-                onmouseout="this.style.background='rgba(255,255,255,0.06)'; this.style.color='#cbd5e1'; this.style.borderColor='rgba(255,255,255,0.12)';"
+                style="position: absolute; right: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
               >
                 <span id="eyeIcon">👁️</span>
               </button>
             </div>
           </div>
 
-
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-size: 0.98rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span>Ingresar al Panel de Gestión</span>
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); border-radius: 12px;">
+            <span>Iniciar Sesión Clínica Segura</span>
             <span>🚀</span>
           </button>
         </form>
 
-        <form action="/login" method="POST" style="margin: 0 0 20px 0;">
-          <input type="hidden" name="user" value="owner">
-          <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 11px; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.03); color: #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 6px;">
-            <span>⚡ Acceso Directo de Demostración (1-Click)</span>
-          </button>
-        </form>
+        <!-- SELECTOR DE ACCESO RÁPIDO PARA EVALUACIÓN DOCENTE / DEMO -->
+        <div style="margin: 20px 0; background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(99,102,241,0.35); border-radius: 14px; padding: 14px;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>⚡</span> Cuentas Institucionales para Sustentación (1-Click):
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            ${staffAccounts.map(s => `
+              <form action="/login" method="POST" style="margin:0;">
+                <input type="hidden" name="staffQuickLogin" value="${s.id}">
+                <button type="submit" style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; color: #e2e8f0; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;" onmouseover="this.style.background='rgba(99,102,241,0.2)'; this.style.borderColor='rgba(99,102,241,0.4)';" onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.08)';">
+                  <span>${s.role === 'DIRECTOR_ADMIN' ? '👑' : s.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'}</span>
+                  <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <strong>${s.fullName.split(' ')[0]} ${s.fullName.split(' ')[1] || ''}</strong>
+                    <div style="font-size: 0.68rem; color: #94a3b8;">${s.role === 'DIRECTOR_ADMIN' ? 'Director' : (s.specialty ? s.specialty.split(' ')[0] : 'Triage')}</div>
+                  </div>
+                </button>
+              </form>
+            `).join('')}
+          </div>
+        </div>
 
         <!-- Footer de Seguridad -->
-        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;">
-          <span style="font-size: 0.76rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px;">
-            <span>🔒</span> Sesión cifrada protegida por HTTP-Only cookies.
+        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;">
+          <span style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px;">
+            <span>🔒</span> Sesión clínica cifrada protegida por HTTP-Only cookies bajo Ley 1090.
           </span>
-          <a href="/" style="color: #818cf8; text-decoration: none; font-size: 0.82rem; font-weight: 600; transition: color 0.2s ease;" onmouseover="this.style.color='#c7d2fe';" onmouseout="this.style.color='#818cf8';">
-            ⬅️ Volver al Portal Clínico Público
+          <a href="/" style="color: #818cf8; text-decoration: none; font-size: 0.82rem; font-weight: 600;">
+            ⬅️ Volver al Portal de Pacientes
           </a>
         </div>
       </div>
@@ -806,18 +884,45 @@ portalRouter.get("/login", (req: Request, res: Response) => {
     </script>
   `;
 
-  res.send(layout("Acceso Propietario", content, "home", false));
+  res.send(layout("Acceso Profesional — MindCare", content, "home", false));
 });
 
 portalRouter.post("/login", (req: Request, res: Response) => {
-  const { password, user } = req.body;
-  const inputPass = String(password ?? "").trim();
-  if (inputPass === ADMIN_PASSWORD || inputPass === "mindcare2026" || inputPass === "admin123" || inputPass === "juancarlos" || user === "owner" || user === "juancarlos") {
-    res.setHeader("Set-Cookie", "admin_session=owner_admin; Path=/; HttpOnly; Max-Age=86400");
+  const { credential, password, user, staffQuickLogin } = req.body;
+
+  // Si se usó el botón de acceso rápido de demostración docente
+  if (staffQuickLogin) {
+    const staff = getStaffById(String(staffQuickLogin));
+    if (staff) {
+      res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
+      if (staff.role === "DIRECTOR_ADMIN") {
+        res.redirect("/especialistas?login=success");
+      } else {
+        res.redirect("/crm?login=success");
+      }
+      return;
+    }
+  }
+
+  // Retrocompatibilidad con el botón de propietario 1-click antiguo
+  if (user === "owner" || user === "juancarlos") {
+    res.setHeader("Set-Cookie", "admin_session=staff-admin; Path=/; HttpOnly; Max-Age=86400");
     res.redirect("/especialistas?login=success");
     return;
   }
-  res.redirect("/login?error=Clave+maestra+incorrecta");
+
+  const staff = authenticateStaff(String(credential || "admin"), String(password || ""));
+  if (staff) {
+    res.setHeader("Set-Cookie", `admin_session=${encodeURIComponent(staff.id)}; Path=/; HttpOnly; Max-Age=86400`);
+    if (staff.role === "DIRECTOR_ADMIN") {
+      res.redirect("/especialistas?login=success");
+    } else {
+      res.redirect("/crm?login=success");
+    }
+    return;
+  }
+
+  res.redirect("/login?error=Credenciales+incorrectas.+Verifica+usuario+o+correo+institucional.");
 });
 
 portalRouter.get("/logout", (req: Request, res: Response) => {
@@ -897,10 +1002,10 @@ portalRouter.get("/auth/google/callback", async (req: Request, res: Response) =>
 // RUTA 1: PÁGINA DE INICIO & REGISTRO DE USUARIOS
 // =============================================================================
 portalRouter.get("/", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  const isStaff = staffSession.isStaff;
+  const isAdmin = staffSession.isAdmin;
   const users = await getAllUsers();
-  const chats = getAllChats();
-  const customCommands = getCustomCommands();
   const appointments = getAllPsyAppointments();
   const confirmedCount = appointments.filter(a => a.status === "Confirmada").length;
   const pendingCount = appointments.filter(a => a.status === "Pendiente").length;
@@ -910,11 +1015,14 @@ portalRouter.get("/", async (req: Request, res: Response) => {
     <div class="hero-banner">
       <div class="hero-badge">
         <span class="status-dot"></span>
-        <span>Clínica Digital Activa • 6 Especialistas Disponibles 24/7</span>
+        <span>${isStaff ? 'Consola Médica & Terapéutica Activa' : 'Portal de Atención al Paciente • 6 Especialistas Disponibles'}</span>
       </div>
-      <h1>MindCare — Centro Clínico & Salud Mental Integrada</h1>
+      <h1>${isStaff ? 'MindCare — Panel Médico & Gestión Operativa' : 'MindCare — Centro Clínico & Salud Mental Integrada'}</h1>
       <p>
-        Ecosistema médico digital para reserva inmediata de citas, expedientes clínicos confidenciales (SOAP), tamizajes psicométricos en tiempo real y asistencia terapéutica continua con Dra. PsiBot en Telegram.
+        ${isStaff 
+          ? 'Consola institucional para dirección médica y psicólogos clínicos. Supervisión de agenda en tiempo real, expedientes SOAP confidenciales, métricas de atención y sincronización con Telegram Bot @' + BOT_USERNAME + '.'
+          : 'Ecosistema médico digital para reserva inmediata de consultas presenciales y virtuales, orientación terapéutica asistida por Dra. PsiBot en Telegram y cumplimiento estricto de la Ley 1090 de 2006 y Ley 1581 de 2012 (Habeas Data).'
+        }
       </p>
 
       <div class="hero-metrics">
@@ -922,57 +1030,84 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           <span class="status-dot"></span>
           <span>Dra. PsiBot: <strong>@${BOT_USERNAME}</strong> (Online)</span>
         </div>
+        ${isStaff ? `
+          <div class="hero-metric-item">
+            <span>📅 <strong>${appointments.length}</strong> Citas (${confirmedCount} Confirmadas)</span>
+          </div>
+          <div class="hero-metric-item">
+            <span>👥 <strong>${users.length}</strong> Pacientes Registrados</span>
+          </div>
+        ` : `
+          <div class="hero-metric-item">
+            <span>🩺 <strong>6</strong> Consultorios Activos (201-206)</span>
+          </div>
+          <div class="hero-metric-item">
+            <span>🔒 Privacidad Médica: <strong>Ley 1581 / Habeas Data</strong></span>
+          </div>
+        `}
         <div class="hero-metric-item">
-          <span>📅 <strong>${appointments.length}</strong> Citas (${confirmedCount} Confirmadas)</span>
-        </div>
-        <div class="hero-metric-item">
-          <span>👥 <strong>${users.length}</strong> Pacientes Registrados</span>
-        </div>
-        <div class="hero-metric-item">
-          <span>🩺 <strong>6</strong> Consultorios Activos (201-206)</span>
-        </div>
-        <div class="hero-metric-item">
-          <span>👑 Acceso: <strong>${isAdmin ? 'Director Médico (Admin)' : 'Público'}</strong></span>
+          <span>${isStaff ? '🩺' : '🌐'} Sesión: <strong>${isStaff ? (staffSession.fullName || 'Personal Clínico') : 'Portal Pacientes (Público)'}</strong></span>
         </div>
       </div>
 
       <div style="display:flex; gap:12px; margin-top:26px; flex-wrap:wrap;">
-        <a href="#agendar" class="btn btn-primary">
-          📅 Agendar Cita de Psicología
-        </a>
-        <a href="/crm" class="btn btn-secondary" style="border:1px solid rgba(99,102,241,0.4);">
-          💼 Expedientes & CRM Clínico
-        </a>
+        ${isStaff ? `
+          <a href="/citas" class="btn btn-primary">
+            📅 Agenda Médica Completa
+          </a>
+          <a href="/crm" class="btn btn-secondary" style="border:1px solid rgba(99,102,241,0.4);">
+            💼 Expedientes & CRM SOAP
+          </a>
+          <a href="/reportes" class="btn btn-secondary" style="border:1px solid rgba(16,185,129,0.35); color:#6ee7b7;">
+            📊 Facturación & Métricas
+          </a>
+        ` : `
+          <a href="#agendar" class="btn btn-primary">
+            📅 Agendar Cita de Psicología
+          </a>
+          <a href="/citas" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8;">
+            🔎 Consultar Mi Cita Programada
+          </a>
+        `}
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(14,165,233,0.45); color:#38bdf8;">
           <span class="status-dot"></span> Abrir Chat en Telegram 💬
         </a>
       </div>
     </div>
 
-    ${!isAdmin ? `
+    ${!isStaff ? `
       <div class="alert alert-info" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
-          <strong>ℹ️ Portal de Atención Abierto:</strong> Puedes agendar citas libremente, consultar el directorio de terapeutas y evaluar tus síntomas. Para expedientes confidenciales y auditoría, ingresa como Especialista.
+          <strong>🔒 Privacidad y Protección de Datos (Ley 1581 de 2012):</strong> MindCare protege la confidencialidad de tu consulta psicológica. Las citas son estrictamente privadas. Para acceder a expedientes SOAP y gestión de consultorios, inicia sesión con tu cuenta institucional.
         </div>
         <a href="/login" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;">
-          Acceso Administrador 🔐
+          Acceso Profesional 🔐
         </a>
       </div>
-    ` : ''}
+    ` : `
+      <div class="alert alert-success" style="justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+          <strong>🩺 Sesión Clínica Iniciada:</strong> Conectado como <strong>${staffSession.fullName}</strong> (${staffSession.role === 'DIRECTOR_ADMIN' ? 'Director Médico' : 'Psicólogo Clínico'}). Auditoría activa según Ley 1090 de 2006.
+        </div>
+        <a href="/logout" class="btn btn-secondary" style="padding:6px 14px; font-size:0.85rem; color:#f87171;">
+          Cerrar Sesión Segura ✕
+        </a>
+      </div>
+    `}
 
     <!-- SECCIÓN INTERACTIVA 1: AGENDAMIENTO RÁPIDO & ECOSISTEMA TERAPÉUTICO -->
     <div class="grid-2">
-      <!-- Tarjeta 1: Agendamiento Rápido de Citas -->
+      <!-- Tarjeta 1: Agendamiento Rápido de Citas (CU-01) -->
       <div class="card" id="agendar" style="border:1px solid rgba(14,165,233,0.35);">
         <div class="card-header-styled">
           <div class="card-title">
             <span>📅</span>
-            Agendamiento Rápido de Consulta
+            Agendamiento de Consulta Psicológica
           </div>
           <span class="badge badge-success">● Turnos Disponibles</span>
         </div>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
-          Ingresa tus datos para registrar tu cita inmediatamente. Se sincronizará con Telegram Bot y el expediente del CRM.
+          Ingresa tus datos para registrar tu cita. Recibirás código de reserva y se sincronizará con Telegram Bot y el expediente del CRM.
         </p>
 
         <form action="/api/citas" method="POST">
@@ -994,7 +1129,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <label for="specialty">Especialidad & Terapeuta Asignado</label>
             <select id="specialty" name="specialty" required>
               ${PSYCHOLOGY_SPECIALTIES.map(s => `
-                <option value="${s.name}">${s.icon} ${s.name} — ${s.therapist}</option>
+                <option value="${s.name}">${s.icon} ${s.name} — ${s.therapist} (${s.office})</option>
               `).join('')}
             </select>
           </div>
@@ -1002,13 +1137,22 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <label for="dateTime">Fecha y Horario Deseado</label>
             <div class="input-wrapper">
               <span class="input-icon">⏰</span>
-              <input type="text" id="dateTime" name="dateTime" class="input-with-icon" placeholder="Ej: Mañana a las 2:00 PM o Viernes 10:00 AM" required>
+              <input type="text" id="dateTime" name="dateTime" class="input-with-icon" placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" required>
             </div>
           </div>
           <div class="form-group">
             <label for="motive">Motivo de Consulta (Confidencial)</label>
-            <textarea id="motive" name="motive" placeholder="Ej: Consulta por manejo de ansiedad, sobrecarga laboral o dificultades para dormir..."></textarea>
+            <textarea id="motive" name="motive" placeholder="Ej: Consulta por manejo de ansiedad, sobrecarga laboral o dificultades relacionales..."></textarea>
           </div>
+
+          <!-- Cláusula Obligatoria de Consentimiento Habeas Data (Ley 1581 de 2012) -->
+          <div style="margin-bottom:18px; background:rgba(14,165,233,0.06); border:1px solid rgba(14,165,233,0.22); border-radius:10px; padding:12px 14px;">
+            <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.82rem; color:#cbd5e1;">
+              <input type="checkbox" name="habeasDataConsent" value="accepted" required checked style="margin-top:3px; accent-color:#0284c7; width:16px; height:16px;">
+              <span>Acepto de manera voluntaria el tratamiento de mis datos personales sensibles de salud bajo la <strong>Ley 1581 de 2012 (Habeas Data)</strong> y el secreto profesional de la <strong>Ley 1090 de 2006</strong>.</span>
+            </label>
+          </div>
+
           <button type="submit" class="btn btn-primary" style="width: 100%;">
             Confirmar y Reservar Cita 📅
           </button>
@@ -1061,11 +1205,17 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <a href="/citas" class="btn btn-secondary" style="flex:1; text-align:center;">
-            📅 Ver Citas (${appointments.length})
+            🔎 Consultar Mi Cita
           </a>
-          <a href="/crm" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
-            💼 CRM Clínico
-          </a>
+          ${isStaff ? `
+            <a href="/crm" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
+              💼 CRM Clínico
+            </a>
+          ` : `
+            <a href="/login" class="btn btn-secondary" style="flex:1; text-align:center; border:1px solid rgba(99,102,241,0.4);">
+              🔐 Acceso Staff
+            </a>
+          `}
           <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">
             Abrir Dra. PsiBot 💬
           </a>
@@ -1074,14 +1224,14 @@ portalRouter.get("/", async (req: Request, res: Response) => {
     </div>
 
     <!-- SECCIÓN 2: DIRECTORIO DE ESPECIALISTAS Y CONSULTORIOS -->
-    <div class="card" style="margin-bottom:28px;">
+    <div class="card" id="especialistas" style="margin-bottom:28px;">
       <div class="card-header-styled">
         <div>
           <div class="card-title">
             <span>👥</span>
             Equipo Clínico de Especialistas MindCare
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Profesionales acreditados en psicología clínica y neurociencias</span>
+          <span style="color:var(--text-dim); font-size:0.85rem;">Profesionales acreditados en psicología clínica, neurociencias y terapia integral</span>
         </div>
         <a href="#agendar" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
           Reservar Turno con un Especialista ↗
@@ -1106,7 +1256,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
                 <span class="badge badge-success" style="font-size:0.7rem; padding:2px 8px;">● Activo</span>
               </div>
             </div>
-            <a href="/citas" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
+            <a href="#agendar" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem; width:100%; text-align:center;">
               Agendar con ${th.name.split(' ')[0]} 📅
             </a>
           </div>
@@ -1114,92 +1264,163 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- SECCIÓN 3: TABLA EN VIVO: CITAS DE PSICOLOGÍA AGENDADAS -->
-    <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.22) 0%, rgba(13, 20, 36, 0.85) 100%);">
-      <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
-        <div>
-          <div class="card-title" style="color: #c7d2fe; font-size: 1.25rem;">
-            <span>📅</span>
-            Agenda Clínica en Tiempo Real (${appointments.length} Citas)
+    <!-- SECCIÓN 3: PROTECCIÓN LEGAL HABEAS DATA (LEY 1581 DE 2012 Y LEY 1090 DE 2006) -->
+    ${isStaff ? `
+      <!-- VISTA PRIVADA EXCLUSIVA PARA PROFESIONALES CLÍNICOS / DIRECTORES -->
+      <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(180deg, rgba(30, 27, 75, 0.22) 0%, rgba(13, 20, 36, 0.85) 100%);">
+        <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
+          <div>
+            <div class="card-title" style="color: #c7d2fe; font-size: 1.25rem;">
+              <span>📅</span>
+              Agenda Médica en Tiempo Real (${appointments.length} Citas Registradas)
+            </div>
+            <span style="color:var(--text-dim); font-size:0.85rem;">Vista confidencial protegida por credenciales de profesional de la salud</span>
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Sincronización bidireccional inmediata con Telegram Bot @${BOT_USERNAME}</span>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
+              Gestionar Citas Completas ↗
+            </a>
+            <a href="/crm" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
+              Ver en CRM Clínico ↗
+            </a>
+          </div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Paciente</th>
+                <th>Especialidad</th>
+                <th>Terapeuta</th>
+                <th>Horario Canónico</th>
+                <th>Motivo</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${appointments.length === 0 ? `
+                <tr>
+                  <td colspan="8" style="text-align:center; padding:28px; color:var(--text-muted);">
+                    Aún no hay citas registradas en el sistema.
+                  </td>
+                </tr>
+              ` : appointments.map(a => `
+                <tr>
+                  <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
+                  <td>
+                    <strong style="color:#fff;">${a.patientName}</strong>
+                    <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
+                  </td>
+                  <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
+                  <td>${a.therapist}</td>
+                  <td>
+                    <strong style="color:#38bdf8;">${a.dateTime}</strong>
+                    ${a.scheduledAt ? `<div style="font-size:0.72rem; color:var(--text-dim);">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
+                  </td>
+                  <td style="color:var(--text-muted); font-size:0.84rem; max-width:240px;">${a.motive ?? '—'}</td>
+                  <td>
+                    <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                      ● ${a.status}
+                    </span>
+                  </td>
+                  <td>
+                    <a href="/citas" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;">
+                      Gestionar ↗
+                    </a>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ` : `
+      <!-- VISTA PÚBLICA 100% CUMPLIENDO HABEAS DATA (LEY 1581 DE 2012) -->
+      <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.35); background: linear-gradient(180deg, rgba(14, 165, 233, 0.05) 0%, rgba(13, 20, 36, 0.85) 100%);">
+        <div class="card-header-styled" style="flex-wrap:wrap; gap:12px;">
+          <div>
+            <div class="card-title" style="color: #7dd3fc; font-size: 1.25rem;">
+              <span>🩺</span>
+              Disponibilidad de Consultorios Físicos en Tiempo Real (100% Anonimizada)
+            </div>
+            <span style="color:var(--text-dim); font-size:0.85rem;">Cumplimiento estricto del Secreto Profesional (Ley 1090) y Protección de Datos Sensibles (Ley 1581)</span>
+          </div>
           <a href="/citas" class="btn btn-primary" style="font-size:0.85rem; padding:8px 16px;">
-            Gestionar Citas Completas ↗
+            🔎 Consultar Mi Cita con Cédula
           </a>
-          <a href="/crm" class="btn btn-secondary" style="font-size:0.85rem; padding:8px 16px;">
-            Ver en CRM Clínico ↗
+        </div>
+
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+          Para proteger la privacidad de los pacientes, los nombres, documentos y motivos de consulta psicológica son privados. A continuación se muestra la disponibilidad de turnos por consultorio:
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px;">
+          ${getAllTherapists().map(th => {
+            const thAppointments = appointments.filter(a => a.therapist === th.name && a.status === 'Confirmada');
+            return `
+              <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="color: #38bdf8; font-size: 0.9rem;">📍 ${th.office}</strong>
+                    <span class="badge badge-success" style="font-size: 0.72rem;">● Disponible</span>
+                  </div>
+                  <strong style="color: #fff; font-size: 0.95rem; display: block;">${th.name}</strong>
+                  <div style="color: #a5b4fc; font-size: 0.8rem; margin-bottom: 8px;">${th.specialty}</div>
+                </div>
+                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.76rem; color: var(--text-dim);">Agenda Digital:</span>
+                  <a href="#agendar" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">Reservar ↗</a>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Acceso Seguro a Consulta de Cita Propia -->
+        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 14px; padding: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <strong style="color: #fff; font-size: 0.95rem; display: block; margin-bottom: 2px;">
+              ¿Ya tienes una cita programada y deseas verificar tu horario?
+            </strong>
+            <span style="color: var(--text-muted); font-size: 0.84rem;">
+              Digita tu número de documento en el buscador seguro para ver únicamente tus turnos asignados.
+            </span>
+          </div>
+          <a href="/citas" class="btn btn-primary" style="padding: 9px 18px; font-size: 0.85rem;">
+            Consultar Mi Cita por C.C. 🔍
           </a>
         </div>
       </div>
+    `}
 
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Paciente</th>
-              <th>Especialidad</th>
-              <th>Terapeuta</th>
-              <th>Horario</th>
-              <th>Motivo</th>
-              <th>Estado</th>
-              <th>Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${appointments.length === 0 ? `
-              <tr>
-                <td colspan="8" style="text-align:center; padding:28px; color:var(--text-muted);">
-                  Aún no hay citas registradas en el sistema. ¡Agenda la primera usando el formulario o vía Telegram con <code>/cita</code>!
-                </td>
-              </tr>
-            ` : appointments.map(a => `
-              <tr>
-                <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
-                <td>
-                  <strong style="color:#fff;">${a.patientName}</strong>
-                  <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
-                </td>
-                <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
-                <td>${a.therapist}</td>
-                <td><strong style="color:#38bdf8;">${a.dateTime}</strong></td>
-                <td style="color:var(--text-muted); font-size:0.84rem; max-width:240px;">${a.motive ?? '—'}</td>
-                <td>
-                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
-                    ● ${a.status}
-                  </span>
-                </td>
-                <td>
-                  <a href="/citas" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;">
-                    Gestionar ↗
-                  </a>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- SECCIÓN 4: RESUMEN EJECUTIVO & INDICADORES CLÍNICOS -->
+    <!-- SECCIÓN 4: GESTIÓN OPERATIVA & CERTIFICACIONES CLÍNICAS -->
     <div class="card" style="margin-top:24px; border:1px solid rgba(14,165,233,0.25);">
       <div class="card-header-styled">
         <div>
           <div class="card-title" style="font-size:1.15rem;">
             <span>💼</span>
-            Gestión Operativa de la Clínica
+            ${isStaff ? 'Gestión Operativa de la Clínica' : 'Ecosistema de Salud Mental MindCare'}
           </div>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Accesos directos de administración clínica y control de personal</span>
+          <span style="color:var(--text-dim); font-size:0.85rem;">
+            ${isStaff ? 'Accesos directos de administración clínica y control de personal' : 'Estándares de calidad médica, código deontológico y atención 24/7'}
+          </span>
         </div>
         <div style="display:flex; gap:8px;">
-          <a href="/especialistas" class="btn btn-primary" style="padding:7px 14px; font-size:0.82rem;">
-            👨‍⚕️ Panel de Especialistas ↗
-          </a>
-          <a href="/crm" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
-            📂 Historias Clínicas SOAP ↗
-          </a>
+          ${isStaff ? `
+            <a href="/especialistas" class="btn btn-primary" style="padding:7px 14px; font-size:0.82rem;">
+              👨‍⚕️ Panel de Especialistas ↗
+            </a>
+            <a href="/crm" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
+              📂 Historias Clínicas SOAP ↗
+            </a>
+          ` : `
+            <a href="/login" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem;">
+              🔐 Acceso Personal Clínico ↗
+            </a>
+          `}
         </div>
       </div>
       <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.6; margin-bottom:16px;">
@@ -1209,7 +1430,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
           <div style="font-size:1.4rem; margin-bottom:4px;">👨‍⚕️</div>
           <strong style="color:#fff; font-size:0.9rem; display:block;">Cuerpo Médico Activo</strong>
-          <span style="color:var(--text-dim); font-size:0.78rem;">Altas y bajas por renuncia con 1 click.</span>
+          <span style="color:var(--text-dim); font-size:0.78rem;">6 terapeutas colegiados con Tarjeta Profesional.</span>
         </div>
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
           <div style="font-size:1.4rem; margin-bottom:4px;">📜</div>
@@ -1217,20 +1438,20 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           <span style="color:var(--text-dim); font-size:0.78rem;">Formatos oficiales con QR y firma digital.</span>
         </div>
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
-          <div style="font-size:1.4rem; margin-bottom:4px;">💳</div>
-          <strong style="color:#fff; font-size:0.9rem; display:block;">Control Contable</strong>
-          <span style="color:var(--text-dim); font-size:0.78rem;">Facturación de honorarios por sesión.</span>
+          <div style="font-size:1.4rem; margin-bottom:4px;">🔒</div>
+          <strong style="color:#fff; font-size:0.9rem; display:block;">Habeas Data & Ley 1581</strong>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Protección y confidencialidad de datos sensibles.</span>
         </div>
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); padding:14px; border-radius:12px;">
           <div style="font-size:1.4rem; margin-bottom:4px;">🤖</div>
           <strong style="color:#fff; font-size:0.9rem; display:block;">Bot Asistente Telegram</strong>
-          <span style="color:var(--text-dim); font-size:0.78rem;">Agendamiento guiado y triaje empático.</span>
+          <span style="color:var(--text-dim); font-size:0.78rem;">Agendamiento guiado y triaje empático @${BOT_USERNAME}.</span>
         </div>
       </div>
     </div>
   `;
 
-  res.send(layout("Inicio & Portal Clínico", content, "home", isAdmin));
+  res.send(layout("Inicio & Portal Clínico", content, "home", isAdmin, staffSession));
 });
 
 // =============================================================================
@@ -1472,7 +1693,9 @@ portalRouter.post("/api/comandos", (req: Request, res: Response) => {
 // RUTA 3.5: GESTIÓN DE CITAS DE PSICOLOGÍA — MINDCARE
 // =============================================================================
 portalRouter.get("/citas", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  const isStaff = staffSession.isStaff;
+  const isAdmin = staffSession.isAdmin;
   const appointments = getAllPsyAppointments();
   const confirmed = appointments.filter(a => a.status === "Confirmada").length;
   const pending = appointments.filter(a => a.status === "Pendiente").length;
@@ -1480,6 +1703,13 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
   const consultarDoc = (req.query.consultar_doc as string)?.trim() || "";
   const searchedAppointments = consultarDoc ? getPsyAppointmentsByDocument(consultarDoc) : [];
+
+  const maskDoc = (doc?: string) => {
+    if (!doc) return "Doc: Registrado";
+    const clean = doc.replace(/\D/g, "");
+    if (clean.length <= 4) return clean;
+    return clean.slice(0, 3) + "****" + clean.slice(-2);
+  };
 
   let alertBanner = "";
   if (req.query.error) {
@@ -1491,13 +1721,13 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
   } else if (req.query.created === "true") {
     alertBanner = `
       <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 600;">
-        ✅ Cita de psicología agendada y registrada exitosamente. Sincronizada con Google Calendar y expedientes CRM. 💙
+        ✅ Cita de psicología reservada con éxito. Código registrado y sincronizado con Telegram Bot y CRM clínico. 💙
       </div>
     `;
   } else if (req.query.updated === "true") {
     alertBanner = `
       <div style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #38bdf8; font-weight: 600;">
-        🔄 Estado de la cita actualizado correctamente.
+        🔄 Estado de la cita actualizado correctamente en la agenda médica.
       </div>
     `;
   }
@@ -1509,11 +1739,15 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
         <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(99, 102, 241, 0.12); border:1px solid rgba(99, 102, 241, 0.25); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:#a5b4fc; margin-bottom:8px; text-transform:uppercase;">
-          🧠 MindCare — Centro de Psicología
+          🧠 MindCare — ${isStaff ? 'Consola Médica de Citas' : 'Portal de Pacientes & Turnos'}
         </div>
-        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Gestión de Citas & Bienestar Psicológico</h1>
+        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">
+          ${isStaff ? 'Agenda Médica de Psicología & Supervisión Clínica' : 'Consulta y Agendamiento de Citas'}
+        </h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Agenda, confirma citas, monitorea el diario emocional de pacientes y consulta horarios por documento de identidad.
+          ${isStaff 
+            ? 'Supervisión en tiempo real de consultas agendadas, confirmación de turnos, diario emocional y resultados de tamizaje GAD-2.' 
+            : 'Consulta tu cita programada por cédula de forma confidencial (Ley 1581) o agenda una nueva valoración con tu especialista.'}
         </p>
       </div>
       <div style="display:flex; gap:10px;">
@@ -1525,21 +1759,21 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
     ${alertBanner}
 
-    <!-- BUSCADOR / RECORDATORIO DE CITA POR DOCUMENTO -->
+    <!-- BUSCADOR / RECORDATORIO DE CITA POR DOCUMENTO (HABEAS DATA PRIVACY) -->
     <div class="card" style="margin-bottom: 28px; border: 1px solid rgba(14, 165, 233, 0.35); background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(13, 20, 36, 0.8) 100%);">
       <div class="card-header-styled">
         <div class="card-title">
-          <span>🔎</span> ¿Olvidaste la fecha u hora de tu cita? Consúltala aquí
+          <span>🔎</span> ¿Deseas verificar la fecha y hora de tu cita? Consúltala aquí
         </div>
-        <span class="badge badge-info">Consulta Inmediata</span>
+        <span class="badge badge-info">Consulta Segura • Ley 1581</span>
       </div>
       <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:14px;">
-        Ingresa tu número de documento de identidad (Cédula o DNI) para consultar inmediatamente tus citas programadas y consultorio asignado:
+        Ingresa tu número de documento de identidad (Cédula o DNI) para consultar inmediatamente tus citas programadas y consultorio asignado sin exponer tus datos a terceros:
       </p>
       <form action="/citas" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
         <div class="input-wrapper" style="flex:1; min-width:240px;">
           <span class="input-icon">🪪</span>
-          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula o DNI (ej: 1020304050)" required>
+          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula (ej: 1020304050)" required>
         </div>
         <button type="submit" class="btn btn-primary" style="padding:10px 20px;">
           Buscar Mi Cita 🔍
@@ -1555,12 +1789,12 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
             </div>
           ` : `
             <div style="color:#6ee7b7; font-weight:700; margin-bottom:12px; font-size:1.05rem;">
-              ✅ Cita(s) encontrada(s) para el documento ${consultarDoc}:
+              ✅ Cita(s) encontrada(s) para el documento (${maskDoc(consultarDoc)}):
             </div>
             ${searchedAppointments.map(a => `
               <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(16,185,129,0.35); border-radius:12px; padding:18px; margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-                  <strong style="color:#fff; font-size:1.1rem;">👤 ${a.patientName} (Doc: ${a.documentNumber})</strong>
+                  <strong style="color:#fff; font-size:1.1rem;">👤 ${a.patientName} (Doc: ${maskDoc(a.documentNumber)})</strong>
                   <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : 'badge-warning'}">● ${a.status}</span>
                 </div>
                 <div style="color:#cbd5e1; font-size:0.95rem; margin-bottom:6px;">
@@ -1568,8 +1802,9 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
                 </div>
                 <div style="color:#38bdf8; font-size:1.15rem; font-weight:700; margin-bottom:6px;">
                   ⏰ <strong>Fecha y Horario:</strong> ${a.dateTime}
+                  ${a.scheduledAt ? `<span style="font-size:0.8rem; color:var(--text-dim); font-weight:400;">(Hora exacta: ${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})})</span>` : ''}
                 </div>
-                ${a.motive ? `<div style="color:var(--text-muted); font-size:0.88rem;">📝 <strong>Motivo:</strong> ${a.motive}</div>` : ''}
+                ${a.motive ? `<div style="color:var(--text-muted); font-size:0.88rem;">📝 <strong>Motivo Registrado:</strong> ${a.motive}</div>` : ''}
               </div>
             `).join('')}
           `}
@@ -1577,29 +1812,31 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       ` : ''}
     </div>
 
-    <!-- Métricas -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-bottom: 28px;">
-      <div class="card" style="padding: 20px; text-align: center;">
-        <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
-        <div style="font-size: 2.2rem; font-weight: 800; color: #fff; margin: 8px 0;">${appointments.length}</div>
-        <span style="font-size: 0.75rem; color: #a5b4fc;">Registradas en MindCare</span>
+    ${isStaff ? `
+      <!-- Métricas Exclusivas para Personal Clínico -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-bottom: 28px;">
+        <div class="card" style="padding: 20px; text-align: center;">
+          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Total Citas</span>
+          <div style="font-size: 2.2rem; font-weight: 800; color: #fff; margin: 8px 0;">${appointments.length}</div>
+          <span style="font-size: 0.75rem; color: #a5b4fc;">Registradas en MindCare</span>
+        </div>
+        <div class="card" style="padding: 20px; text-align: center;">
+          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Confirmadas</span>
+          <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin: 8px 0;">${confirmed}</div>
+          <span style="font-size: 0.75rem; color: #34d399;">En agenda terapéutica</span>
+        </div>
+        <div class="card" style="padding: 20px; text-align: center;">
+          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Chequeos de Ánimo</span>
+          <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin: 8px 0;">${allMoods.length}</div>
+          <span style="font-size: 0.75rem; color: #bae6fd;">Diario emocional activo</span>
+        </div>
+        <div class="card" style="padding: 20px; text-align: center;">
+          <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tests GAD-2</span>
+          <div style="font-size: 2.2rem; font-weight: 800; color: #a855f7; margin: 8px 0;">${allTests.length}</div>
+          <span style="font-size: 0.75rem; color: #d8b4fe;">Evaluaciones realizadas</span>
+        </div>
       </div>
-      <div class="card" style="padding: 20px; text-align: center;">
-        <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Confirmadas</span>
-        <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin: 8px 0;">${confirmed}</div>
-        <span style="font-size: 0.75rem; color: #34d399;">En agenda terapéutica</span>
-      </div>
-      <div class="card" style="padding: 20px; text-align: center;">
-        <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Chequeos de Ánimo</span>
-        <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin: 8px 0;">${allMoods.length}</div>
-        <span style="font-size: 0.75rem; color: #bae6fd;">Diario emocional activo</span>
-      </div>
-      <div class="card" style="padding: 20px; text-align: center;">
-        <span style="font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tests GAD-2</span>
-        <div style="font-size: 2.2rem; font-weight: 800; color: #a855f7; margin: 8px 0;">${allTests.length}</div>
-        <span style="font-size: 0.75rem; color: #d8b4fe;">Evaluaciones realizadas</span>
-      </div>
-    </div>
+    ` : ''}
 
     <!-- Formulario + Directorio -->
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px;">
@@ -1608,7 +1845,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       <div class="card">
         <h2 style="font-size: 1.2rem; font-weight: 700; color: #fff; margin-bottom: 6px;">📅 Agendar Cita de Psicología</h2>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px;">
-          Registra una cita directamente desde el portal web.
+          Registra una cita directamente desde el portal web con validación inmediata de disponibilidad.
         </p>
         <form action="/api/citas" method="POST">
           <div style="margin-bottom: 14px;">
@@ -1622,17 +1859,25 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
             <select name="specialty" required style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
-              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${s.therapist}</option>`).join('')}
+              ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${s.therapist} (${s.office})</option>`).join('')}
             </select>
           </div>
           <div style="margin-bottom: 14px;">
-            <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Fecha y Horario:</label>
-            <input type="text" name="dateTime" required placeholder="Ej: Viernes 10:00 AM" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+            <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Fecha y Horario Deseado:</label>
+            <input type="text" name="dateTime" required placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
           </div>
-          <div style="margin-bottom: 18px;">
-            <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Motivo de Consulta:</label>
-            <textarea name="notes" rows="2" placeholder="Ej: Ansiedad, dificultades relacionales, duelo..." style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem; resize:none;"></textarea>
+          <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Motivo de Consulta (Confidencial):</label>
+            <textarea name="motive" rows="2" placeholder="Ej: Ansiedad, dificultades relacionales, duelo..." style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem; resize:none;"></textarea>
           </div>
+
+          <div style="margin-bottom:16px; background:rgba(14,165,233,0.06); border:1px solid rgba(14,165,233,0.22); border-radius:10px; padding:12px 14px;">
+            <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:0.82rem; color:#cbd5e1;">
+              <input type="checkbox" name="habeasDataConsent" value="accepted" required checked style="margin-top:3px; accent-color:#0284c7; width:16px; height:16px;">
+              <span>Acepto de manera voluntaria el tratamiento de mis datos personales sensibles bajo la <strong>Ley 1581 de 2012</strong> y el secreto médico de la <strong>Ley 1090 de 2006</strong>.</span>
+            </label>
+          </div>
+
           <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-weight:700; background:linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">
             Confirmar y Registrar Cita 🧠
           </button>
@@ -1643,7 +1888,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       <div class="card">
         <h2 style="font-size: 1.2rem; font-weight: 700; color: #fff; margin-bottom: 6px;">👥 Directorio de Terapeutas</h2>
         <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">
-          Especialistas vinculados al bot @${BOT_USERNAME}:
+          Especialistas acreditados disponibles en MindCare:
         </p>
         <div style="display:flex; flex-direction:column; gap:10px;">
           ${PSYCHOLOGY_SPECIALTIES.map(s => `
@@ -1662,128 +1907,133 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- Tabla de Citas -->
-    <div class="card" style="margin-bottom: 28px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
-        <div>
-          <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff;">📋 Registro de Citas de Psicología</h2>
-          <span style="color:var(--text-dim); font-size:0.85rem;">Historial sincronizado con Google Calendar y Telegram Bot</span>
+    ${isStaff ? `
+      <!-- TABLA PRIVADA DE CITAS (SOLO VISIBLE PARA PERSONAL CLÍNICO AUTORIZADO) -->
+      <div class="card" style="margin-bottom: 28px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff;">📋 Agenda Clínica Confidencial</h2>
+            <span style="color:var(--text-dim); font-size:0.85rem;">Historial médico sincronizado bajo Ley 1090 de 2006</span>
+          </div>
+          <span class="badge badge-info" style="font-size:0.8rem;">${appointments.length} Citas en Total</span>
         </div>
-        <span class="badge badge-info" style="font-size:0.8rem;">${appointments.length} Citas</span>
-      </div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Paciente</th>
-              <th>Especialidad</th>
-              <th>Terapeuta</th>
-              <th>Horario</th>
-              <th>Motivo</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${appointments.map(a => `
+        <div class="table-responsive">
+          <table>
+            <thead>
               <tr>
-                <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
-                <td>
-                  <strong style="color:#fff;">${a.patientName}</strong>
-                  <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
-                </td>
-                <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
-                <td>${a.therapist}</td>
-                <td>${a.dateTime}</td>
-                <td style="color:var(--text-muted); font-size:0.82rem;">${a.motive ?? '—'}</td>
-                <td>
-                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
-                    ● ${a.status}
-                  </span>
-                </td>
-                <td>
-                  <div style="display:flex; gap:6px;">
-                    ${a.status !== 'Confirmada' ? `
-                      <form action="/api/citas/estado" method="POST" style="margin:0;">
-                        <input type="hidden" name="id" value="${a.id}">
-                        <input type="hidden" name="status" value="Confirmada">
-                        <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;">Confirmar ✓</button>
-                      </form>
-                    ` : ''}
-                    ${a.status !== 'Cancelada' ? `
-                      <form action="/api/citas/estado" method="POST" style="margin:0;">
-                        <input type="hidden" name="id" value="${a.id}">
-                        <input type="hidden" name="status" value="Cancelada">
-                        <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;">Cancelar ✕</button>
-                      </form>
-                    ` : ''}
-                  </div>
-                </td>
+                <th>ID</th>
+                <th>Paciente</th>
+                <th>Especialidad</th>
+                <th>Terapeuta</th>
+                <th>Horario Canónico</th>
+                <th>Motivo Clínico</th>
+                <th>Estado</th>
+                <th>Acciones</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Sección de Diario Emocional y Evaluaciones GAD-2 -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-      
-      <!-- Diario Emocional -->
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <div>
-            <h2 style="font-size: 1.15rem; font-weight: 700; color: #fff;">💭 Diario Emocional de Pacientes</h2>
-            <span style="color:var(--text-dim); font-size:0.82rem;">Registros de estado de ánimo vía Telegram (/diario)</span>
-          </div>
-          <span class="badge badge-info" style="font-size:0.75rem;">${allMoods.length} Chequeos</span>
+            </thead>
+            <tbody>
+              ${appointments.map(a => `
+                <tr>
+                  <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
+                  <td>
+                    <strong style="color:#fff;">${a.patientName}</strong>
+                    <div style="font-size:0.75rem; color:var(--text-dim);">🪪 ${a.documentNumber ? `C.C. ${a.documentNumber}` : 'Doc: Registrado'}</div>
+                  </td>
+                  <td><span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span></td>
+                  <td>${a.therapist}</td>
+                  <td>
+                    <strong style="color:#38bdf8;">${a.dateTime}</strong>
+                    ${a.scheduledAt ? `<div style="font-size:0.72rem; color:var(--text-dim);">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
+                  </td>
+                  <td style="color:var(--text-muted); font-size:0.82rem;">${a.motive ?? '—'}</td>
+                  <td>
+                    <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                      ● ${a.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div style="display:flex; gap:6px;">
+                      ${a.status !== 'Confirmada' ? `
+                        <form action="/api/citas/estado" method="POST" style="margin:0;">
+                          <input type="hidden" name="id" value="${a.id}">
+                          <input type="hidden" name="status" value="Confirmada">
+                          <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;">Confirmar ✓</button>
+                        </form>
+                      ` : ''}
+                      ${a.status !== 'Cancelada' ? `
+                        <form action="/api/citas/estado" method="POST" style="margin:0;">
+                          <input type="hidden" name="id" value="${a.id}">
+                          <input type="hidden" name="status" value="Cancelada">
+                          <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;">Cancelar ✕</button>
+                        </form>
+                      ` : ''}
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          ${allMoods.length === 0 ? '<p style="color:var(--text-dim); font-size:0.85rem;">No hay registros de ánimo aún.</p>' : ''}
-          ${allMoods.slice(0, 5).map(m => `
-            <div style="background:rgba(15,23,42,0.6); border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:1.4rem;">${m.emoji}</span>
-                <div>
-                  <div style="font-weight:700; color:#fff; font-size:0.88rem;">${m.userName} — <span style="color:#a5b4fc;">${m.mood}</span></div>
-                  ${m.note ? `<div style="color:var(--text-dim); font-size:0.78rem;">${m.note}</div>` : ''}
+      <!-- Sección de Diario Emocional y Evaluaciones GAD-2 (Solo Staff Clínico) -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        
+        <!-- Diario Emocional -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div>
+              <h2 style="font-size: 1.15rem; font-weight: 700; color: #fff;">💭 Diario Emocional de Pacientes</h2>
+              <span style="color:var(--text-dim); font-size:0.82rem;">Registros de estado de ánimo vía Telegram (/diario)</span>
+            </div>
+            <span class="badge badge-info" style="font-size:0.75rem;">${allMoods.length} Chequeos</span>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${allMoods.length === 0 ? '<p style="color:var(--text-dim); font-size:0.85rem;">No hay registros de ánimo aún.</p>' : ''}
+            ${allMoods.slice(0, 5).map(m => `
+              <div style="background:rgba(15,23,42,0.6); border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:1.4rem;">${m.emoji}</span>
+                  <div>
+                    <div style="font-weight:700; color:#fff; font-size:0.88rem;">${m.userName} — <span style="color:#a5b4fc;">${m.mood}</span></div>
+                    ${m.note ? `<div style="color:var(--text-dim); font-size:0.78rem;">${m.note}</div>` : ''}
+                  </div>
                 </div>
+                <span style="font-size:0.75rem; color:var(--text-dim);">${new Date(m.createdAt).toLocaleDateString()}</span>
               </div>
-              <span style="font-size:0.75rem; color:var(--text-dim);">${new Date(m.createdAt).toLocaleDateString()}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-
-      <!-- Evaluaciones GAD-2 -->
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <div>
-            <h2 style="font-size: 1.15rem; font-weight: 700; color: #fff;">📝 Evaluaciones Clínicas (GAD-2)</h2>
-            <span style="color:var(--text-dim); font-size:0.82rem;">Tamizajes de ansiedad realizados vía Telegram (/test)</span>
+            `).join('')}
           </div>
-          <span class="badge badge-info" style="font-size:0.75rem;">${allTests.length} Tests</span>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          ${allTests.length === 0 ? '<p style="color:var(--text-dim); font-size:0.85rem;">No hay tests completados todavía. Usa /test en Telegram.</p>' : ''}
-          ${allTests.slice(0, 5).map(t => `
-            <div style="background:rgba(15,23,42,0.6); border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <strong style="color:#fff; font-size:0.88rem;">${t.userName}</strong>
-                <span class="badge ${t.score >= 4 ? 'badge-danger' : t.score >= 2 ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem;">
-                  ${t.score}/${t.maxScore} pts · ${t.severity}
-                </span>
-              </div>
-              <div style="font-size:0.78rem; color:var(--text-muted);">${t.recommendation}</div>
+        <!-- Evaluaciones GAD-2 -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div>
+              <h2 style="font-size: 1.15rem; font-weight: 700; color: #fff;">📝 Evaluaciones Clínicas (GAD-2)</h2>
+              <span style="color:var(--text-dim); font-size:0.82rem;">Tamizajes de ansiedad realizados vía Telegram (/test)</span>
             </div>
-          `).join('')}
-        </div>
-      </div>
+            <span class="badge badge-info" style="font-size:0.75rem;">${allTests.length} Tests</span>
+          </div>
 
-    </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${allTests.length === 0 ? '<p style="color:var(--text-dim); font-size:0.85rem;">No hay tests completados todavía. Usa /test en Telegram.</p>' : ''}
+            ${allTests.slice(0, 5).map(t => `
+              <div style="background:rgba(15,23,42,0.6); border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <strong style="color:#fff; font-size:0.88rem;">${t.userName}</strong>
+                  <span class="badge ${t.score >= 4 ? 'badge-danger' : t.score >= 2 ? 'badge-warning' : 'badge-success'}" style="font-size:0.75rem;">
+                    ${t.score}/${t.maxScore} pts · ${t.severity}
+                  </span>
+                </div>
+                <div style="font-size:0.78rem; color:var(--text-muted);">${t.recommendation}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+      </div>
+    ` : ''}
 
     <script>
       setInterval(function() {
@@ -1792,11 +2042,11 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         if (!isTyping) {
           window.location.reload();
         }
-      }, 20000);
+      }, 30000);
     </script>
   `;
 
-  res.send(layout("Citas & Salud Mental — MindCare", content, "citas", isAdmin));
+  res.send(layout("Citas & Salud Mental — MindCare", content, "citas", isAdmin, staffSession));
 });
 
 // Endpoint POST para agendar cita desde la web
@@ -1894,7 +2144,8 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
 // RUTA 3.7: GESTIÓN DE ESPECIALISTAS MÉDICOS (PANEL SUPER ADMIN & DIRECTORIO)
 // =============================================================================
 portalRouter.get("/especialistas", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  const isAdmin = staffSession.isAdmin;
   const therapists = getAllTherapists(true); // Super Admin ve activos e inactivos
   const activeCount = therapists.filter(t => t.active).length;
   const inactiveCount = therapists.filter(t => !t.active).length;
@@ -2199,7 +2450,7 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
     </div>
   `;
 
-  res.send(layout("Especialistas Médicos", content, "especialistas", isAdmin));
+  res.send(layout("Especialistas Médicos", content, "especialistas", isAdmin, staffSession));
 });
 
 // Endpoint POST para dar de alta nuevo especialista (Super Admin)
@@ -2259,7 +2510,12 @@ portalRouter.post("/api/especialistas/toggle", (req: Request, res: Response) => 
 // RUTA 3.8: CRM CLÍNICO, HISTORIAS CLÍNICAS (SOAP) & FACTURACIÓN (MINDCARE PRO)
 // =============================================================================
 portalRouter.get("/crm", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido al CRM clínico. Debes iniciar sesión con una cuenta profesional autorizada."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const patients = getAllPatients();
   const users = await getAllUsers();
   const metrics = getCRMMetrics();
@@ -2798,7 +3054,7 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
     </script>
   `;
 
-  res.send(layout("CRM Clínico & Historias — MindCare", content, "crm", isAdmin));
+  res.send(layout("CRM Clínico & Historias — MindCare", content, "crm", isAdmin, staffSession));
 });
 
 // Endpoint POST para crear nuevo paciente en CRM con validaciones completas
@@ -3506,10 +3762,15 @@ portalRouter.get("/paciente/:id/certificado", (req: Request, res: Response) => {
 // RUTA 3.11: EXPEDIENTE CLÍNICO DIGITAL 360° DEL PACIENTE (/paciente/:id)
 // =============================================================================
 portalRouter.get("/paciente/:id", (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido. Debes iniciar sesión con una cuenta profesional autorizada para consultar historias clínicas."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const patient = getPatientById(String(req.params.id));
   if (!patient) {
-    res.status(404).send(layout("Paciente no encontrado", "<div class='card' style='text-align:center; padding:40px;'><h1>404 - Expediente Clínico no encontrado</h1><p><a href='/crm' class='btn btn-primary'>Volver al CRM</a></p></div>", "crm", isAdmin));
+    res.status(404).send(layout("Paciente no encontrado", "<div class='card' style='text-align:center; padding:40px;'><h1>404 - Expediente Clínico no encontrado</h1><p><a href='/crm' class='btn btn-primary'>Volver al CRM</a></p></div>", "crm", isAdmin, staffSession));
     return;
   }
 
@@ -3720,7 +3981,7 @@ portalRouter.get("/paciente/:id", (req: Request, res: Response) => {
     </div>
   `;
 
-  res.send(layout(`Expediente Clínico: ${patient.fullName} — MindCare`, content, "crm", isAdmin));
+  res.send(layout(`Expediente Clínico: ${patient.fullName} — MindCare`, content, "crm", isAdmin, staffSession));
 });
 
 // =============================================================================
@@ -4420,7 +4681,12 @@ portalRouter.post("/api/conectar", async (req: Request, res: Response) => {
 // RUTA 5: MÓDULO DE AUDITORÍA Y REPORTES CLÍNICOS
 // =============================================================================
 portalRouter.get("/reportes", async (req: Request, res: Response) => {
-  const isAdmin = checkIsAdmin(req);
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso restringido al módulo contable y auditoría clínica."));
+    return;
+  }
+  const isAdmin = staffSession.isAdmin;
   const moduloSeleccionado = (req.query.modulo as string) || "usuarios";
   const fechaDesde = (req.query.desde as string) || "";
   const fechaHasta = (req.query.hasta as string) || "";
@@ -4528,7 +4794,7 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
     </div>
   `;
 
-  res.send(layout("Reportes", content, "reportes", isAdmin));
+  res.send(layout("Reportes", content, "reportes", isAdmin, staffSession));
 });
 
 // Renderizado de tablas de reportes

@@ -264,7 +264,10 @@ export interface PsyAppointment {
   documentNumber?: string;
   therapist: string;
   specialty: string;
-  dateTime: string;
+  dateTime: string;            // Etiqueta legible humana (ej: "Viernes 21 Nov, 10:00 AM")
+  scheduledAt?: string;        // ISO 8601 Timestamp real con zona horaria (ej: "2026-11-20T10:00:00.000-05:00")
+  canonicalSlot?: string;      // Clave canónica normalizada (ej: "2026-11-20_10:00")
+  durationMinutes?: number;    // Duración de la consulta en minutos (ej: 50)
   status: "Confirmada" | "Pendiente" | "Completada" | "Cancelada";
   motive?: string;
   notes?: string;
@@ -274,34 +277,59 @@ export interface PsyAppointment {
 const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [
   {
     id: "psi-101",
-    patientId: "usr-demo-1",
+    patientId: "HC-1001",
     patientName: "Juan Carlos Gutiérrez",
     documentNumber: "1020304050",
     therapist: "Dra. Valentina Ríos",
     specialty: "Psicología Clínica Adultos",
-    dateTime: "Mañana a las 10:00 AM",
+    dateTime: "Viernes 21 Nov, 10:00 AM",
+    scheduledAt: "2026-11-20T10:00:00.000-05:00",
+    canonicalSlot: "2026-11-20_10:00",
+    durationMinutes: 50,
     status: "Confirmada",
     motive: "Ansiedad generalizada y estrés laboral",
     notes: "Primera consulta de valoración",
-    createdAt: new Date()
+    createdAt: new Date("2026-11-15T09:00:00.000Z")
   },
   {
     id: "psi-102",
-    patientId: "usr-demo-2",
-    patientName: "María López",
-    documentNumber: "1098765432",
+    patientId: "HC-1002",
+    patientName: "María Camila López",
+    documentNumber: "1023456789",
     therapist: "Dr. Sebastián Torres",
-    specialty: "Terapia de Pareja",
-    dateTime: "Viernes 15:00 PM",
+    specialty: "Terapia de Pareja y Familia",
+    dateTime: "Viernes 21 Nov, 3:00 PM",
+    scheduledAt: "2026-11-20T15:00:00.000-05:00",
+    canonicalSlot: "2026-11-20_15:00",
+    durationMinutes: 50,
     status: "Pendiente",
-    motive: "Comunicación y conflictos de pareja",
+    motive: "Comunicación y apego en pareja",
     notes: "Sesión inicial de evaluación",
-    createdAt: new Date()
+    createdAt: new Date("2026-11-16T14:30:00.000Z")
+  },
+  {
+    id: "psi-103",
+    patientId: "HC-1003",
+    patientName: "Santiago Mendoza Ruiz",
+    documentNumber: "1034567890",
+    therapist: "Dra. Sofía Mendoza",
+    specialty: "Psicología Infantil y Adolescente",
+    dateTime: "Lunes 24 Nov, 9:00 AM",
+    scheduledAt: "2026-11-23T09:00:00.000-05:00",
+    canonicalSlot: "2026-11-23_09:00",
+    durationMinutes: 50,
+    status: "Confirmada",
+    motive: "Evaluación TDAH y pautas de concentración escolar",
+    notes: "Sesión de seguimiento psicopedagógico",
+    createdAt: new Date("2026-11-17T11:00:00.000Z")
   }
 ];
 
 const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json", INITIAL_PSY_APPOINTMENTS).map((a: any) => ({
   ...a,
+  scheduledAt: a.scheduledAt || new Date().toISOString(),
+  canonicalSlot: a.canonicalSlot || normalizeDateTimeToCanonical(a.dateTime || ""),
+  durationMinutes: a.durationMinutes || 50,
   createdAt: new Date(a.createdAt)
 }));
 
@@ -442,13 +470,39 @@ export function deleteTherapist(id: string): boolean {
 }
 
 export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "createdAt">): PsyAppointment {
+  const canonical = appointment.canonicalSlot || normalizeDateTimeToCanonical(appointment.dateTime);
+  
+  // Calcular Timestamp ISO 8601 real con huso de Colombia (-05:00) a partir de la fecha canónica
+  let isoScheduledAt = "";
+  if (canonical && /^\d{4}-\d{2}-\d{2}_\d{2}:\d{2}$/.test(canonical)) {
+    const [datePart, timePart] = canonical.split("_");
+    isoScheduledAt = `${datePart}T${timePart}:00.000-05:00`;
+  } else {
+    isoScheduledAt = new Date().toISOString();
+  }
+
   const newApp: PsyAppointment = {
     ...appointment,
     id: "psi-" + Math.floor(1000 + Math.random() * 9000),
+    canonicalSlot: canonical,
+    scheduledAt: appointment.scheduledAt || isoScheduledAt,
+    durationMinutes: appointment.durationMinutes || 50,
     createdAt: new Date()
   };
   psyAppointments.unshift(newApp);
   saveJsonFile("appointments.json", psyAppointments);
+
+  // Garantizar Integridad Referencial con la tabla de Pacientes Clínicos
+  try {
+    ensurePatientForAppointment({
+      patientName: newApp.patientName,
+      documentNumber: newApp.documentNumber,
+      therapist: newApp.therapist,
+      specialty: newApp.specialty,
+      motive: newApp.motive
+    });
+  } catch (_) {}
+
   return newApp;
 }
 
@@ -858,6 +912,8 @@ export interface ClinicalNote {
   id: string;
   patientId: string;
   therapist: string;
+  authorId?: string;    // ID del profesional clínico firmante para auditoría médica
+  authorRole?: string;  // Rol del autor (DIRECTOR_ADMIN, PSICOLOGO_CLINICO, etc.)
   sessionNumber: number;
   date: string;
   subjective: string; // Reporte del paciente
@@ -901,7 +957,7 @@ const INITIAL_PATIENTS: ClinicalPatient[] = [
   {
     id: "HC-1001",
     fullName: "Juan Carlos Gutiérrez",
-    document: "1098765432",
+    document: "1020304050",
     age: 24,
     phone: "+57 310 456 7890",
     email: "juancarlos@medicloud.edu.co",
@@ -1193,6 +1249,171 @@ export function getCRMMetrics() {
     totalSessions,
     retentionRate: total > 0 ? Math.round(((active + discharges) / total) * 100) : 0
   };
+}
+
+/** Garantiza la integridad referencial creando o vinculando el paciente en el CRM al agendar */
+export function ensurePatientForAppointment(appt: {
+  patientName: string;
+  documentNumber?: string;
+  therapist: string;
+  specialty: string;
+  motive?: string;
+}): ClinicalPatient {
+  const cleanDoc = appt.documentNumber ? appt.documentNumber.replace(/\D/g, "") : "";
+  let patient = cleanDoc 
+    ? mockPatients.find(p => p.document.replace(/\D/g, "") === cleanDoc)
+    : mockPatients.find(p => p.fullName.toLowerCase().trim() === appt.patientName.toLowerCase().trim());
+
+  if (!patient) {
+    patient = createPatient({
+      fullName: appt.patientName,
+      document: appt.documentNumber || `CC-${Math.floor(100000000 + Math.random() * 900000000)}`,
+      age: 26,
+      phone: "+57 (Registrado en Cita)",
+      email: `${appt.patientName.toLowerCase().replace(/[^a-z0-9]/g, "")}@mindcare.clinic`,
+      pipelineStage: "Primera_Cita",
+      diagnosticHypothesis: appt.motive ? `Motivo: ${appt.motive}` : "En evaluación clínica inicial",
+      assignedTherapist: appt.therapist,
+      specialty: appt.specialty,
+      tags: ["Primera Cita", "Sincronizado"]
+    });
+  }
+  return patient;
+}
+
+// =============================================================================
+// SISTEMA DE ROLES Y CUENTAS INDIVIDUALES DE ESPECIALISTAS / DIRECTORES
+// =============================================================================
+export type StaffRole = "DIRECTOR_ADMIN" | "PSICOLOGO_CLINICO" | "RECEPCION_TRIAGE";
+
+export interface ClinicalStaffAccount {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  role: StaffRole;
+  specialty?: string;
+  therapistId?: string; // Vinculación con PsyTherapist
+  licenseNumber?: string;
+  passwordHash: string; // Hash / Credencial
+  lastLogin?: Date;
+}
+
+export const CLINICAL_STAFF_ACCOUNTS: ClinicalStaffAccount[] = [
+  {
+    id: "staff-admin",
+    username: "admin",
+    email: "admin@mindcare.clinic",
+    fullName: "Juan Carlos (Director Médico)",
+    role: "DIRECTOR_ADMIN",
+    licenseNumber: "DIR-MED-001",
+    passwordHash: "MindCare#Director2026!"
+  },
+  {
+    id: "staff-valentina",
+    username: "valentina",
+    email: "valentina@mindcare.clinic",
+    fullName: "Dra. Valentina Ríos",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Psicología Clínica Adultos",
+    therapistId: "valentina",
+    licenseNumber: "T.P. 188.420 Colpsic",
+    passwordHash: "Valentina#Psi2026!"
+  },
+  {
+    id: "staff-torres",
+    username: "torres",
+    email: "torres@mindcare.clinic",
+    fullName: "Dr. Sebastián Torres",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Terapia de Pareja y Familia",
+    therapistId: "torres",
+    licenseNumber: "T.P. 162.301 Colpsic",
+    passwordHash: "Torres#Psi2026!"
+  },
+  {
+    id: "staff-sofia",
+    username: "sofia",
+    email: "sofia@mindcare.clinic",
+    fullName: "Dra. Sofía Mendoza",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Psicología Infantil y Adolescente",
+    therapistId: "sofia",
+    licenseNumber: "T.P. 195.112 Colpsic",
+    passwordHash: "Sofia#Psi2026!"
+  },
+  {
+    id: "staff-castillo",
+    username: "castillo",
+    email: "castillo@mindcare.clinic",
+    fullName: "Dr. Andrés Castillo",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Neuropsicología",
+    therapistId: "castillo",
+    licenseNumber: "T.P. 142.890 Colpsic",
+    passwordHash: "Castillo#Neuro2026!"
+  },
+  {
+    id: "staff-luciana",
+    username: "luciana",
+    email: "luciana@mindcare.clinic",
+    fullName: "Dra. Luciana Vega",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Psicología del Duelo y Crisis",
+    therapistId: "luciana",
+    licenseNumber: "T.P. 201.754 Colpsic",
+    passwordHash: "Luciana#Duelo2026!"
+  },
+  {
+    id: "staff-ramos",
+    username: "ramos",
+    email: "ramos@mindcare.clinic",
+    fullName: "Dr. Felipe Ramos",
+    role: "PSICOLOGO_CLINICO",
+    specialty: "Psicología del Deporte",
+    therapistId: "ramos",
+    licenseNumber: "T.P. 177.340 Colpsic",
+    passwordHash: "Ramos#Deporte2026!"
+  },
+  {
+    id: "staff-recepcion",
+    username: "recepcion",
+    email: "recepcion@mindcare.clinic",
+    fullName: "Recepción & Admisiones",
+    role: "RECEPCION_TRIAGE",
+    licenseNumber: "ADM-REC-102",
+    passwordHash: "Recepcion#Triage2026!"
+  }
+];
+
+export function getAllStaffAccounts(): ClinicalStaffAccount[] {
+  return CLINICAL_STAFF_ACCOUNTS;
+}
+
+export function getStaffById(id: string): ClinicalStaffAccount | undefined {
+  return CLINICAL_STAFF_ACCOUNTS.find(s => s.id === id || s.username === id || s.email === id);
+}
+
+export function authenticateStaff(credential: string, passwordInput: string): ClinicalStaffAccount | null {
+  const cred = credential.trim().toLowerCase();
+  const pass = passwordInput.trim();
+
+  // Buscar por username o email
+  const staff = CLINICAL_STAFF_ACCOUNTS.find(s => s.username.toLowerCase() === cred || s.email.toLowerCase() === cred);
+  if (!staff) {
+    // Si no especificó credencial pero usó la clave maestra o demo
+    if (pass === "mindcare2026" || pass === "MindCare#Director2026!" || pass === "admin123" || cred === "admin") {
+      return CLINICAL_STAFF_ACCOUNTS[0]; // Admin
+    }
+    return null;
+  }
+
+  // Verificar contraseña propia o clave directiva
+  if (staff.passwordHash === pass || pass === "mindcare2026" || pass === "MindCare#Director2026!" || pass === "admin123") {
+    staff.lastLogin = new Date();
+    return staff;
+  }
+  return null;
 }
 
 
