@@ -3087,6 +3087,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       if (e.key === 'Enter' || e.keyCode === 13) {
         const target = e.target;
         if (target && target.tagName === 'INPUT' && target.type !== 'textarea') {
+          if (target.readOnly || target.disabled) {
+            e.preventDefault();
+            return;
+          }
           const form = target.form;
           if (form) {
             if (form.dataset.submitting === 'true') {
@@ -3095,6 +3099,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             }
             const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type="button"])');
             if (submitBtn) {
+              if (submitBtn.disabled) {
+                e.preventDefault();
+                return;
+              }
               e.preventDefault();
               submitBtn.click();
             } else if (typeof form.requestSubmit === 'function') {
@@ -3778,12 +3786,12 @@ portalRouter.get("/login", (req: Request, res: Response) => {
             type="submit" 
             id="loginSubmitBtn"
             class="btn btn-primary" 
-            style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: ${isLocked ? 'linear-gradient(135deg, #475569 0%, #334155 100%)' : 'linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%)'}; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease; ${isLocked ? 'opacity: 0.6; cursor: not-allowed;' : ''}"
-            ${isLocked ? 'disabled' : ''}
+            style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #475569 0%, #334155 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease; opacity: 0.5; cursor: not-allowed; pointer-events: none;"
+            disabled
           >
             <span id="loginBtnSpinner" style="display: none;" class="spinner-inline"></span>
-            <span id="loginBtnText">${isLocked ? '🔒 Acceso Bloqueado Temporalmente' : 'Iniciar Sesión Clínica Segura'}</span>
-            <span id="loginBtnIcon">${isLocked ? '⏳' : '🚀'}</span>
+            <span id="loginBtnText">${isLocked ? '🔒 Acceso Bloqueado Temporalmente' : (error ? '🔒 Haz clic en el campo para escribir' : '🔒 Ingresa tu contraseña clínica')}</span>
+            <span id="loginBtnIcon">${isLocked ? '⏳' : (error ? '👆' : '🔑')}</span>
           </button>
 
           <!-- Banner de verificación interactivo al dar Enter o clic -->
@@ -3814,6 +3822,53 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         }
       }, true);
 
+      function updateLoginButtonState() {
+        const passInput = document.getElementById('passwordInput');
+        const btn = document.getElementById('loginSubmitBtn');
+        const btnText = document.getElementById('loginBtnText');
+        const btnIcon = document.getElementById('loginBtnIcon');
+        if (!btn || !passInput) return;
+        if (isLoginSubmitting) return;
+
+        const isLocked = passInput.disabled;
+        const isReadOnly = passInput.readOnly;
+        const hasValue = (passInput.value || '').trim().length > 0;
+
+        if (isLocked) {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+          btn.style.pointerEvents = 'none';
+          btn.style.background = 'linear-gradient(135deg, #475569 0%, #334155 100%)';
+          if (btnText) btnText.textContent = '🔒 Acceso Bloqueado Temporalmente';
+          if (btnIcon) { btnIcon.style.display = 'inline'; btnIcon.textContent = '⏳'; }
+        } else if (isReadOnly) {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+          btn.style.pointerEvents = 'none';
+          btn.style.background = 'linear-gradient(135deg, #475569 0%, #334155 100%)';
+          if (btnText) btnText.textContent = '🔒 Haz clic en el campo para escribir';
+          if (btnIcon) { btnIcon.style.display = 'inline'; btnIcon.textContent = '👆'; }
+        } else if (!hasValue) {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+          btn.style.pointerEvents = 'none';
+          btn.style.background = 'linear-gradient(135deg, #475569 0%, #334155 100%)';
+          if (btnText) btnText.textContent = '🔒 Ingresa tu contraseña clínica';
+          if (btnIcon) { btnIcon.style.display = 'inline'; btnIcon.textContent = '🔑'; }
+        } else {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+          btn.style.pointerEvents = 'auto';
+          btn.style.background = 'linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%)';
+          if (btnText) btnText.textContent = 'Iniciar Sesión Clínica Segura';
+          if (btnIcon) { btnIcon.style.display = 'inline'; btnIcon.textContent = '🚀'; }
+        }
+      }
+
       function togglePasswordVisibility() {
         if (isLoginSubmitting) return;
         const input = document.getElementById('passwordInput');
@@ -3842,6 +3897,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         const notice = document.getElementById('clickNotice');
         if (notice) notice.remove();
         el.focus();
+        updateLoginButtonState();
       }
 
       function checkUnlocked(e, el) {
@@ -3853,6 +3909,23 @@ portalRouter.get("/login", (req: Request, res: Response) => {
       }
 
       function handleLoginSubmit(e) {
+        const passInput = document.getElementById('passwordInput');
+        const btn = document.getElementById('loginSubmitBtn');
+
+        // Si el botón está bloqueado, el input está en readonly/disabled o no hay contraseña escrita, BLOQUEAR ENVÍO
+        if ((btn && btn.disabled) || !passInput || passInput.disabled || passInput.readOnly || !(passInput.value || '').trim()) {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          if (passInput && passInput.readOnly) {
+            unlockPasswordInput(passInput);
+          } else if (passInput && !passInput.disabled) {
+            passInput.focus();
+          }
+          return false;
+        }
+
         if (isLoginSubmitting) {
           if (e) {
             e.preventDefault();
@@ -3862,12 +3935,10 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         }
         isLoginSubmitting = true;
 
-        const btn = document.getElementById('loginSubmitBtn');
         const spinner = document.getElementById('loginBtnSpinner');
         const btnText = document.getElementById('loginBtnText');
         const btnIcon = document.getElementById('loginBtnIcon');
         const banner = document.getElementById('loginFeedbackBanner');
-        const passInput = document.getElementById('passwordInput');
         const credInput = document.getElementById('credentialInput');
         const toggleBtn = document.getElementById('togglePassBtn');
 
@@ -3949,7 +4020,17 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         if (btnIcon) btnIcon.style.display = 'inline';
         const toggleBtn = document.getElementById('togglePassBtn');
         if (toggleBtn) toggleBtn.style.pointerEvents = 'auto';
+        updateLoginButtonState();
       });
+
+      // Registrar listeners para actualizar el estado del botón en tiempo real
+      const passEl = document.getElementById('passwordInput');
+      if (passEl) {
+        passEl.addEventListener('input', updateLoginButtonState);
+        passEl.addEventListener('keyup', updateLoginButtonState);
+        passEl.addEventListener('change', updateLoginButtonState);
+      }
+      updateLoginButtonState();
 
       // Cuenta regresiva en vivo si la IP está bloqueada por Rate Limit
       ${isLocked ? `
@@ -3993,6 +4074,7 @@ portalRouter.post("/login", (req: Request, res: Response) => {
   }
 
   const { credential, password, user, staffQuickLogin } = req.body;
+  const trimmedPassword = String(password || "").trim();
 
   // 2. Si se usó el botón de acceso rápido de demostración docente
   if (staffQuickLogin) {
@@ -4013,8 +4095,14 @@ portalRouter.post("/login", (req: Request, res: Response) => {
     return;
   }
 
-  // 4. Verificación de credenciales (individuales por especialista o director)
-  const staff = authenticateStaff(String(credential || "admin"), String(password || ""));
+  // 4. Si la contraseña viene vacía, no descontar intentos ni penalizar al usuario
+  if (!trimmedPassword) {
+    res.redirect("/login?error=" + encodeURIComponent("Por favor ingresa tu contraseña clínica"));
+    return;
+  }
+
+  // 5. Verificación de credenciales (individuales por especialista o director)
+  const staff = authenticateStaff(String(credential || "admin"), trimmedPassword);
   if (staff) {
     // ÉXITO: Limpiar contador de intentos fallidos según estándar OWASP
     recordSuccessfulLogin(clientIp);
