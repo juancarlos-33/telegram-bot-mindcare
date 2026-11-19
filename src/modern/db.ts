@@ -661,11 +661,16 @@ export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "P
 }
 
 export function cancelPsyAppointment(id: string): boolean {
-  return updatePsyAppointmentStatus(id, "Cancelada");
+  return deletePsyAppointment(id);
 }
 
 export function deletePsyAppointment(id: string): boolean {
-  const index = psyAppointments.findIndex(a => a.id.toLowerCase() === id.toLowerCase());
+  const cleanId = String(id).trim().toLowerCase();
+  const cleanDigits = cleanId.replace(/\D/g, "");
+  const index = psyAppointments.findIndex(a => 
+    a.id.toLowerCase() === cleanId || 
+    (cleanDigits.length >= 5 && a.documentNumber && a.documentNumber.replace(/\D/g, "") === cleanDigits)
+  );
   if (index === -1) return false;
   const removed = psyAppointments.splice(index, 1)[0];
   saveJsonFile("appointments.json", psyAppointments);

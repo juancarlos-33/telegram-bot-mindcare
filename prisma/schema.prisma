@@ -319,3 +319,39 @@ model Therapist {
   @@map("terapeutas")
 }
 
+model Patient {
+  id                   String    @id
+  fullName             String    @map("full_name")
+  document             String    @unique
+  age                  Int       @default(25)
+  phone                String?
+  email                String?
+  pipelineStage        String    @default("Lead") @map("pipeline_stage")
+  diagnosticHypothesis String?   @map("diagnostic_hypothesis")
+  assignedTherapist    String?   @map("assigned_therapist")
+  specialty            String?
+  totalSessions        Int       @default(0) @map("total_sessions")
+  tags                 String[]  @default([])
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("pacientes")
+}
+
+model ClinicalStaff {
+  id            String    @id
+  username      String    @unique
+  email         String    @unique
+  fullName      String    @map("full_name")
+  role          String    @default("PSICOLOGO_CLINICO")
+  specialty     String?
+  therapistId   String?   @map("therapist_id")
+  licenseNumber String?   @map("license_number")
+  passwordHash  String    @map("password_hash")
+  lastLogin     DateTime? @map("last_login")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("personal_clinico")
+}
+
+

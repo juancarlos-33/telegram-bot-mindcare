@@ -5251,7 +5251,11 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
 portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
   const { id, status } = req.body;
   if (id && status) {
-    updatePsyAppointmentStatus(String(id), status as any);
+    if (status === "Cancelada") {
+      deletePsyAppointment(String(id));
+    } else {
+      updatePsyAppointmentStatus(String(id), status as any);
+    }
   }
   const referer = req.header("Referer") || "";
   if (referer) {

@@ -8,7 +8,7 @@ import {
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments, getPsyAppointmentsByDocument,
-  cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getAllTherapists, getTherapistsBySpecialty,
+  cancelPsyAppointment, deletePsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getAllTherapists, getTherapistsBySpecialty,
   PsyAppointment,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
@@ -645,7 +645,75 @@ bot.command(["tcc", "pensamiento", "reestructuracion"], async (ctx) => {
 bot.on("callback_query", async (ctx) => {
   const data = (ctx.callbackQuery as any).data as string;
   const userId = String(ctx.from?.id ?? "0");
-  await ctx.answerCbQuery();
+  try {
+    await ctx.answerCbQuery();
+  } catch (_) {}
+
+  // MANEJO DIRECTO DE CANCELACIÓN DE CITAS DESDE TELEGRAM
+  if (data.startsWith("confirm_cancel_")) {
+    const id = data.replace("confirm_cancel_", "").trim();
+    const all = getAllPsyAppointments();
+    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase() || (a.documentNumber && a.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
+    const targetId = app ? app.id : id;
+    const ok = deletePsyAppointment(targetId);
+    if (ok || app) {
+      try {
+        await ctx.editMessageText(
+          `✅ *CITA CANCELADA Y LIBERADA CON ÉXITO*\n\nEl turno \`#${targetId}\` ${app ? `de *${app.patientName}* programado para el *${app.dateTime}*` : ""} ha sido cancelado y eliminado de la base de datos.\n\n✨ *El espacio ha quedado 100% disponible de inmediato* para nuevos pacientes en la clínica y en el portal web.\n\nSi deseas agendar en otro horario cuando lo necesites, escribe /cita. ¡Cuídate mucho! 💙`,
+          { parse_mode: "Markdown" }
+        );
+      } catch (_) {
+        await ctx.reply(`✅ *Cita #${targetId} cancelada y liberada con éxito.* El horario ya está disponible nuevamente.`);
+      }
+    } else {
+      await ctx.reply(`❌ No se pudo cancelar la cita #${id} o ya fue liberada.`);
+    }
+    return;
+  }
+
+  if (data.startsWith("abort_cancel_")) {
+    const id = data.replace("abort_cancel_", "").trim();
+    const app = getAllPsyAppointments().find(a => a.id.toLowerCase() === id.toLowerCase());
+    try {
+      await ctx.editMessageText(
+        `💙 *Operación cancelada: Tu cita sigue activa*\n\nEl turno \`#${id}\` ${app ? `con ${app.therapist} para el *${app.dateTime}*` : ""} continúa confirmado.\n\n¡Te esperamos en MindCare! 🧠`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (_) {
+      await ctx.reply(`💙 Cita #${id} preservada. ¡Te esperamos!`);
+    }
+    return;
+  }
+
+  if (data.startsWith("req_cancel_")) {
+    const id = data.replace("req_cancel_", "").trim();
+    const all = getAllPsyAppointments();
+    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase() || (a.documentNumber && a.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
+    if (!app) {
+      await ctx.reply("❌ Cita médica no encontrada.");
+      return;
+    }
+    const office = getAllTherapists(true).find(t => t.name.toLowerCase() === app.therapist.toLowerCase())?.office || "Consultorio MindCare";
+    await ctx.reply([
+      "⚠️ *CONFIRMACIÓN DE CANCELACIÓN DE TURNO*",
+      "",
+      `¿Deseas cancelar definitivamente la cita \`#${app.id}\` de *${app.patientName}*?`,
+      `⏰ *Horario:* ${app.dateTime} con ${app.therapist} (${office})`,
+      "",
+      "⚠️ *Atención:* Al confirmar, la cita se eliminará de la base de datos y el horario quedará 100% libre para que cualquier persona pueda agendarlo."
+    ].join("\n"), {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "❌ Sí, Cancelar y Liberar Turno", callback_data: `confirm_cancel_${app.id}` },
+            { text: "💙 No, Mantener Cita", callback_data: `abort_cancel_${app.id}` }
+          ]
+        ]
+      }
+    });
+    return;
+  }
 
   if (data === "book_start") {
     clearBookingState(userId);
