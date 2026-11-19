@@ -136,7 +136,7 @@ function renderQuickSlotsHtml(therapistName: string): string {
   }
   return `<div class="quick-slots-container" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
     ${slots.map(s => `
-      <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, '${s.dateTime}')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">
+      <button type="button" class="btn btn-secondary quick-slot-btn" data-slot="${s.dateTime}" onclick="selectQuickSlot(this, this.dataset.slot)" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">
         ${s.label}
       </button>
     `).join('')}
@@ -1465,6 +1465,17 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     </div>
   </div>
   <script>
+    function dismissLoveAnnouncement() {
+      try {
+        sessionStorage.setItem('mindcare_love_dismissed', 'true');
+      } catch (e) {}
+      var modal = document.getElementById('mindcare-love-announcement');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+    }
+    window.dismissLoveAnnouncement = dismissLoveAnnouncement;
     (function() {
       try {
         if (!sessionStorage.getItem('mindcare_love_dismissed')) {
@@ -1900,7 +1911,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             return;
           }
           container.innerHTML = data.slots.map(function(s) {
-            return '<button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, \'' + s.dateTime + '\')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">' + s.label + '</button>';
+            return '<button type="button" class="btn btn-secondary quick-slot-btn" data-slot="' + s.dateTime + '" onclick="selectQuickSlot(this, this.dataset.slot)" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">' + s.label + '</button>';
           }).join('');
         })
         .catch(function() {
