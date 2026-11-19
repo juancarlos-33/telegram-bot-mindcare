@@ -487,6 +487,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       border: none;
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       font-family: 'Plus Jakarta Sans', sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     .btn:active { transform: scale(0.98); }
@@ -682,7 +685,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       background: rgba(6, 10, 20, 0.75);
     }
 
-    /* Global Page Loader Overlay */
+    /* Global Page Loader Overlay (Sólo activo durante envíos legítimos de formularios) */
     #mindcare-global-loader {
       position: fixed;
       top: 0;
@@ -693,17 +696,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       backdrop-filter: blur(25px);
       -webkit-backdrop-filter: blur(25px);
       z-index: 99999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      transition: opacity 0.35s ease, visibility 0.35s ease;
-    }
-
-    #mindcare-global-loader.hidden {
+      display: none;
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    #mindcare-global-loader.active {
+      display: flex !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
     }
 
     .loader-container {
@@ -1646,7 +1653,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       }
       const loader = document.getElementById('mindcare-global-loader');
       if (loader) {
-        loader.classList.add('hidden');
+        loader.classList.remove('active');
+        loader.style.display = 'none';
       }
     }
 
@@ -1654,46 +1662,23 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       const loader = document.getElementById('mindcare-global-loader');
       const label = document.getElementById('loaderStatusLabel');
       if (label && msg) label.textContent = msg;
-      if (loader) loader.classList.remove('hidden');
-
-      // Salvaguarda absoluta anti-bloqueo: NUNCA se queda en pantalla más de 1.8 segundos
-      if (globalLoaderTimer) clearTimeout(globalLoaderTimer);
-      globalLoaderTimer = setTimeout(hideGlobalLoader, 1800);
-    }
-
-    // Control del Anuncio de Bienvenida Especial ❤️ 👻 (Sólo al entrar)
-    function dismissLoveAnnouncement() {
-      try {
-        sessionStorage.setItem('mindcare_love_dismissed', 'true');
-      } catch (e) {}
-      const el = document.getElementById('mindcare-love-announcement');
-      if (el) {
-        el.classList.add('hidden');
-        setTimeout(function() { el.style.display = 'none'; }, 400);
+      if (loader) {
+        loader.style.display = 'flex';
+        loader.classList.add('active');
       }
+
+      // Salvaguarda absoluta anti-bloqueo: NUNCA se queda en pantalla más de 2.2 segundos
+      if (globalLoaderTimer) clearTimeout(globalLoaderTimer);
+      globalLoaderTimer = setTimeout(hideGlobalLoader, 2200);
     }
 
-    // Permitir cerrar el loader o el anuncio si el usuario da clic en cualquier parte o pulsa Escape
+    // Permitir cerrar el anuncio si el usuario pulsa Escape
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
         hideGlobalLoader();
-        dismissLoveAnnouncement();
+        if (typeof dismissLoveAnnouncement === 'function') dismissLoveAnnouncement();
       }
     });
-    const loaderOverlay = document.getElementById('mindcare-global-loader');
-    if (loaderOverlay) {
-      loaderOverlay.addEventListener('click', hideGlobalLoader);
-    }
-
-    // Ocultar al completar carga
-    if (document.readyState === 'complete') {
-      hideGlobalLoader();
-    } else {
-      window.addEventListener('load', function() {
-        setTimeout(hideGlobalLoader, 50);
-      });
-    }
-    document.addEventListener('DOMContentLoaded', hideGlobalLoader);
 
     // SOLUCIÓN AL BUCLE DE NAVEGACIÓN ATRÁS (bfcache):
     // Cuando el usuario pulsa "Atrás" en el navegador, pageshow se ejecuta de inmediato
@@ -2736,7 +2721,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
       </p>
 
       <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-        <a href="/citas" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
+        <a href="#agendar" onclick="const el=document.getElementById('agendar'); if(el){ el.scrollIntoView({behavior:'smooth'}); const inp=el.querySelector('input[name=\'patientName\']'); if(inp) setTimeout(function(){ inp.focus(); }, 300); return false; }" class="btn btn-primary" style="padding: 12px 24px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); box-shadow: 0 10px 25px rgba(14, 165, 233, 0.35);">
           📅 Agendar Mi Cita
         </a>
         <a href="/citas#consultar-cita" class="btn btn-secondary" style="padding: 12px 20px; font-size: 0.95rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
@@ -3463,7 +3448,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         </p>
 
         <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-          <a href="#agendar-paciente" class="btn btn-primary" style="padding: 11px 22px; font-size: 0.92rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">
+          <a href="#agendar-paciente" onclick="const el=document.getElementById('agendar-paciente'); if(el){ el.scrollIntoView({behavior:'smooth'}); const inp=el.querySelector('input[name=\'patientName\']'); if(inp) setTimeout(function(){ inp.focus(); }, 300); return false; }" class="btn btn-primary" style="padding: 11px 22px; font-size: 0.92rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">
             📅 Agendar Mi Cita Ahora
           </a>
           <a href="#consultar-cita" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.92rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
