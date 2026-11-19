@@ -4401,7 +4401,36 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
     return;
   }
   const isAdmin = staffSession.isAdmin;
-  const appointments = getAllPsyAppointments();
+  const filterProfesional = (req.query.profesional as string)?.trim() || "";
+  const filterDesde = (req.query.desde as string)?.trim() || "";
+  const filterHasta = (req.query.hasta as string)?.trim() || "";
+  const filterEstado = (req.query.estado as string)?.trim() || "";
+
+  let allAppointments = getAllPsyAppointments();
+  let appointments = allAppointments;
+
+  if (filterProfesional) {
+    appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
+  }
+  if (filterDesde) {
+    const from = new Date(filterDesde);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d >= from : true;
+    });
+  }
+  if (filterHasta) {
+    const to = new Date(filterHasta);
+    to.setHours(23, 59, 59, 999);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d <= to : true;
+    });
+  }
+  if (filterEstado && filterEstado !== "TODAS") {
+    appointments = appointments.filter(a => a.status.toLowerCase() === filterEstado.toLowerCase());
+  }
+
   const confirmed = appointments.filter(a => a.status === "Confirmada").length;
   const pending = appointments.filter(a => a.status === "Pendiente").length;
   const canceled = appointments.filter(a => a.status === "Cancelada").length;
@@ -4627,6 +4656,86 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           `).join('')}
         </div>
       </div>
+    </div>
+
+    <!-- BARRA DE REPORTES & FILTROS POR PROFESIONAL Y FECHAS -->
+    <div class="card" style="margin-bottom: 24px; padding: 22px 24px; border: 1.5px solid rgba(99, 102, 241, 0.35); background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.9) 100%);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.4rem;">📊</span>
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#fff;">Reportes y Filtros de Agenda Médica</h3>
+            <span style="color:var(--text-dim); font-size:0.8rem;">Filtra citas por especialista clínico, rango de fechas y estado</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" onclick="window.print()" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2);">
+            🖨️ Imprimir / Exportar Reporte
+          </button>
+          <a href="/reportes" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(56,189,248,0.4); color:#38bdf8;">
+            📈 Módulo de Reportes Globales ↗
+          </a>
+        </div>
+      </div>
+
+      <form action="/admin#agenda-clinica-card" method="GET" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex: 2; min-width: 220px;">
+          <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Especialista / Profesional:</label>
+          <select name="profesional" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+            <option value="">Todos los Especialistas Clínicos</option>
+            ${getAllTherapists(true).map(t => `
+              <option value="${t.name}" ${filterProfesional === t.name ? 'selected' : ''}>
+                ${t.icon || '👨‍⚕️'} ${t.name} (${t.specialty})
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div style="flex: 1; min-width: 140px;">
+          <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Fecha Desde:</label>
+          <input type="date" name="desde" value="${filterDesde}" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+        </div>
+
+        <div style="flex: 1; min-width: 140px;">
+          <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Fecha Hasta:</label>
+          <input type="date" name="hasta" value="${filterHasta}" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+        </div>
+
+        <div style="flex: 1; min-width: 140px;">
+          <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Estado:</label>
+          <select name="estado" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+            <option value="" ${!filterEstado ? 'selected' : ''}>Todos los Estados</option>
+            <option value="Confirmada" ${filterEstado === 'Confirmada' ? 'selected' : ''}>Confirmadas</option>
+            <option value="Pendiente" ${filterEstado === 'Pendiente' ? 'selected' : ''}>Pendientes</option>
+            <option value="Cancelada" ${filterEstado === 'Cancelada' ? 'selected' : ''}>Canceladas</option>
+          </select>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button type="submit" class="btn btn-primary" style="padding:10px 18px; font-weight:700; font-size:0.88rem;">
+            Filtrar Reporte 🔍
+          </button>
+          ${(filterProfesional || filterDesde || filterHasta || filterEstado) ? `
+            <a href="/admin#agenda-clinica-card" class="btn btn-secondary" style="padding:10px 14px; font-size:0.88rem;">
+              Limpiar 🔄
+            </a>
+          ` : ''}
+        </div>
+      </form>
+
+      ${(filterProfesional || filterDesde || filterHasta || filterEstado) ? `
+        <div style="margin-top:14px; padding:10px 14px; background:rgba(14,165,233,0.1); border:1px solid rgba(14,165,233,0.3); border-radius:10px; font-size:0.82rem; color:#bae6fd; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <strong>Reporte Filtrado:</strong> 
+            ${filterProfesional ? `Doctor: <em>${filterProfesional}</em> · ` : ''}
+            ${filterDesde ? `Desde: <em>${filterDesde}</em> · ` : ''}
+            ${filterHasta ? `Hasta: <em>${filterHasta}</em> · ` : ''}
+            ${filterEstado ? `Estado: <em>${filterEstado}</em> · ` : ''}
+            Total encontrado: <strong>${appointments.length} cita(s)</strong> (${confirmed} confirmadas, ${pending} pendientes, ${canceled} canceladas)
+          </div>
+          <span class="badge badge-info">Filtro Activo</span>
+        </div>
+      ` : ''}
     </div>
 
     <!-- TABLA PRIVADA DE CITAS (CONFIDENCIAL) -->
@@ -7714,8 +7823,9 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
   const moduloSeleccionado = (req.query.modulo as string) || "citas";
   const fechaDesde = (req.query.desde as string) || "";
   const fechaHasta = (req.query.hasta as string) || "";
+  const profesional = (req.query.profesional as string) || "";
 
-  const reporte = await getModuleData(moduloSeleccionado, fechaDesde, fechaHasta);
+  const reporte = await getModuleData(moduloSeleccionado, fechaDesde, fechaHasta, profesional);
 
   const modulosDisponibles = [
     { key: "citas", name: "🧠 Citas & Consultas Agendadas", desc: "Registro clínico de turnos, pacientes y doctores" },
@@ -7739,19 +7849,24 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
         </div>
         <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Panel Administrativo de Reportes Clínicos</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Auditoría técnica de expedientes, actividad de usuarios y reportes relacionales filtrados por módulo y fechas.
+          Auditoría técnica de expedientes, actividad de usuarios y reportes relacionales filtrados por módulo, profesional y fechas.
         </p>
       </div>
 
-      <button onclick="window.print()" class="btn btn-secondary">
-        Imprimir / Exportar Reporte 🖨️
-      </button>
+      <div style="display:flex; gap:10px;">
+        <button onclick="window.print()" class="btn btn-secondary">
+          Imprimir / Exportar Reporte 🖨️
+        </button>
+        <a href="/admin" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8;">
+          👑 Ir a Panel Admin
+        </a>
+      </div>
     </div>
 
     <!-- Barra de Filtros -->
     <div class="card" style="padding: 22px 28px; margin-bottom: 24px;">
-      <form method="GET" action="/reportes" style="display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap;">
-        <div style="flex: 2; min-width: 240px;">
+      <form method="GET" action="/reportes" style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex: 2; min-width: 220px;">
           <label for="modulo">Módulo del Sistema (RF-53):</label>
           <select id="modulo" name="modulo">
             ${modulosDisponibles.map(m => `
@@ -7762,20 +7877,37 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
           </select>
         </div>
 
-        <div style="flex: 1; min-width: 160px;">
+        <div style="flex: 2; min-width: 220px;">
+          <label for="profesional">Especialista / Profesional:</label>
+          <select id="profesional" name="profesional">
+            <option value="">Todos los Especialistas Clínicos</option>
+            ${getAllTherapists(true).map(t => `
+              <option value="${t.name}" ${profesional === t.name ? 'selected' : ''}>
+                ${t.icon || '👨‍⚕️'} ${t.name} (${t.specialty})
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div style="flex: 1; min-width: 140px;">
           <label for="desde">Fecha Desde (RF-55):</label>
           <input type="date" id="desde" name="desde" value="${fechaDesde}">
         </div>
 
-        <div style="flex: 1; min-width: 160px;">
+        <div style="flex: 1; min-width: 140px;">
           <label for="hasta">Fecha Hasta (RF-55):</label>
           <input type="date" id="hasta" name="hasta" value="${fechaHasta}">
         </div>
 
-        <div>
-          <button type="submit" class="btn btn-primary" style="padding: 12px 24px;">
+        <div style="display:flex; gap:8px;">
+          <button type="submit" class="btn btn-primary" style="padding: 12px 20px; font-weight:700;">
             Consultar Datos 🔍
           </button>
+          ${(profesional || fechaDesde || fechaHasta) ? `
+            <a href="/reportes?modulo=${moduloSeleccionado}" class="btn btn-secondary" style="padding: 12px 14px;">
+              Limpiar 🔄
+            </a>
+          ` : ''}
         </div>
       </form>
     </div>

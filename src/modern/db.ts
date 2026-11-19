@@ -1954,7 +1954,7 @@ export async function isUserVerified(telegramId: string | number): Promise<boole
   return true;
 }
 
-export async function getModuleData(modulo: string, fromDate?: string, toDate?: string) {
+export async function getModuleData(modulo: string, fromDate?: string, toDate?: string, therapist?: string) {
   const parseDate = (d?: string) => d ? new Date(d) : undefined;
   const from = parseDate(fromDate);
   const to = parseDate(toDate);
@@ -1969,6 +1969,9 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
     switch (modulo) {
       case "citas": {
         let items = getAllPsyAppointments();
+        if (therapist) {
+          items = items.filter(a => a.therapist.toLowerCase().includes(therapist.toLowerCase()));
+        }
         if (from) {
           items = items.filter(a => {
             const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
@@ -2008,6 +2011,9 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
     switch (modulo) {
       case "citas": {
         let items = getAllPsyAppointments();
+        if (therapist) {
+          items = items.filter(a => a.therapist.toLowerCase().includes(therapist.toLowerCase()));
+        }
         if (from) {
           items = items.filter(a => {
             const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
