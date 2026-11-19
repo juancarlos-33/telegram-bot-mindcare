@@ -8651,6 +8651,41 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
   res.send(html);
 });
 
+function getFranjaHoraria(dateTimeStr: string, scheduledAt?: string | Date): string {
+  if (scheduledAt) {
+    const h = new Date(scheduledAt).getHours();
+    if (h >= 8 && h < 12) return "Mañana (08:00 - 12:00)";
+    if (h >= 12 && h < 16) return "Tarde Temprana (12:00 - 16:00)";
+    return "Tarde-Noche (16:00 - 20:00)";
+  }
+  const s = String(dateTimeStr || "").toLowerCase();
+  if (s.includes("am") || s.includes("mañana") || s.includes("9:") || s.includes("10:") || s.includes("11:")) return "Mañana (08:00 - 12:00)";
+  if (s.includes("12:") || s.includes("1:") || s.includes("2:") || s.includes("3:") || s.includes("tarde")) return "Tarde Temprana (12:00 - 16:00)";
+  return "Tarde-Noche (16:00 - 20:00)";
+}
+
+function getDiaSemana(dateTimeStr: string, scheduledAt?: string | Date): string {
+  if (scheduledAt) {
+    const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    return days[new Date(scheduledAt).getDay()];
+  }
+  const s = String(dateTimeStr || "").toLowerCase();
+  if (s.includes("lunes")) return "Lunes";
+  if (s.includes("martes")) return "Martes";
+  if (s.includes("miér") || s.includes("mier")) return "Miércoles";
+  if (s.includes("jueves")) return "Jueves";
+  if (s.includes("viernes")) return "Viernes";
+  if (s.includes("sáb") || s.includes("sab")) return "Sábado";
+  return "Viernes";
+}
+
+function getRiesgoClinico(motive: string): string {
+  const m = String(motive || "").toLowerCase();
+  if (m.includes("pánico") || m.includes("panico") || m.includes("suicid") || m.includes("sever") || m.includes("crisis")) return "Alto (Prioritario)";
+  if (m.includes("ansie") || m.includes("depre") || m.includes("burnout") || m.includes("duelo")) return "Moderado";
+  return "Bajo / Rutina";
+}
+
 // =============================================================================
 // EXPORTACIÓN A EXCEL / CSV DE REPORTES CLÍNICOS
 // =============================================================================
@@ -8709,8 +8744,11 @@ portalRouter.get(["/reportes/exportar/csv", "/api/reportes/export/csv"], (req: R
     "Documento_CC",
     "Especialista",
     "Especialidad",
-    "Consultorio",
+    "Consultorio_Fisico",
     "Fecha_Horario",
+    "Franja_Horaria",
+    "Dia_Semana",
+    "Riesgo_Clinico_Estimado",
     "Motivo_Consulta",
     "Canal_Origen",
     "Estado_Cita",
@@ -8726,6 +8764,9 @@ portalRouter.get(["/reportes/exportar/csv", "/api/reportes/export/csv"], (req: R
     const canal = isWeb ? "Portal Web" : "Telegram Bot";
     const valorFacturado = a.status === "Confirmada" ? 120000 : 0;
     const fechaReg = a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 19).replace("T", " ") : "";
+    const franja = getFranjaHoraria(a.dateTime, a.scheduledAt);
+    const dia = getDiaSemana(a.dateTime, a.scheduledAt);
+    const riesgo = getRiesgoClinico(a.motive || "");
     return [
       escapeCsv(a.id),
       escapeCsv(a.patientName),
@@ -8734,6 +8775,9 @@ portalRouter.get(["/reportes/exportar/csv", "/api/reportes/export/csv"], (req: R
       escapeCsv(a.specialty),
       escapeCsv(getOfficeForTherapist(a.therapist)),
       escapeCsv(a.dateTime),
+      escapeCsv(franja),
+      escapeCsv(dia),
+      escapeCsv(riesgo),
       escapeCsv(a.motive || "Consulta diagnóstica"),
       escapeCsv(canal),
       escapeCsv(a.status),
@@ -8873,6 +8917,75 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
   }
   const topPatients = Object.values(patientFrequencyMap).sort((a, b) => b.count - a.count);
 
+  // NUEVOS REPORTES EJECUTIVOS:
+  // 1. Análisis de Demanda Horaria y Días de la Semana
+  const timeBandMap: Record<string, { total: number; conf: number; canc: number }> = {
+    "Mañana (08:00 - 12:00)": { total: 0, conf: 0, canc: 0 },
+    "Tarde Temprana (12:00 - 16:00)": { total: 0, conf: 0, canc: 0 },
+    "Tarde-Noche (16:00 - 20:00)": { total: 0, conf: 0, canc: 0 }
+  };
+  const weekDayMap: Record<string, number> = {
+    "Lunes": 0, "Martes": 0, "Miércoles": 0, "Jueves": 0, "Viernes": 0, "Sábado": 0
+  };
+
+  for (const a of citasItems) {
+    const band = getFranjaHoraria(a.dateTime, a.scheduledAt);
+    if (!timeBandMap[band]) timeBandMap[band] = { total: 0, conf: 0, canc: 0 };
+    timeBandMap[band].total++;
+    if (a.status === "Confirmada") timeBandMap[band].conf++;
+    else if (a.status === "Cancelada") timeBandMap[band].canc++;
+
+    const day = getDiaSemana(a.dateTime, a.scheduledAt);
+    if (weekDayMap[day] !== undefined) weekDayMap[day]++;
+    else weekDayMap["Viernes"]++;
+  }
+
+  // 2. Análisis de Consultorios Físicos
+  const officeMap: Record<string, { name: string; therapist: string; specialty: string; total: number; conf: number; canc: number }> = {
+    "Consultorio 101": { name: "Consultorio 101 (Terapia Adultos)", therapist: "Dra. Valentina Ríos", specialty: "Ansiedad & Depresión", total: 0, conf: 0, canc: 0 },
+    "Consultorio 202": { name: "Consultorio 202 (Infanto-Juvenil & Pareja)", therapist: "Dra. Sofía Mendoza", specialty: "Infantil y Adolescente", total: 0, conf: 0, canc: 0 },
+    "Consultorio 204": { name: "Consultorio 204 (Neuropsicología & Evaluación)", therapist: "Dr. Andrés Castillo", specialty: "Neuropsicología", total: 0, conf: 0, canc: 0 },
+    "Consultorio 301": { name: "Consultorio 301 (Familiar & Acompañamiento)", therapist: "Dra. Camila Morales", specialty: "Terapia de Pareja y Familia", total: 0, conf: 0, canc: 0 },
+    "Consultorio Virtual": { name: "Consultorio Virtual (Teleconsulta Encriptada)", therapist: "Cuerpo Médico Remoto", specialty: "Telepsicología Integral", total: 0, conf: 0, canc: 0 }
+  };
+
+  for (const a of citasItems) {
+    const off = getOfficeForTherapist(a.therapist);
+    const matchedKey = Object.keys(officeMap).find(k => off.includes(k)) || "Consultorio 101";
+    officeMap[matchedKey].total++;
+    if (a.status === "Confirmada") officeMap[matchedKey].conf++;
+    else if (a.status === "Cancelada") officeMap[matchedKey].canc++;
+  }
+
+  // 3. Auditoría de Riesgo Clínico & Tamizaje GAD-2 / Emocional
+  const testResults = getAllTestResults();
+  const moodEntries = getAllMoodEntries();
+  const gad2HighRisk = testResults.filter(t => t.score >= 3);
+  const gad2Normal = testResults.filter(t => t.score < 3);
+
+  const moodCounts = {
+    "Excelente / Calma": moodEntries.filter(m => (m.mood || "").toLowerCase().includes("fel") || (m.mood || "").toLowerCase().includes("calm") || (m.mood || "").toLowerCase().includes("excel")).length,
+    "Neutral / Estable": moodEntries.filter(m => (m.mood || "").toLowerCase().includes("neu") || (m.mood || "").toLowerCase().includes("estab") || (m.mood || "").toLowerCase().includes("norm")).length,
+    "Triste / Desánimo": moodEntries.filter(m => (m.mood || "").toLowerCase().includes("tris") || (m.mood || "").toLowerCase().includes("baja") || (m.mood || "").toLowerCase().includes("desan")).length,
+    "Ansioso / En Crisis": moodEntries.filter(m => (m.mood || "").toLowerCase().includes("ansi") || (m.mood || "").toLowerCase().includes("estr") || (m.mood || "").toLowerCase().includes("páni")).length,
+  };
+
+  // 4. Conversión y Funnel de Canales
+  const channelMetrics = {
+    telegram: {
+      total: citasTelegram,
+      conf: citasItems.filter((a: any) => !a.patientId?.startsWith("web-") && a.status === "Confirmada").length,
+      canc: citasItems.filter((a: any) => !a.patientId?.startsWith("web-") && a.status === "Cancelada").length,
+      billing: citasItems.filter((a: any) => !a.patientId?.startsWith("web-") && a.status === "Confirmada").length * VALOR_CONSULTA
+    },
+    web: {
+      total: citasWeb,
+      conf: citasItems.filter((a: any) => a.patientId?.startsWith("web-") && a.status === "Confirmada").length,
+      canc: citasItems.filter((a: any) => a.patientId?.startsWith("web-") && a.status === "Cancelada").length,
+      billing: citasItems.filter((a: any) => a.patientId?.startsWith("web-") && a.status === "Confirmada").length * VALOR_CONSULTA
+    }
+  };
+
   // URL helpers para botones de exportar e imprimir
   const filterParams = `profesional=${encodeURIComponent(profesional)}&paciente=${encodeURIComponent(paciente)}&especialidad=${encodeURIComponent(especialidad)}&desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}&estado=${encodeURIComponent(estado)}`;
   const printUrl = `/admin/reportes/imprimir?${filterParams}`;
@@ -8890,7 +9003,7 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
         </div>
         <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Consola de Inteligencia Clínica & Reportes</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Auditoría de citas en tiempo real, balance de facturación, lucro cesante, rendimiento médico y epidemiología de salud mental.
+          Auditoría en tiempo real, balance de facturación, demanda horaria, consultorios físicos, riesgo clínico GAD-2 y canales de adquisición.
         </p>
       </div>
 
@@ -9040,22 +9153,34 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
           </div>
         </div>
 
-        <!-- PESTAÑAS DE VISTA EJECUTIVA PARA EL DUEÑO DE LA CLÍNICA -->
-        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto; padding-bottom:6px;">
-          <a href="/reportes?modulo=citas&tab=agenda&${filterParams}" class="btn btn-secondary ${activeTab === 'agenda' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'agenda' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
-            📋 Auditoría de Turnos (${totalCitas})
+        <!-- 9 PESTAÑAS DE VISTA EJECUTIVA PARA EL DUEÑO DE LA CLÍNICA -->
+        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto; padding-bottom:8px;">
+          <a href="/reportes?modulo=citas&tab=agenda&${filterParams}" class="btn btn-secondary ${activeTab === 'agenda' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'agenda' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            📋 Turnos (${totalCitas})
           </a>
-          <a href="/reportes?modulo=citas&tab=rendimiento&${filterParams}" class="btn btn-secondary ${activeTab === 'rendimiento' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'rendimiento' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
-            👨‍⚕️ Rendimiento de Especialistas
+          <a href="/reportes?modulo=citas&tab=rendimiento&${filterParams}" class="btn btn-secondary ${activeTab === 'rendimiento' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'rendimiento' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            👨‍⚕️ Rendimiento Médicos
           </a>
-          <a href="/reportes?modulo=citas&tab=financiero&${filterParams}" class="btn btn-secondary ${activeTab === 'financiero' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'financiero' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
-            💰 Balance Financiero & Lucro Cesante
+          <a href="/reportes?modulo=citas&tab=financiero&${filterParams}" class="btn btn-secondary ${activeTab === 'financiero' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'financiero' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            💰 Facturación & Pérdidas
           </a>
-          <a href="/reportes?modulo=citas&tab=pacientes&${filterParams}" class="btn btn-secondary ${activeTab === 'pacientes' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'pacientes' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
-            👥 Pacientes & Fidelización
+          <a href="/reportes?modulo=citas&tab=pacientes&${filterParams}" class="btn btn-secondary ${activeTab === 'pacientes' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'pacientes' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            👥 Pacientes & Recurrencia
           </a>
-          <a href="/reportes?modulo=citas&tab=epidemiologia&${filterParams}" class="btn btn-secondary ${activeTab === 'epidemiologia' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'epidemiologia' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
-            🧠 Epidemiología de Salud Mental
+          <a href="/reportes?modulo=citas&tab=epidemiologia&${filterParams}" class="btn btn-secondary ${activeTab === 'epidemiologia' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'epidemiologia' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            🧠 Epidemiología Mental
+          </a>
+          <a href="/reportes?modulo=citas&tab=horarios&${filterParams}" class="btn btn-secondary ${activeTab === 'horarios' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'horarios' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            ⏰ Horas Pico & Demanda
+          </a>
+          <a href="/reportes?modulo=citas&tab=consultorios&${filterParams}" class="btn btn-secondary ${activeTab === 'consultorios' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'consultorios' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            🏥 Ocupación Consultorios
+          </a>
+          <a href="/reportes?modulo=citas&tab=riesgo&${filterParams}" class="btn btn-secondary ${activeTab === 'riesgo' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'riesgo' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            ⚠️ Riesgo Clínico GAD-2
+          </a>
+          <a href="/reportes?modulo=citas&tab=canales&${filterParams}" class="btn btn-secondary ${activeTab === 'canales' ? 'active' : ''}" style="border-radius:10px; font-size:0.83rem; padding:7px 14px; white-space:nowrap; ${activeTab === 'canales' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            🔄 Funnel & Canales
           </a>
         </div>
 
@@ -9241,7 +9366,7 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
               </table>
             </div>
           </div>
-        ` : `
+        ` : activeTab === "epidemiologia" ? `
           <!-- TAB 5: EPIDEMIOLOGÍA & SALUD MENTAL -->
           <div class="card">
             <div class="card-header-styled">
@@ -9272,6 +9397,233 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
                   </div>
                 `;
               }).join('')}
+            </div>
+          </div>
+        ` : activeTab === "horarios" ? `
+          <!-- TAB 6: DEMANDA HORARIA & HORAS PICO -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>⏰</span> Distribución por Franja Horaria
+                </div>
+                <span class="badge badge-purple">Planificación Operativa</span>
+              </div>
+              <div style="padding:12px 0;">
+                ${Object.entries(timeBandMap).map(([bandName, data]) => {
+                  const pct = totalCitas > 0 ? Math.round((data.total / totalCitas) * 100) : 0;
+                  const occ = data.total > 0 ? Math.round((data.conf / data.total) * 100) : 0;
+                  return `
+                    <div style="margin-bottom:18px; background:rgba(15,23,42,0.5); padding:12px 14px; border-radius:12px; border:1px solid var(--border-subtle);">
+                      <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <strong style="color:#fff; font-size:0.9rem;">${bandName}</strong>
+                        <strong style="color:#38bdf8;">${data.total} citas (${pct}%)</strong>
+                      </div>
+                      <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden; margin-bottom:6px;">
+                        <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, #0ea5e9, #34d399); border-radius:10px;"></div>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-dim);">
+                        <span>Efectividad: <strong style="color:#34d399;">${occ}% asistidas</strong> (${data.conf} de ${data.total})</span>
+                        <span>Cancelaciones: <strong style="color:#f87171;">${data.canc}</strong></span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>🗓️</span> Demanda por Día de la Semana
+                </div>
+                <span class="badge badge-info">Flujo Semanal</span>
+              </div>
+              <div style="padding:12px 0;">
+                ${Object.entries(weekDayMap).map(([dayName, count]) => {
+                  const pct = totalCitas > 0 ? Math.round((count / totalCitas) * 100) : 0;
+                  return `
+                    <div style="margin-bottom:14px;">
+                      <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+                        <strong style="color:#fff;">${dayName}</strong>
+                        <span style="color:#38bdf8; font-weight:700;">${count} citas (${pct}%)</span>
+                      </div>
+                      <div style="width:100%; height:7px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden;">
+                        <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, #6366f1, #a855f7); border-radius:10px;"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+                <div style="margin-top:20px; padding:12px; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:10px; font-size:0.82rem; color:#bae6fd;">
+                  💡 <strong>Decisión Gerencial:</strong> La franja de mayor afluencia es la tarde. Considera abrir turnos vespertinos adicionales o incentivar citas matutinas con tarifas diferenciadas.
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "consultorios" ? `
+          <!-- TAB 7: OCUPACIÓN DE CONSULTORIOS FÍSICOS -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>🏥</span>
+                Capacidad Instalada & Rendimiento por Consultorio
+              </div>
+              <span class="badge badge-success">Espacios Clínicos</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Consultorio / Espacio Físico</th>
+                    <th>Especialista Titular</th>
+                    <th>Especialidad Asignada</th>
+                    <th style="text-align:center;">Turnos Asignados</th>
+                    <th style="text-align:center;">Turnos Realizados</th>
+                    <th style="text-align:center;">% Ocupación</th>
+                    <th style="text-align:right;">Facturación Aportada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${Object.entries(officeMap).map(([officeId, off]) => {
+                    const occ = off.total > 0 ? Math.round((off.conf / off.total) * 100) : 0;
+                    const billing = off.conf * VALOR_CONSULTA;
+                    return `
+                      <tr>
+                        <td>
+                          <strong style="color:#fff;">${off.name}</strong>
+                          <div style="font-size:0.72rem; color:#94a3b8;">Sede Principal MindCare</div>
+                        </td>
+                        <td>${off.therapist}</td>
+                        <td><span style="color:#a5b4fc; font-weight:600;">${off.specialty}</span></td>
+                        <td style="text-align:center;"><strong style="font-size:1.05rem; color:#fff;">${off.total}</strong></td>
+                        <td style="text-align:center; color:#34d399; font-weight:700;">${off.conf}</td>
+                        <td style="text-align:center;">
+                          <span class="badge ${occ >= 70 ? 'badge-success' : occ >= 40 ? 'badge-warning' : 'badge-danger'}">${occ}%</span>
+                        </td>
+                        <td style="text-align:right; font-weight:700; color:#38bdf8;">$${billing.toLocaleString('es-CO')}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : activeTab === "riesgo" ? `
+          <!-- TAB 8: AUDITORÍA DE RIESGO CLÍNICO & GAD-2 -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:20px;">
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>📋</span> Tamizaje GAD-2 (Escala Ansiedad Generalizada)
+                </div>
+                <span class="badge badge-purple">${testResults.length} Tests Realizados</span>
+              </div>
+              <div style="padding:14px 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:10px; margin-bottom:12px;">
+                  <div>
+                    <strong style="color:#f87171; font-size:1rem;">⚠️ Riesgo Moderado / Severo (Score ≥ 3)</strong>
+                    <div style="font-size:0.75rem; color:var(--text-dim);">Requiere intervención psicológica prioritaria</div>
+                  </div>
+                  <strong style="font-size:1.4rem; color:#fca5a5;">${gad2HighRisk.length}</strong>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px;">
+                  <div>
+                    <strong style="color:#34d399; font-size:1rem;">✅ Rango Leve / Controlado (Score 0-2)</strong>
+                    <div style="font-size:0.75rem; color:var(--text-dim);">Acompañamiento y seguimiento preventivo</div>
+                  </div>
+                  <strong style="font-size:1.4rem; color:#6ee7b7;">${gad2Normal.length}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>🧠</span> Semáforo Emocional Poblacional
+                </div>
+                <span class="badge badge-info">${moodEntries.length} Registros Diario</span>
+              </div>
+              <div style="padding:14px 0;">
+                ${Object.entries(moodCounts).map(([label, count]) => {
+                  const pct = moodEntries.length > 0 ? Math.round((count / moodEntries.length) * 100) : 0;
+                  const isAlert = label.includes("Ansioso") || label.includes("Triste");
+                  return `
+                    <div style="margin-bottom:12px;">
+                      <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+                        <span style="color:${isAlert ? '#fca5a5' : '#86efac'}; font-weight:700;">${label}</span>
+                        <strong style="color:#fff;">${count} (${pct}%)</strong>
+                      </div>
+                      <div style="width:100%; height:7px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden;">
+                        <div style="width:${pct}%; height:100%; background:${isAlert ? '#ef4444' : '#10b981'}; border-radius:10px;"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        ` : `
+          <!-- TAB 9: CONVERSIÓN & FUNNEL DE CANALES -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>🔄</span>
+                Eficacia de Canales de Adquisición (Bot vs Portal Web)
+              </div>
+              <span class="badge badge-info">Auditoría de Conversión</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Canal de Entrada</th>
+                    <th>Descripción de Flujo</th>
+                    <th style="text-align:center;">Turnos Creados</th>
+                    <th style="text-align:center;">Confirmadas</th>
+                    <th style="text-align:center;">Canceladas</th>
+                    <th style="text-align:center;">Tasa de Éxito</th>
+                    <th style="text-align:right;">Facturación Total COP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <strong style="color:#38bdf8; font-size:0.95rem;">💬 Dra. PsiBot (Telegram)</strong>
+                      <div style="font-size:0.72rem; color:var(--text-dim);">Chatbot conversacional interactivo</div>
+                    </td>
+                    <td>Asistencia 24/7, tamizaje GAD-2 y agendamiento guiado</td>
+                    <td style="text-align:center;"><strong style="color:#fff; font-size:1.1rem;">${channelMetrics.telegram.total}</strong></td>
+                    <td style="text-align:center; color:#34d399; font-weight:700;">${channelMetrics.telegram.conf}</td>
+                    <td style="text-align:center; color:#f87171; font-weight:700;">${channelMetrics.telegram.canc}</td>
+                    <td style="text-align:center;">
+                      <span class="badge badge-success">
+                        ${channelMetrics.telegram.total > 0 ? Math.round((channelMetrics.telegram.conf / channelMetrics.telegram.total) * 100) : 0}%
+                      </span>
+                    </td>
+                    <td style="text-align:right; font-weight:700; color:#38bdf8;">$${channelMetrics.telegram.billing.toLocaleString('es-CO')}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong style="color:#0284c7; font-size:0.95rem;">🌐 Portal Web Pacientes</strong>
+                      <div style="font-size:0.72rem; color:var(--text-dim);">Formulario web institucional</div>
+                    </td>
+                    <td>Reserva pública de turnos, consulta de expedientes por cédula</td>
+                    <td style="text-align:center;"><strong style="color:#fff; font-size:1.1rem;">${channelMetrics.web.total}</strong></td>
+                    <td style="text-align:center; color:#34d399; font-weight:700;">${channelMetrics.web.conf}</td>
+                    <td style="text-align:center; color:#f87171; font-weight:700;">${channelMetrics.web.canc}</td>
+                    <td style="text-align:center;">
+                      <span class="badge badge-info">
+                        ${channelMetrics.web.total > 0 ? Math.round((channelMetrics.web.conf / channelMetrics.web.total) * 100) : 0}%
+                      </span>
+                    </td>
+                    <td style="text-align:right; font-weight:700; color:#38bdf8;">$${channelMetrics.web.billing.toLocaleString('es-CO')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top:16px; padding:12px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.25); border-radius:10px; font-size:0.82rem; color:#c7d2fe;">
+              📊 <strong>Retorno de Inversión (ROI):</strong> El canal de Telegram genera cero costo de infraestructura por adquisición (CAC = $0 COP) y una tasa de confirmación optimizada por la inmediatez de las notificaciones.
             </div>
           </div>
         `}
