@@ -1954,6 +1954,31 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       ${content}
     </div>
   </main>
+  <script>
+    (function() {
+      function revealFast() {
+        var skel = document.getElementById('mindcare-initial-skeleton');
+        var real = document.getElementById('mindcare-real-content');
+        if (skel && real && real.style.display === 'none') {
+          setTimeout(function() {
+            skel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+            skel.style.opacity = '0';
+            skel.style.transform = 'translateY(-4px)';
+            setTimeout(function() {
+              skel.style.display = 'none';
+              real.style.display = 'block';
+              real.classList.add('view-fade-in');
+            }, 160);
+          }, 220);
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', revealFast);
+      } else {
+        revealFast();
+      }
+    })();
+  </script>
   <noscript>
     <style>
       #mindcare-initial-skeleton { display: none !important; }
@@ -3129,7 +3154,10 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     var SKELETON_TEMPLATES = ${JSON.stringify(SKELETON_MAP)};
 
     function getSkeletonForPath(path) {
-      var clean = sanitizePath(path).replace(/^\/+|\/+$/g, '') || 'home';
+      var s = sanitizePath(path);
+      while (s.charAt(0) === '/') s = s.substring(1);
+      while (s.length > 0 && s.charAt(s.length - 1) === '/') s = s.substring(0, s.length - 1);
+      var clean = s || 'home';
       if (clean === 'consultar') clean = 'consultar-cita';
       var skel = SKELETON_TEMPLATES[clean] || SKELETON_TEMPLATES['home'];
       return '<div class="view-fade-in" style="width:100%;">' + skel + '</div>';
@@ -3362,7 +3390,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     function revealInitialContent() {
       var skel = document.getElementById('mindcare-initial-skeleton');
       var real = document.getElementById('mindcare-real-content');
-      if (skel && real) {
+      if (skel && real && real.style.display === 'none') {
         setTimeout(function() {
           skel.style.transition = 'opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
           skel.style.opacity = '0';
