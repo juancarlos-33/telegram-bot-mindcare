@@ -20,6 +20,8 @@ import {
   updatePsyAppointmentStatus,
   cancelPsyAppointment,
   deletePsyAppointment,
+  getAvailableSlotsForTherapist,
+  ClinicalSlotOption,
   PSYCHOLOGY_SPECIALTIES,
   PSYCHOLOGY_THERAPISTS,
   getAllTherapists,
@@ -122,6 +124,23 @@ export function getStaffSession(req: Request): StaffSession {
 // Helper de retrocompatibilidad
 function checkIsAdmin(req: Request): boolean {
   return getStaffSession(req).isAdmin;
+}
+
+/** Renderiza los botones de turnos exclusivamente disponibles (excluyendo automáticamente los ocupados) */
+function renderQuickSlotsHtml(therapistName: string): string {
+  const slots = getAvailableSlotsForTherapist(therapistName, 6);
+  if (!slots || slots.length === 0) {
+    return `<div class="quick-slots-container" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+      <span style="font-size:0.75rem; color:#f59e0b;">⚠️ Todos los turnos inmediatos con este especialista están reservados. Puedes proponer otra fecha o elegir otro especialista.</span>
+    </div>`;
+  }
+  return `<div class="quick-slots-container" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+    ${slots.map(s => `
+      <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, '${s.dateTime}')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">
+        ${s.label}
+      </button>
+    `).join('')}
+  </div>`;
 }
 
 // =============================================================================
@@ -1844,7 +1863,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       });
     }
 
-    // 5. Función de botones de selección rápida de horarios
+    // 5. Función de botones de selección rápida de horarios garantizados disponibles
     function selectQuickSlot(btn, text) {
       const form = btn.closest('form');
       if (!form) return;
@@ -1855,11 +1874,38 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         input.focus();
       }
       form.querySelectorAll('.quick-slot-btn').forEach(function(b) {
-        b.style.borderColor = 'rgba(255,255,255,0.1)';
-        b.style.background = 'rgba(255,255,255,0.04)';
+        b.style.borderColor = 'rgba(56,189,248,0.25)';
+        b.style.background = 'rgba(15,23,42,0.6)';
+        b.style.color = '#e2e8f0';
       });
-      btn.style.borderColor = 'rgba(14, 165, 233, 0.8)';
-      btn.style.background = 'rgba(14, 165, 233, 0.2)';
+      btn.style.borderColor = '#38bdf8';
+      btn.style.background = 'rgba(14, 165, 233, 0.28)';
+      btn.style.color = '#fff';
+    }
+
+    function refreshAvailableSlotsForForm(selectEl) {
+      const form = selectEl.closest('form');
+      if (!form) return;
+      const container = form.querySelector('.quick-slots-container');
+      if (!container) return;
+      const specialty = selectEl.value;
+
+      container.style.opacity = '0.5';
+      fetch('/api/citas/disponibilidad?specialty=' + encodeURIComponent(specialty))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          container.style.opacity = '1';
+          if (!data || !data.slots || data.slots.length === 0) {
+            container.innerHTML = '<span style="font-size:0.75rem; color:#f59e0b;">⚠️ Todos los turnos automáticos inmediatos con este especialista están reservados. Puedes proponer otra fecha o elegir otro especialista.</span>';
+            return;
+          }
+          container.innerHTML = data.slots.map(function(s) {
+            return '<button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, \'' + s.dateTime + '\')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(56,189,248,0.25); background:rgba(15,23,42,0.6); color:#e2e8f0;" title="Turno garantizado disponible">' + s.label + '</button>';
+          }).join('');
+        })
+        .catch(function() {
+          container.style.opacity = '1';
+        });
     }
 
     // 6. Formateo automático de Tarjeta Profesional Colpsic en /especialistas
@@ -2747,7 +2793,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
           </div>
           <div class="form-group">
             <label for="specialty">Especialidad & Terapeuta Asignado</label>
-            <select id="specialty" name="specialty" required>
+            <select id="specialty" name="specialty" onchange="refreshAvailableSlotsForForm(this)" required>
               ${PSYCHOLOGY_SPECIALTIES.map(s => `
                 <option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)} (${s.office})</option>
               `).join('')}
@@ -2759,12 +2805,10 @@ portalRouter.get("/", async (req: Request, res: Response) => {
               <span class="input-icon">⏰</span>
               <input type="text" id="dateTime" name="dateTime" class="input-with-icon" placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" required>
             </div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Mañana 10:00 AM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 3:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Mañana 3:00 PM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Pasado Mañana 10 AM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 4:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Pasado Mañana 4 PM</button>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">
+              💡 <strong>Turnos disponibles garantizados</strong> (los ocupados se ocultan automáticamente):
             </div>
+            ${renderQuickSlotsHtml(getTherapistNameForSpecialty(PSYCHOLOGY_SPECIALTIES[0].name))}
           </div>
           <div class="form-group">
             <label for="motive">Motivo de Consulta (Confidencial)</label>
@@ -3299,6 +3343,28 @@ portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
   });
 });
 
+// Endpoint dinámico de horarios garantizados disponibles por especialista
+portalRouter.get("/api/citas/disponibilidad", (req: Request, res: Response) => {
+  const specialty = String(req.query.specialty || "").trim();
+  const therapistParam = String(req.query.therapist || "").trim();
+  let therapistName = therapistParam;
+
+  if (!therapistName && specialty) {
+    therapistName = getTherapistsBySpecialty(specialty)[0]?.name || getTherapistNameForSpecialty(specialty) || "";
+  }
+  if (!therapistName) {
+    therapistName = getAllTherapists(false)[0]?.name || "Dra. Valentina Ríos";
+  }
+
+  const slots = getAvailableSlotsForTherapist(therapistName, 6);
+  res.json({
+    status: "ok",
+    specialty,
+    therapist: therapistName,
+    slots
+  });
+});
+
 // =============================================================================
 // RUTA 3.5: GESTIÓN DE CITAS DE PSICOLOGÍA — MINDCARE
 // =============================================================================
@@ -3560,7 +3626,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
             <div style="margin-bottom: 16px;">
               <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad Clínica & Terapeuta:</label>
-              <select name="specialty" required style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+              <select name="specialty" onchange="refreshAvailableSlotsForForm(this)" required style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
                 ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)} (${s.office})</option>`).join('')}
               </select>
             </div>
@@ -3568,12 +3634,10 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
             <div style="margin-bottom: 16px;">
               <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Fecha y Horario Deseado:</label>
               <input type="text" name="dateTime" required placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
-              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-                <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Mañana 10:00 AM</button>
-                <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 3:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Mañana 3:00 PM</button>
-                <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Pasado Mañana 10 AM</button>
-                <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 4:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Pasado Mañana 4 PM</button>
+              <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">
+                💡 <strong>Turnos disponibles garantizados</strong> (los ocupados se ocultan automáticamente):
               </div>
+              ${renderQuickSlotsHtml(getTherapistNameForSpecialty(PSYCHOLOGY_SPECIALTIES[0].name))}
             </div>
 
             <div style="margin-bottom: 18px;">
@@ -3845,19 +3909,17 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
-            <select name="specialty" required style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+            <select name="specialty" onchange="refreshAvailableSlotsForForm(this)" required style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
               ${PSYCHOLOGY_SPECIALTIES.map(s => `<option value="${s.name}">${s.icon} ${s.name} — ${getTherapistNameForSpecialty(s.name)} (${s.office})</option>`).join('')}
             </select>
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Fecha y Horario Deseado:</label>
             <input type="text" name="dateTime" required placeholder="Ej: Viernes 10:00 AM o 2026-11-20 10:00" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Mañana 10:00 AM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Mañana a las 3:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Mañana 3:00 PM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 10:00 AM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">☀️ Pasado Mañana 10 AM</button>
-              <button type="button" class="btn btn-secondary quick-slot-btn" onclick="selectQuickSlot(this, 'Pasado Mañana 4:00 PM')" style="padding:4px 9px; font-size:0.75rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04);">🌤️ Pasado Mañana 4 PM</button>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">
+              💡 <strong>Turnos disponibles garantizados</strong> (los ocupados se ocultan automáticamente):
             </div>
+            ${renderQuickSlotsHtml(getTherapistNameForSpecialty(PSYCHOLOGY_SPECIALTIES[0].name))}
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Motivo de Consulta (Confidencial):</label>

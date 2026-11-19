@@ -975,6 +975,82 @@ export function validateBookingAvailability(params: {
   return { valid: true };
 }
 
+export interface ClinicalSlotOption {
+  dateTime: string;
+  label: string;
+  canonicalSlot: string;
+}
+
+/**
+ * Genera y filtra los próximos turnos clínicos disponibles para un especialista dado,
+ * excluyendo completamente aquellos que ya están reservados u ocupados.
+ */
+export function getAvailableSlotsForTherapist(therapistName: string, limit: number = 6): ClinicalSlotOption[] {
+  const nowBogota = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const available: ClinicalSlotOption[] = [];
+
+  const standardHours = [
+    { h: 8, label: "8:00 AM", icon: "🌅" },
+    { h: 9, label: "9:00 AM", icon: "🌅" },
+    { h: 10, label: "10:00 AM", icon: "☀️" },
+    { h: 11, label: "11:00 AM", icon: "☀️" },
+    { h: 14, label: "2:00 PM", icon: "🌤️" },
+    { h: 15, label: "3:00 PM", icon: "🌤️" },
+    { h: 16, label: "4:00 PM", icon: "☕" },
+    { h: 17, label: "5:00 PM", icon: "🌙" }
+  ];
+
+  const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+  let dayOffset = 1;
+  let businessDaysEvaluated = 0;
+
+  // Evaluar hasta 8 días en el futuro para encontrar los mejores turnos libres garantizados
+  while (businessDaysEvaluated < 5 && dayOffset <= 10 && available.length < limit) {
+    const d = new Date(nowBogota);
+    d.setDate(d.getDate() + dayOffset);
+    dayOffset++;
+
+    if (d.getDay() === 0) continue; // MindCare cierra los domingos
+    businessDaysEvaluated++;
+
+    let dayPrefix = "";
+    let shortName = "";
+    if (businessDaysEvaluated === 1) {
+      dayPrefix = "Mañana";
+      shortName = "Mañana";
+    } else if (businessDaysEvaluated === 2) {
+      dayPrefix = "Pasado Mañana";
+      shortName = "Pasado Mañana";
+    } else {
+      dayPrefix = `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
+      shortName = `${dayNames[d.getDay()].substring(0, 3)} ${d.getDate()}`;
+    }
+
+    for (const hr of standardHours) {
+      const slotString = `${dayPrefix} a las ${hr.label}`;
+
+      // Validar si el turno está realmente libre para este especialista (anti-colisión)
+      const check = validateBookingAvailability({
+        therapistName,
+        dateTime: slotString
+      });
+
+      if (check.valid) {
+        available.push({
+          dateTime: slotString,
+          label: `${hr.icon} ${shortName} ${hr.label}`,
+          canonicalSlot: normalizeDateTimeToCanonical(slotString)
+        });
+        if (available.length >= limit) break;
+      }
+    }
+  }
+
+  return available;
+}
+
 // =============================================================================
 // MÓDULO CRM CLÍNICO: EXPEDIENTES, HISTORIAS CLÍNICAS (SOAP) Y PAGOS
 // =============================================================================
