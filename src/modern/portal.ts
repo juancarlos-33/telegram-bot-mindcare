@@ -2137,8 +2137,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             if (res && res.stats) {
               updateKpisDirectly(res.stats);
             }
-            if (res && res.recentAppointments) {
-              window.ADMIN_CITAS_DATA = res.recentAppointments;
+            if (res && (res.appointments || res.recentAppointments)) {
+              window.ADMIN_CITAS_DATA = res.appointments || res.recentAppointments;
             }
           })
           .catch(function() {});
@@ -2185,10 +2185,25 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
 
-            const newTable = doc.querySelector('table');
-            const curTable = document.querySelector('table');
-            if (newTable && curTable) {
-              curTable.innerHTML = newTable.innerHTML;
+            const newTbody = doc.getElementById('tabla-citas-tbody');
+            const curTbody = document.getElementById('tabla-citas-tbody');
+            if (newTbody && curTbody) {
+              curTbody.innerHTML = newTbody.innerHTML;
+            } else {
+              const newTable = doc.querySelector('table');
+              const curTable = document.querySelector('table');
+              if (newTable && curTable) {
+                curTable.innerHTML = newTable.innerHTML;
+              }
+            }
+
+            // Si hay un filtro activo por estado en la tabla, re-aplicarlo inmediatamente
+            const activePill = document.querySelector('#table-filter-pills .filter-pill.active');
+            if (activePill && typeof filterCitasByStatus === 'function') {
+              const filterStatus = activePill.getAttribute('data-filter');
+              if (filterStatus && filterStatus !== 'TODAS') {
+                filterCitasByStatus(filterStatus);
+              }
             }
 
             // Actualizar grilla de 6 KPIs en tiempo real
@@ -2240,8 +2255,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             if (res && res.stats) {
               updateKpisDirectly(res.stats);
             }
-            if (res && res.recentAppointments) {
-              window.ADMIN_CITAS_DATA = res.recentAppointments;
+            if (res && (res.appointments || res.recentAppointments)) {
+              window.ADMIN_CITAS_DATA = res.appointments || res.recentAppointments;
             }
           })
           .catch(function() {});
@@ -2368,8 +2383,6 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     // Modal Global de Detalle Clínico de Cita
     function openCitaDetailById(id) {
-      const modal = document.getElementById('modal-cita-detail');
-      if (!modal) return;
       const targetId = String(id || '').trim().toLowerCase();
       const list = window.ADMIN_CITAS_DATA || [];
       const found = list.find(function(c) {
@@ -2402,7 +2415,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     function renderCitaModal(cita) {
       try {
         const modal = document.getElementById('modal-cita-detail');
-        if (!modal || !cita) return;
+        if (!modal) {
+          console.warn('modal-cita-detail no encontrado en el DOM, mostrando resumen');
+          if (cita) {
+            alert('📋 DETALLE DE CITA #' + (cita.id || '') + '\n' +
+                  '• Paciente: ' + (cita.patientName || 'Paciente') + '\n' +
+                  '• Documento: ' + (cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado') + '\n' +
+                  '• Especialidad: ' + (cita.specialty || 'Psicología') + '\n' +
+                  '• Especialista: ' + (cita.therapist || 'Especialista') + '\n' +
+                  '• Horario: ' + (cita.dateTime || '') + '\n' +
+                  '• Motivo: ' + (cita.motive || 'Sin motivo registrado') + '\n' +
+                  '• Estado: ' + (cita.status || 'Pendiente'));
+          }
+          return;
+        }
+        if (!cita) return;
 
         const elId = document.getElementById('mcd-id');
         if (elId) elId.textContent = 'ID: #' + (cita.id || '');
@@ -2440,9 +2467,57 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
         const actions = document.getElementById('mcd-actions');
         if (actions) {
-          actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>' +
-            '<form action="/api/citas/estado" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Cancelar Cita Médica?" data-confirm-message="¿Deseas cancelar la cita #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? El horario será liberado completamente." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">✕ Cancelar Cita</button></form>' +
-            '<form action="/api/citas/eliminar" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Eliminar Cita Permanentemente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar</button></form>';
+          actions.innerHTML = '';
+          const btnComp = document.createElement('button');
+          btnComp.type = 'button';
+          btnComp.className = 'btn btn-primary';
+          btnComp.style.cssText = 'background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;';
+          btnComp.innerHTML = '📥 Imprimir Comprobante (PDF)';
+          btnComp.onclick = function() { imprimirComprobanteCita(cita.id); };
+          actions.appendChild(btnComp);
+
+          if (cita.status !== 'Confirmada') {
+            const fConf = document.createElement('form');
+            fConf.action = '/api/citas/estado';
+            fConf.method = 'POST';
+            fConf.style.margin = '0';
+            fConf.style.display = 'inline';
+            fConf.setAttribute('data-confirm-title', '¿Confirmar Cita Médica?');
+            fConf.setAttribute('data-confirm-message', '¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?');
+            fConf.setAttribute('data-confirm-icon', '✅');
+            fConf.setAttribute('data-confirm-btn', 'Sí, Confirmar Cita');
+            fConf.setAttribute('data-confirm-color', 'green');
+            fConf.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button>';
+            actions.appendChild(fConf);
+          }
+
+          if (cita.status !== 'Cancelada') {
+            const fCanc = document.createElement('form');
+            fCanc.action = '/api/citas/estado';
+            fCanc.method = 'POST';
+            fCanc.style.margin = '0';
+            fCanc.style.display = 'inline';
+            fCanc.setAttribute('data-confirm-title', '¿Cancelar Cita Médica?');
+            fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar la cita #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? El horario será liberado completamente.');
+            fCanc.setAttribute('data-confirm-icon', '❌');
+            fCanc.setAttribute('data-confirm-btn', 'Sí, Cancelar Cita');
+            fCanc.setAttribute('data-confirm-color', 'red');
+            fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">✕ Cancelar Cita</button>';
+            actions.appendChild(fCanc);
+          }
+
+          const fDel = document.createElement('form');
+          fDel.action = '/api/citas/eliminar';
+          fDel.method = 'POST';
+          fDel.style.margin = '0';
+          fDel.style.display = 'inline';
+          fDel.setAttribute('data-confirm-title', '¿Eliminar Cita Permanentemente?');
+          fDel.setAttribute('data-confirm-message', '¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?');
+          fDel.setAttribute('data-confirm-icon', '🗑️');
+          fDel.setAttribute('data-confirm-btn', 'Sí, Eliminar Cita');
+          fDel.setAttribute('data-confirm-color', 'red');
+          fDel.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar</button>';
+          actions.appendChild(fDel);
         }
 
         modal.style.display = 'flex';
@@ -3829,7 +3904,8 @@ portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
       totalMoods: moods.length,
       totalTests: tests.length
     },
-    recentAppointments: appointments.slice(0, 10),
+    appointments: appointments,
+    recentAppointments: appointments.slice(0, 50),
     activeTherapistsCount: therapists.filter(t => t.active).length
   });
 });
@@ -5224,11 +5300,12 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       window.ADMIN_CITAS_DATA = ${JSON.stringify(appointments)};
 
       function openCitaDetailById(id) {
-        const modal = document.getElementById('modal-cita-detail');
-        if (!modal) return;
         const targetId = String(id || '').trim().toLowerCase();
         const list = window.ADMIN_CITAS_DATA || [];
-        const found = list.find(function(c) { return String(c.id || '').toLowerCase() === targetId; });
+        const found = list.find(function(c) { 
+          return String(c.id || '').toLowerCase() === targetId ||
+                 (c.documentNumber && String(c.documentNumber).replace(/\D/g, '') === targetId.replace(/\D/g, ''));
+        });
         if (found) {
           renderCitaModal(found);
           return;
@@ -5262,7 +5339,20 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       function renderCitaModal(cita) {
         try {
           const modal = document.getElementById('modal-cita-detail');
-          if (!modal || !cita) return;
+          if (!modal) {
+            if (cita) {
+              alert('📋 DETALLE DE CITA #' + (cita.id || '') + '\n' +
+                    '• Paciente: ' + (cita.patientName || 'Paciente') + '\n' +
+                    '• Documento: ' + (cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado') + '\n' +
+                    '• Especialidad: ' + (cita.specialty || 'Psicología') + '\n' +
+                    '• Especialista: ' + (cita.therapist || 'Especialista') + '\n' +
+                    '• Horario: ' + (cita.dateTime || '') + '\n' +
+                    '• Motivo: ' + (cita.motive || 'Sin motivo registrado') + '\n' +
+                    '• Estado: ' + (cita.status || 'Pendiente'));
+            }
+            return;
+          }
+          if (!cita) return;
 
           const elId = document.getElementById('mcd-id');
           if (elId) elId.textContent = 'ID: #' + (cita.id || '');
@@ -5300,14 +5390,57 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 
           const actions = document.getElementById('mcd-actions');
           if (actions) {
-            actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>';
+            actions.innerHTML = '';
+            const btnComp = document.createElement('button');
+            btnComp.type = 'button';
+            btnComp.className = 'btn btn-primary';
+            btnComp.style.cssText = 'background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;';
+            btnComp.innerHTML = '📥 Imprimir Comprobante (PDF)';
+            btnComp.onclick = function() { imprimirComprobanteCita(cita.id); };
+            actions.appendChild(btnComp);
+
             if (cita.status !== 'Confirmada') {
-              actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Cita Médica?" data-confirm-message="¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar Cita" data-confirm-color="green"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+              const fConf = document.createElement('form');
+              fConf.action = '/api/citas/estado';
+              fConf.method = 'POST';
+              fConf.style.margin = '0';
+              fConf.style.display = 'inline';
+              fConf.setAttribute('data-confirm-title', '¿Confirmar Cita Médica?');
+              fConf.setAttribute('data-confirm-message', '¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?');
+              fConf.setAttribute('data-confirm-icon', '✅');
+              fConf.setAttribute('data-confirm-btn', 'Sí, Confirmar Cita');
+              fConf.setAttribute('data-confirm-color', 'green');
+              fConf.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button>';
+              actions.appendChild(fConf);
             }
+
             if (cita.status !== 'Cancelada') {
-              actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
+              const fCanc = document.createElement('form');
+              fCanc.action = '/api/citas/estado';
+              fCanc.method = 'POST';
+              fCanc.style.margin = '0';
+              fCanc.style.display = 'inline';
+              fCanc.setAttribute('data-confirm-title', '¿Cancelar Turno Médico?');
+              fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?');
+              fCanc.setAttribute('data-confirm-icon', '❌');
+              fCanc.setAttribute('data-confirm-btn', 'Sí, Cancelar Turno');
+              fCanc.setAttribute('data-confirm-color', 'red');
+              fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button>';
+              actions.appendChild(fCanc);
             }
-            actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" data-confirm-title="¿Eliminar Cita Definitivamente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
+
+            const fDel = document.createElement('form');
+            fDel.action = '/api/citas/eliminar';
+            fDel.method = 'POST';
+            fDel.style.margin = '0';
+            fDel.style.display = 'inline';
+            fDel.setAttribute('data-confirm-title', '¿Eliminar Cita Definitivamente?');
+            fDel.setAttribute('data-confirm-message', '¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?');
+            fDel.setAttribute('data-confirm-icon', '🗑️');
+            fDel.setAttribute('data-confirm-btn', 'Sí, Eliminar Cita');
+            fDel.setAttribute('data-confirm-color', 'red');
+            fDel.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button>';
+            actions.appendChild(fDel);
           }
 
           modal.style.display = 'flex';
