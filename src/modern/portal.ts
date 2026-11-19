@@ -3350,10 +3350,20 @@ portalRouter.get("/api/citas/disponibilidad", (req: Request, res: Response) => {
   let therapistName = therapistParam;
 
   if (!therapistName && specialty) {
-    therapistName = getTherapistsBySpecialty(specialty)[0]?.name || getTherapistNameForSpecialty(specialty) || "";
+    const specLower = specialty.toLowerCase();
+    const all = getAllTherapists(false);
+    const matched = all.find(t => t.specialty.toLowerCase() === specLower || specLower.includes(t.specialty.toLowerCase()) || t.specialty.toLowerCase().includes(specLower));
+    if (matched) {
+      therapistName = matched.name;
+    } else {
+      therapistName = getTherapistsBySpecialty(specialty)[0]?.name || getTherapistNameForSpecialty(specialty) || "";
+    }
   }
-  if (!therapistName) {
-    therapistName = getAllTherapists(false)[0]?.name || "Dra. Valentina Ríos";
+
+  const allActive = getAllTherapists(false);
+  const exists = allActive.find(t => t.name.toLowerCase() === therapistName.toLowerCase());
+  if (!exists) {
+    therapistName = allActive[0]?.name || "Dra. Valentina Ríos";
   }
 
   const slots = getAvailableSlotsForTherapist(therapistName, 6);
