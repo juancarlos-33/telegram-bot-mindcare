@@ -643,6 +643,21 @@ export function getPatientPsyAppointments(patientIdOrDoc: string): PsyAppointmen
   });
 }
 
+const telegramUserDocMap = new Map<string, string>();
+
+export function linkTelegramUserDoc(telegramId: string, doc: string): void {
+  if (!telegramId || !doc) return;
+  const clean = doc.replace(/\D/g, "").trim();
+  if (clean) {
+    telegramUserDocMap.set(String(telegramId), clean);
+  }
+}
+
+export function getLinkedDocForTelegramUser(telegramId: string): string | undefined {
+  if (!telegramId) return undefined;
+  return telegramUserDocMap.get(String(telegramId));
+}
+
 export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "Pendiente" | "Completada" | "Cancelada"): boolean {
   const app = psyAppointments.find(a => a.id.toLowerCase() === id.toLowerCase());
   if (app) { 

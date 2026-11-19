@@ -2418,14 +2418,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         if (!modal) {
           console.warn('modal-cita-detail no encontrado en el DOM, mostrando resumen');
           if (cita) {
-            alert('📋 DETALLE DE CITA #' + (cita.id || '') + '\n' +
-                  '• Paciente: ' + (cita.patientName || 'Paciente') + '\n' +
-                  '• Documento: ' + (cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado') + '\n' +
-                  '• Especialidad: ' + (cita.specialty || 'Psicología') + '\n' +
-                  '• Especialista: ' + (cita.therapist || 'Especialista') + '\n' +
-                  '• Horario: ' + (cita.dateTime || '') + '\n' +
-                  '• Motivo: ' + (cita.motive || 'Sin motivo registrado') + '\n' +
-                  '• Estado: ' + (cita.status || 'Pendiente'));
+            alert('Cita #' + (cita.id || '') + ' - Paciente: ' + (cita.patientName || 'Paciente') + ' | ' + (cita.dateTime || '') + ' (' + (cita.status || 'Pendiente') + ')');
           }
           return;
         }
@@ -5341,14 +5334,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           const modal = document.getElementById('modal-cita-detail');
           if (!modal) {
             if (cita) {
-              alert('📋 DETALLE DE CITA #' + (cita.id || '') + '\n' +
-                    '• Paciente: ' + (cita.patientName || 'Paciente') + '\n' +
-                    '• Documento: ' + (cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado') + '\n' +
-                    '• Especialidad: ' + (cita.specialty || 'Psicología') + '\n' +
-                    '• Especialista: ' + (cita.therapist || 'Especialista') + '\n' +
-                    '• Horario: ' + (cita.dateTime || '') + '\n' +
-                    '• Motivo: ' + (cita.motive || 'Sin motivo registrado') + '\n' +
-                    '• Estado: ' + (cita.status || 'Pendiente'));
+              alert('Cita #' + (cita.id || '') + ' - Paciente: ' + (cita.patientName || 'Paciente') + ' | ' + (cita.dateTime || '') + ' (' + (cita.status || 'Pendiente') + ')');
             }
             return;
           }

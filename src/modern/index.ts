@@ -8,6 +8,7 @@ import {
   prisma, addXp, confirmVerification, saveComandoLog,
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments, getPsyAppointmentsByDocument,
+  linkTelegramUserDoc, getLinkedDocForTelegramUser,
   cancelPsyAppointment, deletePsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getAllTherapists, getTherapistsBySpecialty,
   PsyAppointment,
   getBookingState, setBookingState, clearBookingState,
@@ -52,6 +53,20 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const botToken = BOT_TOKEN || "0000000000:dummy_bot_token_placeholder";
 const bot = new Telegraf(botToken);
 const app = express();
+
+export async function safeReplyMarkdown(ctx: Context, text: string, extra?: any) {
+  try {
+    return await ctx.reply(text, { parse_mode: "Markdown", ...extra });
+  } catch (err) {
+    console.warn("Markdown reply error, falling back to plain text:", err);
+    try {
+      const plain = text.replace(/[*_`]/g, "");
+      return await ctx.reply(plain, extra);
+    } catch (e2) {
+      console.error("Critical error in safeReplyMarkdown:", e2);
+    }
+  }
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -1775,14 +1790,14 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
 
   if (arg) {
     const cleanDoc = arg.replace(/[^\w\-]/g, "");
+    linkTelegramUserDoc(userId, cleanDoc);
     const found = getPsyAppointmentsByDocument(cleanDoc);
     if (found.length === 0) {
-      await ctx.reply([
+      await safeReplyMarkdown(ctx, [
         `❌ No se encontraron citas activas asociadas al documento o código *${arg}*.`,
         "",
         "💡 Si necesitas agendar una nueva cita, escribe /cita o pulsa el botón abajo."
       ].join("\n"), {
-        parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [[{ text: "📅 Agendar Cita", callback_data: "book_start" }]]
         }
@@ -1798,25 +1813,29 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
       .filter(a => a.status !== "Cancelada")
       .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
 
-    await ctx.reply([
+    await safeReplyMarkdown(ctx, [
       `📋 *CITAS ENCONTRADAS PARA EL DOCUMENTO ${arg} (${found.length}):*`,
       "",
       lines,
       "",
       "🏢 Recuerda presentarte 10 minutos antes en las instalaciones de MindCare con tu documento de identidad original.",
-      `🌐 Consultar también en el portal web: ${APP_BASE_URL}/citas?consultar_doc=${encodeURIComponent(cleanDoc)}`,
+      `🌐 Ver en portal: \`${APP_BASE_URL}/citas?consultar_doc=${cleanDoc}\``,
       "",
       "💡 *¿Deseas cancelar alguna cita?* Puedes pulsar el botón abajo o escribir:",
       `👉 \`/cancelarcita ${cleanDoc}\``
     ].join("\n"), { 
-      parse_mode: "Markdown",
       reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
     });
     return;
   }
 
-  // Si no pasó argumento, primero buscar si tiene citas con su telegramId
-  const myApps = getPatientPsyAppointments(userId);
+  // Si no pasó argumento, primero buscar si tiene citas con su telegramId o documento previamente vinculado
+  const linkedDoc = getLinkedDocForTelegramUser(userId);
+  let myApps = getPatientPsyAppointments(userId);
+  if (myApps.length === 0 && linkedDoc) {
+    myApps = getPsyAppointmentsByDocument(linkedDoc);
+  }
+
   if (myApps.length > 0) {
     const lines = myApps.map(a =>
       `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}${a.documentNumber ? `\n  🪪 *Documento:* ${a.documentNumber}` : ""}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
@@ -1826,7 +1845,7 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
       .filter(a => a.status !== "Cancelada")
       .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
 
-    await ctx.reply([
+    await safeReplyMarkdown(ctx, [
       `📋 *TUS CITAS PROGRAMADAS (${myApps.length}):*`,
       "",
       lines,
@@ -1834,28 +1853,29 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
       "💡 *¿Consultar o cancelar por número de documento?*",
       "Usa: `/consultar <número_documento>` o `/cancelarcita <número_documento>`"
     ].join("\n"), { 
-      parse_mode: "Markdown",
       reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
     });
     return;
   }
 
   // Si no tiene citas registradas con su telegramId y no pasó argumento
-  await ctx.reply([
+  await safeReplyMarkdown(ctx, [
     "🪪 *CONSULTAR FECHA Y HORA DE TU CITA*",
     "",
-    "¿Olvidaste para cuándo quedó tu cita de psicología?",
+    "¿Olvidaste para cuándo quedó tu cita de psicología o agendaste en la web?",
     "",
     "Por favor escribe tu número de documento para buscarla:",
     "👉 `/consultar <número_documento>`",
     "",
-    "Ejemplo: `/consultar 1040359897`",
+    "Ejemplo: `/consultar 1010101010`",
     "",
     "O también puedes simplemente escribir tu número de cédula aquí en el chat."
   ].join("\n"), {
-    parse_mode: "Markdown",
     reply_markup: {
-      inline_keyboard: [[{ text: "📅 Agendar Nueva Cita", callback_data: "book_start" }]]
+      inline_keyboard: [
+        [{ text: "🔍 Buscar con mi Cédula", callback_data: "ask_search_doc" }],
+        [{ text: "📅 Agendar Nueva Cita", callback_data: "book_start" }]
+      ]
     }
   });
 });
@@ -1864,42 +1884,73 @@ bot.command(["miscitas", "citas"], async (ctx) => {
   const arg = commandArg(ctx).trim();
   const userId = String(ctx.from?.id ?? "");
 
-  let myApps = arg ? getPsyAppointmentsByDocument(arg) : getPatientPsyAppointments(userId);
-  if (arg && myApps.length === 0) {
-    myApps = getPatientPsyAppointments(arg);
+  let myApps: PsyAppointment[] = [];
+  if (arg) {
+    const cleanDoc = arg.replace(/[^\w\-]/g, "");
+    linkTelegramUserDoc(userId, cleanDoc);
+    myApps = getPsyAppointmentsByDocument(cleanDoc);
+    if (myApps.length === 0) {
+      myApps = getPatientPsyAppointments(cleanDoc);
+    }
+  } else {
+    myApps = getPatientPsyAppointments(userId);
+    const linkedDoc = getLinkedDocForTelegramUser(userId);
+    if (myApps.length === 0 && linkedDoc) {
+      myApps = getPsyAppointmentsByDocument(linkedDoc);
+    }
+    // Si aún no encuentra, buscar si en la clínica hay alguna cita cuyo nombre coincida con el usuario de Telegram
+    if (myApps.length === 0) {
+      const firstName = (ctx.from?.first_name || "").trim().toLowerCase();
+      if (firstName.length >= 3) {
+        myApps = getAllPsyAppointments().filter(a => 
+          a.patientName.toLowerCase() === firstName || 
+          a.patientName.toLowerCase().startsWith(firstName)
+        );
+        if (myApps.length > 0 && myApps[0].documentNumber) {
+          linkTelegramUserDoc(userId, myApps[0].documentNumber);
+        }
+      }
+    }
   }
 
   if (myApps.length === 0) {
-    await ctx.reply([
-      "📋 No encontramos citas de psicología registradas con tu cuenta de Telegram.",
+    await safeReplyMarkdown(ctx, [
+      "📋 *CONSULTA DE CITAS CLÍNICAS*",
       "",
-      "👉 *Si agendaste con tu cédula o en el portal web, consulta con:*",
-      "`/consultar <número_documento>` (ej: `/consultar 1040359897`)",
+      "No encontramos citas registradas directamente con tu cuenta de Telegram.",
+      "",
+      "👉 *Si agendaste desde el Portal Web o con tu cédula:*",
+      "Escribe tu número de documento aquí en el chat o usa:",
+      "`/consultar <número_documento>` (ej: `/consultar 1010101010`)",
+      "",
+      "💡 *Al consultarla quedará vinculada automáticamente* a tu Telegram para que siempre la veas escribiendo /citas.",
       "",
       "• Para agendar una nueva consulta escribe /cita. 💙"
     ].join("\n"), {
-      parse_mode: "Markdown",
       reply_markup: {
-        inline_keyboard: [[{ text: "📅 Agendar Cita Ahora", callback_data: "book_start" }]]
+        inline_keyboard: [
+          [{ text: "🔍 Buscar con mi Cédula", callback_data: "ask_search_doc" }],
+          [{ text: "📅 Agendar Cita Ahora", callback_data: "book_start" }]
+        ]
       }
     });
     return;
   }
 
   const lines = myApps.map(a =>
-    `• [${a.id}] ${a.specialty} con ${a.therapist}\n  ⏰ ${a.dateTime} · Estado: ${a.status}${a.documentNumber ? `\n  🪪 Doc: ${a.documentNumber}` : ""}${a.motive ? `\n  📌 ${a.motive}` : ""}`
+    `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}\n  🪪 *Documento:* ${a.documentNumber ?? 'Registrado'}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
   ).join("\n\n");
 
   const cancelButtons = myApps
     .filter(a => a.status !== "Cancelada")
     .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
 
-  await ctx.reply([
-    `📋 TUS CITAS DE PSICOLOGÍA (${myApps.length}):`,
+  await safeReplyMarkdown(ctx, [
+    `📋 *TUS CITAS DE PSICOLOGÍA (${myApps.length}):*`,
     "",
     lines,
     "",
-    "Para cancelar escribe: /cancelarcita <cédula o ID>"
+    "💡 *Para cancelar un turno:* pulsa el botón abajo o escribe `/cancelarcita <cédula o ID>`"
   ].join("\n"), {
     reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
   });
@@ -1987,6 +2038,13 @@ bot.command(["cancelarcita", "cancelar_cita", "anularcita"], async (ctx) => {
       }
     });
   }
+});
+
+bot.action("ask_search_doc", async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply("🪪 Por favor escribe tu número de documento de identidad (ej: 1010101010) aquí en el chat para consultar tus citas y vincular tu cuenta:", {
+    reply_markup: { force_reply: true }
+  });
 });
 
 // Manejadores interactivos de confirmación de cancelación
@@ -2845,20 +2903,30 @@ bot.on("text", async (ctx) => {
     // Si el usuario escribe directamente un número de documento suelto (5 a 12 dígitos)
     const digitsOnly = text.trim();
     if (/^\d{5,12}$/.test(digitsOnly) && !text.startsWith("/") && !text.startsWith("!")) {
+      const userId = String(ctx.from?.id ?? "");
+      linkTelegramUserDoc(userId, digitsOnly);
       const foundAppointments = getPsyAppointmentsByDocument(digitsOnly);
       if (foundAppointments.length > 0) {
         const lines = foundAppointments.map(a =>
           `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}\n  🪪 *Documento:* ${a.documentNumber ?? digitsOnly}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
         ).join("\n\n");
 
-        await ctx.reply([
+        const cancelButtons = foundAppointments
+          .filter(a => a.status !== "Cancelada")
+          .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
+
+        await safeReplyMarkdown(ctx, [
           `📋 *ENCONTRAMOS TU CITA ASOCIADA AL DOCUMENTO ${digitsOnly}:*`,
           "",
           lines,
           "",
           "🏢 Recuerda presentarte 10 minutos antes en las instalaciones de MindCare.",
-          `🌐 Ver en portal: ${APP_BASE_URL}/citas?consultar_doc=${digitsOnly}`
-        ].join("\n"), { parse_mode: "Markdown" });
+          `🌐 Ver en portal: \`${APP_BASE_URL}/citas?consultar_doc=${digitsOnly}\``,
+          "",
+          "💡 *Tu cuenta de Telegram ha quedado vinculada.* De ahora en adelante puedes ver tus citas escribiendo simplemente /citas."
+        ].join("\n"), { 
+          reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined 
+        });
         return;
       }
     }
