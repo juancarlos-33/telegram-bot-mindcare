@@ -248,24 +248,19 @@ export async function disconnectDb() {
 }
 
 // Fallback en memoria y persistente si la BD está temporalmente desconectada
-const INITIAL_USERS: any[] = [
-  { id: "usr-demo-1", telegramId: "123456789", username: "juan_dev", firstName: "Juan Pérez", rol: "administrador", estadoVerificacion: "verificado", fechaRegistro: new Date(), fechaUltimaActividad: new Date(), createdAt: new Date(), updatedAt: new Date() },
-  { id: "usr-demo-2", telegramId: "987654321", username: "maria_code", firstName: "María López", rol: "usuario", estadoVerificacion: "verificado", fechaRegistro: new Date(), fechaUltimaActividad: new Date(), createdAt: new Date(), updatedAt: new Date() }
-];
+const INITIAL_USERS: any[] = [];
 
-const mockUsers: any[] = loadJsonFile<any[]>("users.json", INITIAL_USERS).map((u: any) => ({
-  ...u,
-  fechaRegistro: new Date(u.fechaRegistro),
-  fechaUltimaActividad: new Date(u.fechaUltimaActividad),
-  createdAt: new Date(u.createdAt),
-  updatedAt: new Date(u.updatedAt)
-}));
+const mockUsers: any[] = loadJsonFile<any[]>("users.json", INITIAL_USERS)
+  .filter((u: any) => !["usr-demo-1", "usr-demo-2"].includes(u.id))
+  .map((u: any) => ({
+    ...u,
+    fechaRegistro: new Date(u.fechaRegistro),
+    fechaUltimaActividad: new Date(u.fechaUltimaActividad),
+    createdAt: new Date(u.createdAt),
+    updatedAt: new Date(u.updatedAt)
+  }));
 
-const mockIntegrations: any[] = [
-  { id: "int-1", userId: "usr-demo-1", provider: "google_calendar", status: "conectado", scopes: "calendar.events", fechaAutorizacion: new Date() },
-  { id: "int-2", userId: "usr-demo-1", provider: "github", status: "conectado", scopes: "repo, read:user", fechaAutorizacion: new Date() },
-  { id: "int-3", userId: "usr-demo-1", provider: "youtube", status: "desconectado", scopes: "youtube.readonly", fechaAutorizacion: null }
-];
+const mockIntegrations: any[] = [];
 
 const mockSessions = new Map<string, any>();
 
@@ -286,64 +281,17 @@ export interface PsyAppointment {
   createdAt: Date;
 }
 
-const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [
-  {
-    id: "psi-101",
-    patientId: "HC-1001",
-    patientName: "Juan Carlos Gutiérrez",
-    documentNumber: "1020304050",
-    therapist: "Dra. Valentina Ríos",
-    specialty: "Psicología Clínica Adultos",
-    dateTime: "Viernes 21 Nov, 10:00 AM",
-    scheduledAt: "2026-11-20T10:00:00.000-05:00",
-    canonicalSlot: "2026-11-20_10:00",
-    durationMinutes: 50,
-    status: "Confirmada",
-    motive: "Ansiedad generalizada y estrés laboral",
-    notes: "Primera consulta de valoración",
-    createdAt: new Date("2026-11-15T09:00:00.000Z")
-  },
-  {
-    id: "psi-102",
-    patientId: "HC-1002",
-    patientName: "María Camila López",
-    documentNumber: "1023456789",
-    therapist: "Dr. Sebastián Torres",
-    specialty: "Terapia de Pareja y Familia",
-    dateTime: "Viernes 21 Nov, 3:00 PM",
-    scheduledAt: "2026-11-20T15:00:00.000-05:00",
-    canonicalSlot: "2026-11-20_15:00",
-    durationMinutes: 50,
-    status: "Pendiente",
-    motive: "Comunicación y apego en pareja",
-    notes: "Sesión inicial de evaluación",
-    createdAt: new Date("2026-11-16T14:30:00.000Z")
-  },
-  {
-    id: "psi-103",
-    patientId: "HC-1003",
-    patientName: "Santiago Mendoza Ruiz",
-    documentNumber: "1034567890",
-    therapist: "Dra. Sofía Mendoza",
-    specialty: "Psicología Infantil y Adolescente",
-    dateTime: "Lunes 24 Nov, 9:00 AM",
-    scheduledAt: "2026-11-23T09:00:00.000-05:00",
-    canonicalSlot: "2026-11-23_09:00",
-    durationMinutes: 50,
-    status: "Confirmada",
-    motive: "Evaluación TDAH y pautas de concentración escolar",
-    notes: "Sesión de seguimiento psicopedagógico",
-    createdAt: new Date("2026-11-17T11:00:00.000Z")
-  }
-];
+const INITIAL_PSY_APPOINTMENTS: PsyAppointment[] = [];
 
-const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json", INITIAL_PSY_APPOINTMENTS).map((a: any) => ({
-  ...a,
-  scheduledAt: a.scheduledAt || new Date().toISOString(),
-  canonicalSlot: a.canonicalSlot || normalizeDateTimeToCanonical(a.dateTime || ""),
-  durationMinutes: a.durationMinutes || 50,
-  createdAt: new Date(a.createdAt)
-}));
+const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json", INITIAL_PSY_APPOINTMENTS)
+  .filter((a: any) => !["psi-101", "psi-102", "psi-103"].includes(a.id))
+  .map((a: any) => ({
+    ...a,
+    scheduledAt: a.scheduledAt || new Date().toISOString(),
+    canonicalSlot: a.canonicalSlot || normalizeDateTimeToCanonical(a.dateTime || ""),
+    durationMinutes: a.durationMinutes || 50,
+    createdAt: new Date(a.createdAt)
+  }));
 
 if (prisma) {
   prisma.appointment.findMany({ orderBy: { createdAt: "desc" } })

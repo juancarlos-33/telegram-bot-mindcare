@@ -1503,6 +1503,31 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
             📊 Facturación & Métricas
           </a>
+
+          <!-- Centro de Alertas y Notificaciones Clínicas en Vivo -->
+          <div style="position: relative; display: inline-block;">
+            <button id="adminNotifBellBtn" onclick="toggleAdminNotifDropdown(event)" type="button" class="nav-link" style="background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 10px; cursor: pointer; color: #38bdf8; position: relative; padding: 7px 12px; display: inline-flex; align-items: center; gap: 6px;" title="Ver Notificaciones en Tiempo Real">
+              <span style="font-size: 1.15rem;">🔔</span>
+              <span style="font-size: 0.8rem; font-weight: 700;">Alertas</span>
+              <span id="adminNotifBadge" style="display: none; background: #ef4444; color: #fff; font-size: 0.7rem; font-weight: 800; border-radius: 999px; padding: 1px 6px; margin-left: 2px;">0</span>
+            </button>
+
+            <!-- Panel Flotante de Notificaciones -->
+            <div id="adminNotifDropdown" style="display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 350px; background: rgba(15, 23, 42, 0.98); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 16px; box-shadow: 0 15px 40px rgba(0,0,0,0.7), 0 0 25px rgba(14, 165, 233, 0.25); backdrop-filter: blur(20px); z-index: 10000; overflow: hidden;">
+              <div style="padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; background: rgba(14, 165, 233, 0.08);">
+                <div style="font-size: 0.84rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px;">
+                  <span>🔔</span> Notificaciones del Consultorio
+                </div>
+                <button type="button" onclick="clearAdminNotifs(event)" style="background: transparent; border: none; color: #94a3b8; font-size: 0.75rem; cursor: pointer; font-weight: 600;">Limpiar</button>
+              </div>
+              <div id="adminNotifList" style="max-height: 320px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
+                <div id="adminNotifEmpty" style="padding: 24px 16px; text-align: center; color: #64748b; font-size: 0.82rem;">
+                  <span>📭 Sin notificaciones pendientes</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="admin-pill" style="background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe;">
             <span>${currentStaff?.role === 'DIRECTOR_ADMIN' ? '👑' : currentStaff?.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'} ${currentStaff?.fullName?.split(' ')[0] || (isAdmin ? 'Director' : 'Especialista')}</span>
             <a href="/logout" style="color:#f87171; text-decoration:none; margin-left:6px; font-weight:800;" title="Cerrar Sesión Segura">✕</a>
@@ -1679,6 +1704,83 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
   </div>
 
   <script>
+    window.IS_STAFF_LOGGED = ${Boolean(isStaff)};
+    window.ADMIN_NOTIFS_COUNT = 0;
+
+    function toggleAdminNotifDropdown(e) {
+      if (e) e.stopPropagation();
+      const dd = document.getElementById('adminNotifDropdown');
+      if (dd) {
+        const isShown = dd.style.display === 'block';
+        dd.style.display = isShown ? 'none' : 'block';
+        if (!isShown) {
+          const badge = document.getElementById('adminNotifBadge');
+          if (badge) badge.style.display = 'none';
+          window.ADMIN_NOTIFS_COUNT = 0;
+        }
+      }
+    }
+
+    function clearAdminNotifs(e) {
+      if (e) e.stopPropagation();
+      const list = document.getElementById('adminNotifList');
+      if (list) {
+        list.innerHTML = '<div id="adminNotifEmpty" style="padding: 24px 16px; text-align: center; color: #64748b; font-size: 0.82rem;"><span>📭 Sin notificaciones pendientes</span></div>';
+      }
+      const badge = document.getElementById('adminNotifBadge');
+      if (badge) badge.style.display = 'none';
+      window.ADMIN_NOTIFS_COUNT = 0;
+    }
+
+    function addAdminNotification(message, icon, actionType, actionPayload) {
+      const badge = document.getElementById('adminNotifBadge');
+      const empty = document.getElementById('adminNotifEmpty');
+      const list = document.getElementById('adminNotifList');
+      if (!list) return;
+
+      if (empty) empty.style.display = 'none';
+
+      window.ADMIN_NOTIFS_COUNT = (window.ADMIN_NOTIFS_COUNT || 0) + 1;
+      if (badge) {
+        badge.textContent = window.ADMIN_NOTIFS_COUNT;
+        badge.style.display = 'inline-block';
+      }
+
+      const item = document.createElement('div');
+      item.style.cssText = 'background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: flex-start; gap: 10px;';
+      item.onmouseover = function() { item.style.background = 'rgba(14, 165, 233, 0.15)'; item.style.borderColor = 'rgba(56, 189, 248, 0.35)'; };
+      item.onmouseout = function() { item.style.background = 'rgba(255,255,255,0.04)'; item.style.borderColor = 'rgba(255,255,255,0.08)'; };
+
+      item.onclick = function() {
+        const dd = document.getElementById('adminNotifDropdown');
+        if (dd) dd.style.display = 'none';
+        if (actionType === 'APPOINTMENT' && actionPayload && actionPayload.id) {
+          if (typeof openCitaDetailById === 'function') {
+            openCitaDetailById(actionPayload.id);
+          } else {
+            window.location.href = '/admin#tabla-citas';
+          }
+        } else {
+          window.location.href = '/admin';
+        }
+      };
+
+      const now = new Date();
+      const timeStr = (now.getHours() < 10 ? '0' : '') + now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
+      item.innerHTML = '<span style="font-size:1.2rem;">' + (icon || '🔔') + '</span><div style="flex:1;"><div style="font-size:0.82rem; color:#e2e8f0; line-height:1.35;">' + message + '</div><div style="font-size:0.7rem; color:#38bdf8; margin-top:4px; font-weight:600;">' + timeStr + ' • Clic para ver acción</div></div>';
+      list.insertBefore(item, list.firstChild);
+    }
+
+    document.addEventListener('click', function(e) {
+      const dd = document.getElementById('adminNotifDropdown');
+      const btn = document.getElementById('adminNotifBellBtn');
+      if (dd && dd.style.display === 'block') {
+        if (!dd.contains(e.target) && (!btn || !btn.contains(e.target))) {
+          dd.style.display = 'none';
+        }
+      }
+    });
+
     let globalLoaderTimer = null;
 
     function hideGlobalLoader() {
@@ -2078,7 +2180,15 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       let eventSource = null;
       let reconnectTimer = null;
 
-      function showLiveToast(message, icon) {
+      function showLiveToast(message, icon, actionType, actionPayload) {
+        // REGLA CLÍNICA: Las alertas emergentes SOLO se muestran a personal logueado (Admin / Especialistas)
+        if (!window.IS_STAFF_LOGGED) return;
+
+        // Registrar en el Centro de Notificaciones de la barra superior
+        if (typeof addAdminNotification === 'function') {
+          addAdminNotification(message, icon, actionType, actionPayload);
+        }
+
         let container = document.getElementById('live-toast-container');
         if (!container) {
           container = document.createElement('div');
@@ -2087,8 +2197,20 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           document.body.appendChild(container);
         }
         const toast = document.createElement('div');
-        toast.style.cssText = 'background:rgba(15,23,42,0.96); border:1px solid rgba(56,189,248,0.5); border-radius:14px; padding:14px 18px; color:#fff; font-size:0.88rem; box-shadow:0 12px 30px rgba(0,0,0,0.6), 0 0 20px rgba(56,189,248,0.25); backdrop-filter:blur(12px); display:flex; align-items:center; gap:12px; transform:translateY(20px); opacity:0; transition:all 0.35s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:auto;';
+        toast.style.cssText = 'background:rgba(15,23,42,0.96); border:1px solid rgba(56,189,248,0.5); border-radius:14px; padding:14px 18px; color:#fff; font-size:0.88rem; box-shadow:0 12px 30px rgba(0,0,0,0.6), 0 0 20px rgba(56,189,248,0.25); backdrop-filter:blur(12px); display:flex; align-items:center; gap:12px; transform:translateY(20px); opacity:0; transition:all 0.35s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:auto; cursor:pointer;';
         toast.innerHTML = '<span style="font-size:1.4rem;">' + (icon || '🔔') + '</span><div style="flex:1;"><strong style="color:#38bdf8; display:block; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em;">Tiempo Real • MindCare</strong><div style="color:#e2e8f0; font-size:0.84rem; margin-top:3px; line-height:1.35;">' + message + '</div></div>';
+        
+        if (actionType === 'APPOINTMENT' && actionPayload && actionPayload.id) {
+          toast.title = 'Haz clic para ver el detalle de la consulta #' + actionPayload.id;
+          toast.onclick = function() {
+            if (typeof openCitaDetailById === 'function') {
+              openCitaDetailById(actionPayload.id);
+            } else {
+              window.location.href = '/admin#tabla-citas';
+            }
+          };
+        }
+
         container.appendChild(toast);
         requestAnimationFrame(function() {
           toast.style.transform = 'translateY(0)';
@@ -2098,7 +2220,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           toast.style.transform = 'translateY(20px)';
           toast.style.opacity = '0';
           setTimeout(function() { toast.remove(); }, 350);
-        }, 5000);
+        }, 6000);
       }
 
       function updateKpisDirectly(stats) {
@@ -2320,16 +2442,16 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
                 const pat = data.payload && data.payload.patientName ? data.payload.patientName : 'Paciente';
                 const doc = data.payload && data.payload.documentNumber ? ' (C.C. ' + data.payload.documentNumber + ')' : '';
                 const th = data.payload && data.payload.therapist ? ' con ' + data.payload.therapist : '';
-                showLiveToast('Nueva cita agendada en vivo para <strong>' + pat + doc + '</strong>' + th + '.', '📅');
+                showLiveToast('Nueva cita agendada en vivo para <strong>' + pat + doc + '</strong>' + th + '.', '📅', 'APPOINTMENT', data.payload);
                 refreshPageSection();
               } else if (data.type === 'APPOINTMENT_UPDATED') {
                 const id = data.payload && data.payload.id ? data.payload.id : 'Cita';
                 const st = data.payload && data.payload.status ? data.payload.status : '';
-                showLiveToast('Cita <strong>' + id + '</strong> actualizada a estado: <strong>' + st + '</strong>.', '🔄');
+                showLiveToast('Cita <strong>' + id + '</strong> actualizada a estado: <strong>' + st + '</strong>.', '🔄', 'APPOINTMENT', data.payload);
                 refreshPageSection();
               } else if (data.type === 'APPOINTMENT_DELETED') {
                 const id = data.payload && data.payload.id ? data.payload.id : 'Cita';
-                showLiveToast('Cita <strong>' + id + '</strong> eliminada de la agenda en tiempo real.', '🗑️');
+                showLiveToast('Cita <strong>' + id + '</strong> eliminada de la agenda en tiempo real.', '🗑️', 'APPOINTMENT', data.payload);
                 refreshPageSection();
               } else if (data.type === 'THERAPIST_UPDATED') {
                 const thName = data.payload && data.payload.name ? data.payload.name : 'Especialista';
@@ -2510,16 +2632,16 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
           if (cita.status !== 'Cancelada') {
             const fCanc = document.createElement('form');
-            fCanc.action = '/api/citas/estado';
+            fCanc.action = '/api/citas/eliminar';
             fCanc.method = 'POST';
             fCanc.style.margin = '0';
             fCanc.style.display = 'inline';
-            fCanc.setAttribute('data-confirm-title', '¿Cancelar Cita Médica?');
-            fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar la cita #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? El horario será liberado completamente.');
+            fCanc.setAttribute('data-confirm-title', '¿Cancelar y Eliminar Cita?');
+            fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar la cita #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? La cita se eliminará por completo y el turno quedará liberado.');
             fCanc.setAttribute('data-confirm-icon', '❌');
             fCanc.setAttribute('data-confirm-btn', 'Sí, Cancelar Cita');
             fCanc.setAttribute('data-confirm-color', 'red');
-            fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">✕ Cancelar Cita</button>';
+            fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">✕ Cancelar Cita</button>';
             actions.appendChild(fCanc);
           }
 
@@ -5429,16 +5551,16 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 
             if (cita.status !== 'Cancelada') {
               const fCanc = document.createElement('form');
-              fCanc.action = '/api/citas/estado';
+              fCanc.action = '/api/citas/eliminar';
               fCanc.method = 'POST';
               fCanc.style.margin = '0';
               fCanc.style.display = 'inline';
-              fCanc.setAttribute('data-confirm-title', '¿Cancelar Turno Médico?');
-              fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?');
+              fCanc.setAttribute('data-confirm-title', '¿Cancelar y Eliminar Turno?');
+              fCanc.setAttribute('data-confirm-message', '¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? La cita se eliminará por completo y el turno quedará liberado.');
               fCanc.setAttribute('data-confirm-icon', '❌');
-              fCanc.setAttribute('data-confirm-btn', 'Sí, Cancelar Turno');
+              fCanc.setAttribute('data-confirm-btn', 'Sí, Cancelar Cita');
               fCanc.setAttribute('data-confirm-color', 'red');
-              fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button>';
+              fCanc.innerHTML = '<input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button>';
               actions.appendChild(fCanc);
             }
 

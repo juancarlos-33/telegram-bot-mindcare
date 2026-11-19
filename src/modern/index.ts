@@ -1261,6 +1261,42 @@ bot.on("callback_query", async (ctx) => {
     return;
   }
 
+  // Generador inteligente de teclado de fechas rápidas omitiendo horarios ocupados (para este paciente o doctor)
+  function buildQuickDateKeyboard(userIdParam: string, docNum?: string, therapistNameParam?: string) {
+    const quickSlots = [
+      { text: "☀️ Mañana a las 10:00 AM", dateStr: "Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
+      { text: "🌤️ Mañana a las 3:00 PM", dateStr: "Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" },
+      { text: "☀️ Pasado Mañana 10:00 AM", dateStr: "Pasado Mañana a las 10:00 AM", callback_data: "quick_date_pasado_10am" },
+      { text: "🌤️ Pasado Mañana 4:00 PM", dateStr: "Pasado Mañana a las 4:00 PM", callback_data: "quick_date_pasado_4pm" }
+    ];
+
+    const availableSlots = quickSlots.filter(s => {
+      const chk = validateBookingAvailability({
+        therapistName: therapistNameParam || "Dra. Valentina Ríos",
+        dateTime: s.dateStr,
+        patientId: userIdParam,
+        patientDocument: docNum
+      });
+      return chk.valid;
+    });
+
+    const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+    for (let i = 0; i < availableSlots.length; i += 2) {
+      const row = [{ text: availableSlots[i].text, callback_data: availableSlots[i].callback_data }];
+      if (availableSlots[i + 1]) {
+        row.push({ text: availableSlots[i + 1].text, callback_data: availableSlots[i + 1].callback_data });
+      }
+      keyboard.push(row);
+    }
+
+    keyboard.push([
+      { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
+      { text: "❌ Cancelar", callback_data: "cancel_booking" }
+    ]);
+
+    return { keyboard, hasAvailableQuickSlots: availableSlots.length > 0 };
+  }
+
   // Selección de Terapeuta desde botones -> Paso a Fecha y Horario
   if (data.startsWith("therapist_")) {
     const state = getBookingState(userId);
@@ -1272,28 +1308,15 @@ bot.on("callback_query", async (ctx) => {
     }
     setBookingState(userId, { ...state, step: "ask_date", therapist: th.name });
 
-    await ctx.reply(
-      `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno rápido con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):`,
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
-              { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
-            ],
-            [
-              { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
-              { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
-            ],
-            [
-              { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
-              { text: "❌ Cancelar", callback_data: "cancel_booking" }
-            ]
-          ]
-        }
-      }
-    );
+    const { keyboard: dateKeyboard, hasAvailableQuickSlots } = buildQuickDateKeyboard(userId, state.documentNumber, th.name);
+    const datePrompt = hasAvailableQuickSlots
+      ? `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno disponible con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):`
+      : `👨‍⚕️ Terapeuta seleccionado: *${th.name}* (${th.specialty} • ${th.office}).\n\n📅 *¿Qué día y horario prefieres para tu consulta?*\nℹ️ _Los turnos rápidos estándar ya están reservados con este especialista._\nPor favor escribe tu propio horario personalizado en el chat (ej: 'Viernes a las 3 PM'):`;
+
+    await ctx.reply(datePrompt, {
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: dateKeyboard }
+    });
     return;
   }
 
@@ -1355,28 +1378,14 @@ bot.on("callback_query", async (ctx) => {
   if (data === "nav_back_date" || data === "ask_date_retry") {
     const state = getBookingState(userId);
     setBookingState(userId, { ...state, step: "ask_date", pendingDate: undefined });
-    await ctx.reply(
-      "📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno rápido con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):",
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
-              { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
-            ],
-            [
-              { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
-              { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
-            ],
-            [
-              { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
-              { text: "❌ Cancelar", callback_data: "cancel_booking" }
-            ]
-          ]
-        }
-      }
-    );
+    const { keyboard: dateKeyboard, hasAvailableQuickSlots } = buildQuickDateKeyboard(userId, state.documentNumber, state.therapist);
+    const datePrompt = hasAvailableQuickSlots
+      ? "📅 *¿Qué día y horario prefieres para tu consulta?*\nElige un turno disponible con los botones o escribe tu propio horario (ej: 'Viernes a las 3 PM'):"
+      : "📅 *¿Qué día y horario prefieres para tu consulta?*\nℹ️ _Los turnos rápidos estándar ya están reservados._\nPor favor escribe tu propio horario personalizado en el chat (ej: 'Viernes a las 3 PM'):";
+    await ctx.reply(datePrompt, {
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: dateKeyboard }
+    });
     return;
   }
 
@@ -1399,28 +1408,15 @@ bot.on("callback_query", async (ctx) => {
     });
 
     if (!availability.valid) {
-      await ctx.reply(
-        `⚠️ ${availability.reason}\n\nPor favor selecciona otro de los turnos disponibles o escribe un horario personalizado en el chat 📅:`,
-        {
-          parse_mode: "Markdown",
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: "☀️ Mañana a las 10:00 AM", callback_data: "quick_date_manana_10am" },
-                { text: "🌤️ Mañana a las 3:00 PM", callback_data: "quick_date_manana_3pm" }
-              ],
-              [
-                { text: "☀️ Pasado Mañana 10:00 AM", callback_data: "quick_date_pasado_10am" },
-                { text: "🌤️ Pasado Mañana 4:00 PM", callback_data: "quick_date_pasado_4pm" }
-              ],
-              [
-                { text: "⬅️ Cambiar Terapeuta", callback_data: "nav_back_therapist" },
-                { text: "❌ Cancelar", callback_data: "cancel_booking" }
-              ]
-            ]
-          }
-        }
-      );
+      const { keyboard: dateKeyboard, hasAvailableQuickSlots } = buildQuickDateKeyboard(userId, state.documentNumber, therapistName);
+      const retryText = hasAvailableQuickSlots
+        ? `⚠️ ${availability.reason}\n\nPor favor selecciona otro de los turnos disponibles o escribe un horario personalizado en el chat 📅:`
+        : `⚠️ ${availability.reason}\n\nNo quedan más turnos rápidos predeterminados disponibles para este especialista. Por favor escribe un horario personalizado en el chat (ej: 'Lunes a las 2 PM') 📅:`;
+
+      await ctx.reply(retryText, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: dateKeyboard }
+      });
       return;
     }
 
