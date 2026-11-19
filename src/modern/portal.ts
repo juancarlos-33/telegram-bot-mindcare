@@ -320,6 +320,37 @@ function checkIsAdmin(req: Request): boolean {
   return getStaffSession(req).isAdmin;
 }
 
+/**
+ * Filtra las citas clínicas garantizando privacidad y confidencialidad médica (Ley 1090 de 2006):
+ * - El Director Médico (Admin) y Triage/Recepción pueden visualizar todas las citas de la clínica.
+ * - Cada Psicólogo / Especialista individual SOLO visualiza sus propias citas y pacientes asignados.
+ */
+function filterAppointmentsForStaff(appointments: PsyAppointment[], staffSession: StaffSession): PsyAppointment[] {
+  if (!staffSession || !staffSession.isStaff) {
+    return [];
+  }
+  if (staffSession.isAdmin || staffSession.role === "DIRECTOR_ADMIN" || staffSession.role === "RECEPCION_TRIAGE") {
+    return appointments;
+  }
+  if (!staffSession.staff) return [];
+
+  const doctorName = (staffSession.staff.fullName || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const doctorUser = (staffSession.staff.username || "").toLowerCase();
+  const doctorId = (staffSession.staff.therapistId || "").toLowerCase();
+
+  const keywords = doctorName.split(/\s+/)
+    .map(w => w.trim().replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length >= 4 && !['doctor', 'doctora', 'dra', 'dr', 'psicologo', 'psicologa', 'clinica', 'medico'].includes(w));
+
+  return appointments.filter(a => {
+    const aTherapist = (a.therapist || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (aTherapist.includes(doctorName)) return true;
+    if (doctorId && (aTherapist.includes(doctorId) || (a.specialty && a.specialty.toLowerCase().includes(doctorId)))) return true;
+    if (doctorUser && aTherapist.includes(doctorUser)) return true;
+    return keywords.some(kw => aTherapist.includes(kw));
+  });
+}
+
 /** Renderiza los botones de turnos exclusivamente disponibles (excluyendo automáticamente los ocupados) */
 function renderQuickSlotsHtml(therapistName: string): string {
   const slots = getAvailableSlotsForTherapist(therapistName, 6);
@@ -4869,7 +4900,11 @@ portalRouter.get("/api/realtime/events", (req: Request, res: Response) => {
 });
 
 portalRouter.get("/api/realtime/summary", (req: Request, res: Response) => {
-  const appointments = getAllPsyAppointments();
+  const staffSession = getStaffSession(req);
+  let appointments = getAllPsyAppointments();
+  if (staffSession.isStaff && !staffSession.isAdmin) {
+    appointments = filterAppointmentsForStaff(appointments, staffSession);
+  }
   const confirmed = appointments.filter(a => a.status === "Confirmada").length;
   const pending = appointments.filter(a => a.status === "Pendiente").length;
   const canceled = appointments.filter(a => a.status === "Cancelada").length;
@@ -6028,7 +6063,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
   const filterHasta = (req.query.hasta as string)?.trim() || "";
   const filterEstado = (req.query.estado as string)?.trim() || "";
 
-  let allAppointments = getAllPsyAppointments();
+  let allAppointments = filterAppointmentsForStaff(getAllPsyAppointments(), staffSession);
   let appointments = allAppointments;
 
   if (filterProfesional) {
@@ -6302,13 +6337,17 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <form action="/admin#agenda-clinica-card" method="GET" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
         <div style="flex: 2; min-width: 200px;">
           <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Especialista / Profesional:</label>
-          <select name="profesional" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
-            <option value="">Todos los Especialistas Clínicos</option>
-            ${getAllTherapists(true).map(t => `
-              <option value="${t.name}" ${filterProfesional === t.name ? 'selected' : ''}>
-                ${t.icon || '👨‍⚕️'} ${t.name} (${t.specialty})
-              </option>
-            `).join('')}
+          <select name="profesional" ${!isAdmin ? 'disabled' : ''} style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+            ${!isAdmin ? `
+              <option value="">👤 Mis Citas Asignadas (${staffSession.fullName})</option>
+            ` : `
+              <option value="">Todos los Especialistas Clínicos</option>
+              ${getAllTherapists(true).map(t => `
+                <option value="${t.name}" ${filterProfesional === t.name ? 'selected' : ''}>
+                  ${t.icon || '👨‍⚕️'} ${t.name} (${t.specialty})
+                </option>
+              `).join('')}
+            `}
           </select>
         </div>
 
@@ -7436,11 +7475,28 @@ portalRouter.get("/crm", async (req: Request, res: Response) => {
     return;
   }
   const isAdmin = staffSession.isAdmin;
-  const patients = getAllPatients();
+  let appointments = filterAppointmentsForStaff(getAllPsyAppointments(), staffSession);
+  let patients = getAllPatients();
+  if (!isAdmin && staffSession.staff) {
+    const doctorName = (staffSession.staff.fullName || "").toLowerCase();
+    const myPatientDocs = new Set(appointments.map(a => a.documentNumber).filter(Boolean));
+    const myPatientNames = new Set(appointments.map(a => a.patientName.toLowerCase()));
+
+    patients = patients.filter(p => {
+      const assigned = (p.assignedTherapist || "").toLowerCase();
+      return (assigned && assigned.includes(doctorName)) ||
+             (p.document && myPatientDocs.has(p.document)) ||
+             myPatientNames.has(p.fullName.toLowerCase());
+    });
+  }
   const users = await getAllUsers();
   const metrics = getCRMMetrics();
-  const payments = getAllPayments();
-  const appointments = getAllPsyAppointments();
+  let payments = getAllPayments();
+  if (!isAdmin && staffSession.staff) {
+    const myPatientIds = new Set(patients.map(p => p.id));
+    const myPatientNames = new Set(patients.map(p => p.fullName.toLowerCase()));
+    payments = payments.filter(pay => myPatientIds.has(pay.patientId) || myPatientNames.has(pay.patientName.toLowerCase()));
+  }
 
   let banner = "";
   if (req.query.error) {
@@ -9625,7 +9681,7 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
   const filterHasta = (req.query.hasta as string)?.trim() || "";
   const filterEstado = (req.query.estado as string)?.trim() || "";
 
-  let appointments = getAllPsyAppointments();
+  let appointments = filterAppointmentsForStaff(getAllPsyAppointments(), staffSession);
 
   if (filterProfesional) {
     appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
@@ -10122,7 +10178,7 @@ portalRouter.get(["/reportes/exportar/csv", "/api/reportes/export/csv"], (req: R
   const filterHasta = (req.query.hasta as string)?.trim() || "";
   const filterEstado = (req.query.estado as string)?.trim() || "";
 
-  let appointments = getAllPsyAppointments();
+  let appointments = filterAppointmentsForStaff(getAllPsyAppointments(), staffSession);
 
   if (filterProfesional) {
     appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
