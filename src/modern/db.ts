@@ -666,10 +666,10 @@ export function cancelPsyAppointment(id: string): boolean {
 
 export function deletePsyAppointment(id: string): boolean {
   const cleanId = String(id).trim().toLowerCase();
-  const cleanDigits = cleanId.replace(/\D/g, "");
+  const isPureDigits = /^\d{5,12}$/.test(cleanId);
   const index = psyAppointments.findIndex(a => 
     a.id.toLowerCase() === cleanId || 
-    (cleanDigits.length >= 5 && a.documentNumber && a.documentNumber.replace(/\D/g, "") === cleanDigits)
+    (isPureDigits && a.documentNumber && a.documentNumber.replace(/\D/g, "") === cleanId)
   );
   if (index === -1) return false;
   const removed = psyAppointments.splice(index, 1)[0];

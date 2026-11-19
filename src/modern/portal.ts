@@ -1405,6 +1405,42 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         flex: 1 1 100% !important;
       }
     }
+
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+      }
+      .navbar, .nav-links, footer, .btn, #live-toast-container, #mindcare-global-loader,
+      #modal-cita-detail, #mindcare-styled-confirm-modal, form, .input-wrapper,
+      #admin-kpi-grid, #table-filter-pills, .badge-filter, .no-print, [title*="Ver cómo visualizan"] {
+        display: none !important;
+      }
+      .card {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+      }
+      table {
+        color: #0f172a !important;
+        width: 100% !important;
+      }
+      th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        border-bottom: 2px solid #0f172a !important;
+      }
+      td {
+        color: #1e293b !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+      }
+      th:last-child, td:last-child {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1584,7 +1620,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
   </div>
 
   <!-- MODAL GLOBAL DETALLE DE CITA CLÍNICA (DISPONIBLE EN TODO EL PORTAL) -->
-  <div id="modal-cita-detail" style="display:none; position:fixed; inset:0; background:rgba(3,7,18,0.88); backdrop-filter:blur(8px); z-index:9999999; align-items:center; justify-content:center; padding:16px;">
+  <div id="modal-cita-detail" onclick="if(event.target === this) closeCitaDetailModal()" style="display:none; position:fixed; inset:0; background:rgba(3,7,18,0.88); backdrop-filter:blur(8px); z-index:9999999; align-items:center; justify-content:center; padding:16px;">
     <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.4); border-radius:18px; max-width:550px; width:100%; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
         <div>
@@ -2142,7 +2178,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       function refreshPageSection() {
         syncRealtimeStats();
         syncTherapistDropdowns();
-        const url = window.location.href;
+        const url = window.location.pathname + window.location.search;
         fetch(url, { headers: { 'X-Requested-With': 'RealtimeUpdate' } })
           .then(function(r) { return r.text(); })
           .then(function(html) {
@@ -2172,6 +2208,14 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const curAgendaBadge = document.getElementById('agenda-total-badge');
             if (newAgendaBadge && curAgendaBadge) {
               curAgendaBadge.innerHTML = newAgendaBadge.innerHTML;
+            }
+
+            const newFilterSum = doc.getElementById('reporte-filtrado-summary');
+            const curFilterSum = document.getElementById('reporte-filtrado-summary');
+            if (newFilterSum && curFilterSum) {
+              curFilterSum.innerHTML = newFilterSum.innerHTML;
+            } else if (curFilterSum && !newFilterSum) {
+              curFilterSum.remove();
             }
 
             const newMetrics = doc.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
@@ -2210,7 +2254,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               .then(function(r){ return r.json(); })
               .then(function(){ refreshPageSection(); })
               .catch(function(){});
-          }, 4000);
+          }, 3500);
           return;
         }
 
@@ -2290,6 +2334,23 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         }
       }
 
+      // Heartbeat periódico cada 3.5s para sincronización en tiempo real sin desfases
+      setInterval(function() {
+        syncRealtimeStats();
+        if (!document.hidden && (window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/citas') || window.location.pathname.startsWith('/reportes'))) {
+          refreshPageSection();
+        }
+      }, 3500);
+
+      window.addEventListener('focus', function() {
+        refreshPageSection();
+      });
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+          refreshPageSection();
+        }
+      });
+
       connect();
     }
 
@@ -2313,7 +2374,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       const list = window.ADMIN_CITAS_DATA || [];
       const found = list.find(function(c) {
         return String(c.id || '').toLowerCase() === targetId || 
-               (c.documentNumber && c.documentNumber.replace(/\D/g, '') === targetId.replace(/\D/g, ''));
+               (c.documentNumber && String(c.documentNumber).replace(/\D/g, '') === targetId.replace(/\D/g, ''));
       });
       if (found) {
         renderCitaModal(found);
@@ -2326,7 +2387,8 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           if (res && res.cita) {
             renderCitaModal(res.cita);
           } else {
-            alert('Cita #' + id + ' no encontrada o ya fue cancelada.');
+            alert('ℹ️ La cita #' + id + ' ya no existe en el sistema porque fue cancelada o liberada en tiempo real.');
+            refreshPageSection();
           }
         })
         .catch(function(err) {
@@ -4839,10 +4901,10 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button type="button" onclick="window.print()" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2);">
+          <a href="/admin/reportes/imprimir?profesional=${encodeURIComponent(filterProfesional)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" target="_blank" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2); display:inline-flex; align-items:center; gap:6px;" title="Imprimir o exportar en PDF la agenda filtrada">
             🖨️ Imprimir / Exportar Reporte
-          </button>
-          <a href="/reportes" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(56,189,248,0.4); color:#38bdf8;">
+          </a>
+          <a href="/reportes?modulo=citas&profesional=${encodeURIComponent(filterProfesional)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(56,189,248,0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:6px;" title="Ver auditoría técnica de este especialista">
             📈 Módulo de Reportes Globales ↗
           </a>
         </div>
@@ -4894,7 +4956,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       </form>
 
       ${(filterProfesional || filterDesde || filterHasta || filterEstado) ? `
-        <div style="margin-top:14px; padding:10px 14px; background:rgba(14,165,233,0.1); border:1px solid rgba(14,165,233,0.3); border-radius:10px; font-size:0.82rem; color:#bae6fd; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div id="reporte-filtrado-summary" style="margin-top:14px; padding:10px 14px; background:rgba(14,165,233,0.1); border:1px solid rgba(14,165,233,0.3); border-radius:10px; font-size:0.82rem; color:#bae6fd; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div>
             <strong>Reporte Filtrado:</strong> 
             ${filterProfesional ? `Doctor: <em>${filterProfesional}</em> · ` : ''}
@@ -4948,7 +5010,13 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
             </tr>
           </thead>
           <tbody id="tabla-citas-tbody">
-            ${appointments.map(a => `
+            ${appointments.length === 0 ? `
+              <tr id="empty-agenda-row">
+                <td colspan="8" style="text-align:center; padding:36px 16px; color:var(--text-dim); font-size:0.92rem;">
+                  🕊️ No hay citas registradas en este período o la cita fue liberada/cancelada en tiempo real.
+                </td>
+              </tr>
+            ` : appointments.map(a => `
               <tr data-status="${a.status}" data-cita-id="${a.id}" style="cursor:pointer;" onclick="openCitaDetailById('${a.id}')" title="Haz clic para ver el detalle de esta cita">
                 <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
                 <td>
@@ -5173,7 +5241,8 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
             if (res && res.cita) {
               renderCitaModal(res.cita);
             } else {
-              alert('No se pudo encontrar el expediente de la cita #' + id);
+              alert('ℹ️ La cita #' + id + ' ya no existe en la agenda porque fue cancelada o liberada en tiempo real.');
+              if (typeof refreshPageSection === 'function') refreshPageSection();
             }
           })
           .catch(function(err) {
@@ -7963,6 +8032,349 @@ portalRouter.post("/api/conectar", async (req: Request, res: Response) => {
 });
 
 // =============================================================================
+// REPORTE OFICIAL IMPRIMIBLE Y EXPORTABLE EN PDF (FILTRADO POR PROFESIONAL Y FECHAS)
+// =============================================================================
+portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.redirect("/login?error=" + encodeURIComponent("Acceso exclusivo para auditoría médica."));
+    return;
+  }
+
+  const filterProfesional = (req.query.profesional as string)?.trim() || "";
+  const filterDesde = (req.query.desde as string)?.trim() || "";
+  const filterHasta = (req.query.hasta as string)?.trim() || "";
+  const filterEstado = (req.query.estado as string)?.trim() || "";
+
+  let appointments = getAllPsyAppointments();
+
+  if (filterProfesional) {
+    appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
+  }
+  if (filterDesde) {
+    const from = new Date(filterDesde);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d >= from : true;
+    });
+  }
+  if (filterHasta) {
+    const to = new Date(filterHasta);
+    to.setHours(23, 59, 59, 999);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d <= to : true;
+    });
+  }
+  if (filterEstado && filterEstado !== "TODAS") {
+    appointments = appointments.filter(a => a.status.toLowerCase() === filterEstado.toLowerCase());
+  }
+
+  const confirmed = appointments.filter(a => a.status === "Confirmada").length;
+  const pending = appointments.filter(a => a.status === "Pendiente").length;
+  const canceled = appointments.filter(a => a.status === "Cancelada").length;
+  const total = appointments.length;
+
+  const nowBogota = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte Oficial de Agenda Médica - MindCare</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: #f8fafc; color: #0f172a; padding: 30px 20px; }
+    .toolbar {
+      max-width: 960px;
+      margin: 0 auto 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-back { background: #e2e8f0; color: #1e293b; }
+    .btn-back:hover { background: #cbd5e1; }
+    .btn-print { background: #0284c7; color: #fff; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35); }
+    .btn-print:hover { background: #0369a1; }
+    .sheet {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .logo-badge {
+      font-size: 2.2rem;
+      width: 56px;
+      height: 56px;
+      background: #e0f2fe;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .meta-item span {
+      display: block;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 3px;
+    }
+    .meta-item strong {
+      font-size: 0.95rem;
+      color: #0f172a;
+    }
+    .kpis {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .kpi-chip {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px 16px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .kpi-chip.kpi-total { border-color: #38bdf8; background: #f0f9ff; }
+    .kpi-chip.kpi-conf { border-color: #10b981; background: #ecfdf5; }
+    .kpi-chip.kpi-pend { border-color: #f59e0b; background: #fffbeb; }
+    .kpi-chip.kpi-canc { border-color: #ef4444; background: #fef2f2; }
+    .kpi-chip span { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #475569; display: block; }
+    .kpi-chip strong { font-size: 1.4rem; font-weight: 800; display: block; margin-top: 2px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+      font-size: 0.85rem;
+    }
+    th {
+      background: #0f172a;
+      color: #ffffff;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #1e293b;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .sign-box { width: 280px; text-align: center; }
+    .sign-line { border-bottom: 1.5px solid #0f172a; margin-bottom: 6px; height: 40px; }
+    .footer-note {
+      font-size: 0.72rem;
+      color: #64748b;
+      text-align: center;
+      margin-top: 30px;
+      line-height: 1.4;
+    }
+    @media print {
+      body { background: #ffffff !important; padding: 0 !important; }
+      .toolbar { display: none !important; }
+      .sheet { border: none !important; box-shadow: none !important; padding: 15px !important; max-width: 100% !important; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/admin" class="btn btn-back">← Volver al Panel de Control</a>
+    <button onclick="window.print()" class="btn btn-print">🖨️ Imprimir / Guardar en PDF</button>
+  </div>
+
+  <div class="sheet">
+    <div class="header">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div class="logo-badge">🧠</div>
+        <div>
+          <h1 style="font-size: 1.35rem; font-weight: 800; color: #0f172a; letter-spacing: -0.3px;">MINDCARE PSICOLOGÍA INTEGRAL</h1>
+          <p style="font-size: 0.8rem; color: #0284c7; font-weight: 700; text-transform: uppercase;">Informe Oficial de Agenda Médica & Auditoría Clínica</p>
+          <p style="font-size: 0.72rem; color: #64748b;">Vigilado Supersalud • Ley 1090 de 2006 • Colpsic Colombia</p>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <span style="font-size:0.7rem; color:#64748b; font-weight:700; text-transform:uppercase;">EXPEDIENTE AUDITADO</span>
+        <div style="font-family:monospace; font-size:1.1rem; font-weight:800; color:#0284c7;">REP-${Date.now().toString().slice(-6)}</div>
+        <span style="font-size:0.7rem; color:#94a3b8;">Emisión: ${nowBogota} COT</span>
+      </div>
+    </div>
+
+    <!-- METADATOS DEL REPORTE FILTRADO -->
+    <div class="meta-grid">
+      <div class="meta-item">
+        <span>Especialista / Profesional</span>
+        <strong>${filterProfesional ? filterProfesional : 'Todos los Especialistas Clínicos'}</strong>
+      </div>
+      <div class="meta-item">
+        <span>Período Auditado</span>
+        <strong>${filterDesde ? filterDesde : 'Inicio'} &nbsp;hasta&nbsp; ${filterHasta ? filterHasta : 'Hoy'}</strong>
+      </div>
+      <div class="meta-item">
+        <span>Estado Consultado</span>
+        <strong>${filterEstado ? filterEstado : 'Todos los Estados'}</strong>
+      </div>
+      <div class="meta-item">
+        <span>Auditor Responsable</span>
+        <strong>${staffSession.fullName} (${staffSession.role})</strong>
+      </div>
+    </div>
+
+    <!-- KPIS RESUMEN -->
+    <div class="kpis">
+      <div class="kpi-chip kpi-total">
+        <span>Total Citas en Reporte</span>
+        <strong>${total}</strong>
+      </div>
+      <div class="kpi-chip kpi-conf">
+        <span style="color:#059669;">Confirmadas</span>
+        <strong style="color:#059669;">${confirmed}</strong>
+      </div>
+      <div class="kpi-chip kpi-pend">
+        <span style="color:#d97706;">Pendientes</span>
+        <strong style="color:#d97706;">${pending}</strong>
+      </div>
+      <div class="kpi-chip kpi-canc">
+        <span style="color:#dc2626;">Canceladas / Liberadas</span>
+        <strong style="color:#dc2626;">${canceled}</strong>
+      </div>
+    </div>
+
+    <!-- TABLA DE CITAS FILTRADAS -->
+    ${appointments.length === 0 ? `
+      <div style="text-align:center; padding: 40px 20px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; margin-bottom:30px;">
+        <span style="font-size:1.8rem;">🕊️</span>
+        <p style="font-weight:700; margin-top:8px;">No se encontraron registros de citas para los criterios seleccionados.</p>
+        <p style="font-size:0.82rem; margin-top:4px;">Especialista: ${filterProfesional || 'Todos'} | Rango: ${filterDesde || 'Inicio'} a ${filterHasta || 'Hoy'}</p>
+      </div>
+    ` : `
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th>Radicado</th>
+            <th>Paciente & Documento</th>
+            <th>Especialista Tratante</th>
+            <th>Especialidad & Consultorio</th>
+            <th>Fecha & Horario</th>
+            <th>Motivo Clínico</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${appointments.map((a, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong style="font-family:monospace; color:#0284c7;">#${a.id}</strong></td>
+              <td>
+                <strong>${a.patientName}</strong>
+                <div style="font-size:0.75rem; color:#64748b;">🪪 C.C. ${a.documentNumber || 'Registrado'}</div>
+              </td>
+              <td><strong>${a.therapist}</strong></td>
+              <td>
+                <div>${a.specialty}</div>
+                <div style="font-size:0.72rem; color:#64748b;">${getOfficeForTherapist(a.therapist)}</div>
+              </td>
+              <td>
+                <strong style="color:#0284c7;">${a.dateTime}</strong>
+                ${a.scheduledAt ? `<div style="font-size:0.72rem; color:#64748b;">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
+              </td>
+              <td style="max-width:180px; font-size:0.8rem; color:#475569;">${a.motive || 'Consulta diagnóstica'}</td>
+              <td>
+                <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                  ● ${a.status}
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `}
+
+    <div class="signatures">
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <strong style="font-size:0.85rem; color:#0f172a;">${filterProfesional ? filterProfesional : 'Especialista Tratante'}</strong>
+        <p style="font-size:0.72rem; color:#64748b;">Psicología Clínica • Registro Profesional Colpsic</p>
+      </div>
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <strong style="font-size:0.85rem; color:#0f172a;">${staffSession.fullName}</strong>
+        <p style="font-size:0.72rem; color:#64748b;">Dirección Médica & Auditoría Clínica MindCare</p>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Documento clínico y administrativo reservado y confidencial emitido bajo los estándares de la Ley 1090 de 2006 (Código Deontológico y Bioético del Psicólogo en Colombia) y la Resolución 1995 de 1999.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  res.send(html);
+});
+
+// =============================================================================
 // RUTA 5: MÓDULO DE AUDITORÍA Y REPORTES CLÍNICOS
 // =============================================================================
 portalRouter.get("/reportes", async (req: Request, res: Response) => {
@@ -8006,9 +8418,9 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
       </div>
 
       <div style="display:flex; gap:10px;">
-        <button onclick="window.print()" class="btn btn-secondary">
+        <a href="/admin/reportes/imprimir?profesional=${encodeURIComponent(profesional)}&desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}" target="_blank" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
           Imprimir / Exportar Reporte 🖨️
-        </button>
+        </a>
         <a href="/admin" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8;">
           👑 Ir a Panel Admin
         </a>

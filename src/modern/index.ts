@@ -653,7 +653,9 @@ bot.on("callback_query", async (ctx) => {
   if (data.startsWith("confirm_cancel_")) {
     const id = data.replace("confirm_cancel_", "").trim();
     const all = getAllPsyAppointments();
-    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase() || (a.documentNumber && a.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
+    const isDoc = /^\d{5,12}$/.test(id);
+    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase()) || 
+                (isDoc ? all.find(a => a.documentNumber && a.documentNumber.replace(/\D/g, "") === id) : undefined);
     const targetId = app ? app.id : id;
     deletePsyAppointment(targetId);
     try {
@@ -684,7 +686,9 @@ bot.on("callback_query", async (ctx) => {
   if (data.startsWith("req_cancel_")) {
     const id = data.replace("req_cancel_", "").trim();
     const all = getAllPsyAppointments();
-    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase() || (a.documentNumber && a.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
+    const isDoc = /^\d{5,12}$/.test(id);
+    const app = all.find(a => a.id.toLowerCase() === id.toLowerCase()) || 
+                (isDoc ? all.find(a => a.documentNumber && a.documentNumber.replace(/\D/g, "") === id) : undefined);
     if (!app) {
       await ctx.reply("❌ Cita médica no encontrada.");
       return;
