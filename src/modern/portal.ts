@@ -71,6 +71,16 @@ import {
 
 export const portalRouter = Router();
 
+function escapeHtml(str: any): string {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // =============================================================================
 // MIDDLEWARE DE BLOQUEO GLOBAL POR RATE LIMIT (OWASP / NIST)
 // Si la IP del cliente excedió los intentos fallidos de login al Panel Admin,
@@ -1452,6 +1462,43 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         display: none !important;
       }
     }
+
+    /* =========================================================================
+       SKELETON LOADERS SYSTEM & SPA MICRO-ANIMATIONS
+       ========================================================================= */
+    @keyframes skeletonShimmer {
+      0% {
+        background-position: -200% 0;
+      }
+      100% {
+        background-position: 200% 0;
+      }
+    }
+
+    .skeleton-box {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 20%, rgba(56, 189, 248, 0.09) 50%, rgba(255, 255, 255, 0.03) 80%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .view-fade-in {
+      animation: viewFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes viewFadeIn {
+      from {
+        opacity: 0.15;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
   </style>
 </head>
 <body>
@@ -2748,6 +2795,359 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       });
     });
 
+    // =========================================================================
+    // SOPORTE UNIVERSAL TECLA ENTER PARA ENVÍO RÁPIDO DE FORMULARIOS
+    // =========================================================================
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.keyCode === 13) {
+        const target = e.target;
+        if (target && target.tagName === 'INPUT' && target.type !== 'textarea') {
+          const form = target.form;
+          if (form) {
+            if (form.dataset.submitting === 'true') {
+              e.preventDefault();
+              return;
+            }
+            const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type="button"])');
+            if (submitBtn) {
+              e.preventDefault();
+              submitBtn.click();
+            } else if (typeof form.requestSubmit === 'function') {
+              e.preventDefault();
+              form.requestSubmit();
+            }
+          }
+        }
+      }
+    });
+
+    // =========================================================================
+    // NAVEGACIÓN SPA PROFESIONAL CON SKELETON LOADERS PERSONALIZADOS POR VISTA
+    // =========================================================================
+    function getSkeletonForPath(path) {
+      var cleanPath = (path || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+
+      if (cleanPath === '/admin') {
+        return '<div class="view-fade-in" style="width:100%;">' +
+          '<!-- Skeleton Hero Banner Admin -->' +
+          '<div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px 36px; display: flex; flex-direction: column; justify-content: space-between;">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center;">' +
+              '<div class="skeleton-box" style="width: 280px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>' +
+              '<div class="skeleton-box" style="width: 120px; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
+            '</div>' +
+            '<div class="skeleton-box" style="width: 440px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
+          '</div>' +
+          '<!-- Skeleton Búsqueda Forense -->' +
+          '<div class="skeleton-box" style="height: 110px; margin-bottom: 24px; border-radius: 18px; padding: 22px;">' +
+            '<div class="skeleton-box" style="width: 320px; height: 20px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>' +
+            '<div style="display: flex; gap: 12px;">' +
+              '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="width: 170px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.15);"></div>' +
+            '</div>' +
+          '</div>' +
+          '<!-- Skeleton 6 Tarjetas Métricas KPI -->' +
+          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 26px;">' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
+          '</div>' +
+          '<!-- Skeleton Tabla Auditoría Médica -->' +
+          '<div class="skeleton-box" style="height: 420px; border-radius: 20px; padding: 26px;">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">' +
+              '<div class="skeleton-box" style="width: 250px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
+              '<div class="skeleton-box" style="width: 140px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>' +
+            '</div>' +
+            '<div style="display: flex; gap: 8px; margin-bottom: 20px;">' +
+              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
+              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
+              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
+            '</div>' +
+            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
+            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
+            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0;"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      if (cleanPath === '/especialistas') {
+        return '<div class="view-fade-in" style="width:100%;">' +
+          '<!-- Skeleton Cabecera Especialistas -->' +
+          '<div class="skeleton-box" style="height: 140px; margin-bottom: 28px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">' +
+            '<div>' +
+              '<div class="skeleton-box" style="width: 290px; height: 30px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.09);"></div>' +
+              '<div class="skeleton-box" style="width: 380px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
+            '</div>' +
+            '<div class="skeleton-box" style="width: 180px; height: 44px; border-radius: 12px; background: rgba(56,189,248,0.2);"></div>' +
+          '</div>' +
+          '<!-- Skeleton Grid Tarjetas de Médicos -->' +
+          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">' +
+            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
+            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
+            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      if (cleanPath === '/reportes') {
+        return '<div class="view-fade-in" style="width:100%;">' +
+          '<!-- Skeleton Cabecera Reportes -->' +
+          '<div class="skeleton-box" style="height: 150px; margin-bottom: 24px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">' +
+            '<div>' +
+              '<div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.1);"></div>' +
+              '<div class="skeleton-box" style="width: 420px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
+            '</div>' +
+            '<div style="display: flex; gap: 10px;">' +
+              '<div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(16,185,129,0.18);"></div>' +
+              '<div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>' +
+            '</div>' +
+          '</div>' +
+          '<!-- Skeleton Filtros de Auditoría -->' +
+          '<div class="skeleton-box" style="height: 80px; margin-bottom: 24px; border-radius: 16px; padding: 18px 24px; display: flex; gap: 16px; align-items: center;">' +
+            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
+            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
+            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
+            '<div class="skeleton-box" style="width: 140px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>' +
+          '</div>' +
+          '<!-- Skeleton 4 Métricas de Facturación -->' +
+          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 26px;">' +
+            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
+            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
+          '</div>' +
+          '<!-- Skeleton 2 Gráficas Analíticas -->' +
+          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 22px;">' +
+            '<div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:200px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>' +
+            '<div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:220px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      if (cleanPath === '/citas') {
+        return '<div class="view-fade-in" style="width:100%;">' +
+          '<!-- Skeleton Hero Banner Citas -->' +
+          '<div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px; display: flex; flex-direction: column; justify-content: space-between;">' +
+            '<div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>' +
+            '<div class="skeleton-box" style="width: 480px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
+          '</div>' +
+          '<!-- Skeleton Consulta Mi Cita -->' +
+          '<div class="skeleton-box" style="height: 120px; margin-bottom: 28px; border-radius: 18px; padding: 22px;">' +
+            '<div class="skeleton-box" style="width: 300px; height: 18px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>' +
+            '<div style="display: flex; gap: 12px;">' +
+              '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="width: 160px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>' +
+            '</div>' +
+          '</div>' +
+          '<!-- Skeleton 2 Columnas: Formulario & Directorio -->' +
+          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 26px;">' +
+            '<div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 18px;">' +
+              '<div class="skeleton-box" style="width: 240px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
+              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
+              '<div class="skeleton-box" style="height: 50px; border-radius: 12px; margin-top: auto; background: rgba(56,189,248,0.25);"></div>' +
+            '</div>' +
+            '<div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 16px;">' +
+              '<div class="skeleton-box" style="width: 260px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
+              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
+              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
+              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
+              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      // Default / Inicio
+      return '<div class="view-fade-in" style="width:100%;">' +
+        '<!-- Skeleton Hero Banner Home -->' +
+        '<div class="skeleton-box" style="height: 280px; margin-bottom: 30px; border-radius: 24px; padding: 40px; display: flex; flex-direction: column; justify-content: space-between;">' +
+          '<div>' +
+            '<div class="skeleton-box" style="width: 140px; height: 24px; border-radius: 999px; margin-bottom: 16px; background: rgba(56,189,248,0.15);"></div>' +
+            '<div class="skeleton-box" style="width: 480px; height: 42px; border-radius: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.1);"></div>' +
+            '<div class="skeleton-box" style="width: 360px; height: 20px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
+          '</div>' +
+          '<div style="display: flex; gap: 14px;">' +
+            '<div class="skeleton-box" style="width: 160px; height: 46px; border-radius: 12px; background: rgba(56,189,248,0.25);"></div>' +
+            '<div class="skeleton-box" style="width: 160px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.08);"></div>' +
+          '</div>' +
+        '</div>' +
+        '<!-- Skeleton 3 Tarjetas de Especialidades -->' +
+        '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">' +
+          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
+          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
+          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var spaAbortController = null;
+
+    function updateNavLinksActive(targetPath, targetHash) {
+      var cleanTarget = (targetPath || '/').replace(/\/+$/, '') || '/';
+      var allLinks = document.querySelectorAll('.nav-links .nav-link:not(.nav-btn-tg)');
+
+      allLinks.forEach(function(l) {
+        var href = l.getAttribute('href');
+        if (!href) return;
+        try {
+          var linkUrl = new URL(href, window.location.origin);
+          var linkPath = linkUrl.pathname.replace(/\/+$/, '') || '/';
+          var linkHash = linkUrl.hash;
+
+          var isMatch = false;
+          if (linkHash && targetHash) {
+            isMatch = (linkPath === cleanTarget && linkHash === targetHash);
+          } else if (!targetHash) {
+            isMatch = (!linkHash && linkPath === cleanTarget);
+          }
+
+          if (isMatch) {
+            l.classList.add('active');
+          } else {
+            l.classList.remove('active');
+          }
+        } catch(e) {}
+      });
+    }
+
+    function navigateSpa(targetUrl, addToHistory) {
+      if (typeof addToHistory === 'undefined') addToHistory = true;
+
+      try {
+        var urlObj = new URL(targetUrl, window.location.origin);
+        var targetPath = urlObj.pathname.replace(/\/+$/, '') || '/';
+        var currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+
+        var nav = document.getElementById('mainNavLinks');
+        var btn = document.getElementById('mobileMenuBtn');
+        if (nav) nav.classList.remove('mobile-open');
+        if (btn) btn.classList.remove('open');
+
+        if (urlObj.href === window.location.href) {
+          if (urlObj.hash) {
+            var el = document.querySelector(urlObj.hash);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }
+          return;
+        }
+
+        if (spaAbortController) {
+          spaAbortController.abort();
+        }
+        spaAbortController = new AbortController();
+
+        updateNavLinksActive(targetPath, urlObj.hash);
+
+        var mainEl = document.querySelector('main');
+        if (mainEl) {
+          mainEl.innerHTML = getSkeletonForPath(targetPath);
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+
+        if (addToHistory) {
+          window.history.pushState({ path: targetUrl }, '', targetUrl);
+        }
+
+        fetch(urlObj.href, {
+          signal: spaAbortController.signal,
+          headers: { 'X-Requested-With': 'SPA' }
+        })
+        .then(function(res) {
+          if (!res.ok) {
+            window.location.href = urlObj.href;
+            return null;
+          }
+          return res.text();
+        })
+        .then(function(html) {
+          if (!html) return;
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(html, 'text/html');
+
+          if (doc.title) {
+            document.title = doc.title;
+          }
+
+          var newMain = doc.querySelector('main');
+          if (newMain && mainEl) {
+            mainEl.innerHTML = newMain.innerHTML;
+            mainEl.className = 'view-fade-in';
+
+            var scripts = mainEl.querySelectorAll('script');
+            scripts.forEach(function(oldScript) {
+              var newScript = document.createElement('script');
+              Array.from(oldScript.attributes).forEach(function(attr) {
+                newScript.setAttribute(attr.name, attr.value);
+              });
+              newScript.textContent = oldScript.textContent;
+              oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
+
+            if (typeof initDocumentValidation === 'function') initDocumentValidation();
+            if (typeof initNameValidation === 'function') initNameValidation();
+            if (typeof initDateValidation === 'function') initDateValidation();
+            if (typeof initTextareaCounters === 'function') initTextareaCounters();
+            if (typeof initLicenseFormatting === 'function') initLicenseFormatting();
+            if (typeof initFormSubmitLock === 'function') initFormSubmitLock();
+
+            if (urlObj.hash) {
+              setTimeout(function() {
+                var hashEl = document.querySelector(urlObj.hash);
+                if (hashEl) hashEl.scrollIntoView({ behavior: 'smooth' });
+              }, 60);
+            }
+          } else {
+            window.location.href = urlObj.href;
+          }
+        })
+        .catch(function(err) {
+          if (err && err.name === 'AbortError') return;
+          console.warn('Fallo en navegación SPA, recurriendo a navegación tradicional:', err);
+          window.location.href = urlObj.href;
+        });
+
+      } catch(e) {
+        console.error('Error durante navegación SPA:', e);
+        window.location.href = targetUrl;
+      }
+    }
+    window.navigateSpa = navigateSpa;
+
+    document.addEventListener('click', function(e) {
+      var link = (e.target && e.target.closest) ? e.target.closest('a.nav-link:not(.nav-btn-tg), a.brand') : null;
+      if (!link) return;
+
+      var href = link.getAttribute('href');
+      if (!href) return;
+
+      if (link.target === '_blank' || href.startsWith('http://') || href.startsWith('https://') || href.startsWith('javascript:') || href === '/logout' || href.startsWith('/logout')) {
+        return;
+      }
+
+      var targetUrl = new URL(href, window.location.origin);
+      if (targetUrl.pathname === window.location.pathname && targetUrl.hash && !targetUrl.search) {
+        var targetEl = document.querySelector(targetUrl.hash);
+        if (targetEl) {
+          e.preventDefault();
+          targetEl.scrollIntoView({ behavior: 'smooth' });
+          window.history.pushState(null, '', targetUrl.hash);
+        }
+        return;
+      }
+
+      e.preventDefault();
+      navigateSpa(href, true);
+    });
+
+    window.addEventListener('popstate', function() {
+      navigateSpa(window.location.href, false);
+    });
+
     // Inicializar todos los validadores interactivos al cargar el DOM
     document.addEventListener('DOMContentLoaded', function() {
       initDocumentValidation();
@@ -2889,6 +3289,135 @@ function renderComprobanteCard(a: PsyAppointment, isNewBooking: boolean = false)
             </button>
           </form>
         ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderPatientConsolidatedReport(doc: string, appointments: PsyAppointment[], isAdmin: boolean = true): string {
+  if (appointments.length === 0) {
+    return `
+      <div class="alert alert-warning" style="margin-bottom:0;">
+        ⚠️ No se encontraron citas registradas para el documento <strong>${doc}</strong>.
+      </div>
+    `;
+  }
+
+  const patientName = appointments[0]?.patientName || "Paciente";
+  const confirmedCount = appointments.filter(a => a.status === "Confirmada").length;
+  const pendingCount = appointments.filter(a => a.status === "Pendiente").length;
+  const canceledCount = appointments.filter(a => a.status === "Cancelada").length;
+  const specialists = Array.from(new Set(appointments.map(a => a.therapist))).join(", ");
+
+  const rows = appointments.map(a => {
+    const isConf = a.status === "Confirmada";
+    const isPend = a.status === "Pendiente";
+    const statusPill = isConf
+      ? `<span style="background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4); padding:3px 10px; border-radius:999px; font-weight:700; font-size:0.75rem;">● Confirmada</span>`
+      : isPend
+      ? `<span style="background:rgba(245,158,11,0.18); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); padding:3px 10px; border-radius:999px; font-weight:700; font-size:0.75rem;">● Pendiente</span>`
+      : `<span style="background:rgba(239,68,68,0.18); color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:3px 10px; border-radius:999px; font-weight:700; font-size:0.75rem;">● ${a.status}</span>`;
+
+    const office = getOfficeForTherapist(a.therapist);
+
+    return `
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(56,189,248,0.06)'" onmouseout="this.style.background='transparent'">
+        <td style="padding: 12px 14px; font-weight: 700; color: #38bdf8; font-family: monospace;">#${a.id.toUpperCase()}</td>
+        <td style="padding: 12px 14px;">
+          <div style="font-weight: 700; color: #fff; font-size: 0.88rem;">${a.therapist}</div>
+          <div style="font-size: 0.75rem; color: #94a3b8;">${office}</div>
+        </td>
+        <td style="padding: 12px 14px; font-size: 0.84rem; color: #cbd5e1;">${a.specialty}</td>
+        <td style="padding: 12px 14px;">
+          <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">${a.dateTime}</div>
+          ${a.scheduledAt ? `<div style="font-size: 0.72rem; color: #64748b;">${new Date(a.scheduledAt).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}</div>` : ''}
+        </td>
+        <td style="padding: 12px 14px; font-size: 0.82rem; color: #94a3b8; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${a.motive || 'Sin motivo'}">
+          ${a.motive || 'Sin motivo registrado'}
+        </td>
+        <td style="padding: 12px 14px; text-align: center;">${statusPill}</td>
+        <td style="padding: 12px 14px; text-align: right;">
+          <div style="display: inline-flex; gap: 6px; align-items: center;">
+            <button type="button" onclick="openCitaDetailById('${a.id}')" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(56,189,248,0.4); color: #38bdf8;" title="Ver expediente completo">
+              👁️ Ver
+            </button>
+            <button type="button" onclick="imprimirComprobanteCita('${a.id}')" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(16,185,129,0.4); color: #34d399;" title="Imprimir Comprobante Oficial">
+              🖨️ PDF
+            </button>
+            ${isAdmin ? `
+              <form action="/api/citas/eliminar" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Eliminar Cita?" data-confirm-message="¿Estás seguro de eliminar la cita #${a.id} de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar" data-confirm-color="red">
+                <input type="hidden" name="id" value="${a.id}">
+                <button type="submit" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 8px; background: rgba(239,68,68,0.85);" title="Eliminar cita">
+                  🗑️
+                </button>
+              </form>
+            ` : (a.status !== 'Cancelada' ? `
+              <form action="/api/citas/estado" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Cancelar Cita Médica?" data-confirm-message="¿Estás seguro de cancelar tu cita #${a.id}? Tu turno será liberado." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Cita" data-confirm-color="red">
+                <input type="hidden" name="id" value="${a.id}">
+                <input type="hidden" name="status" value="Cancelada">
+                <button type="submit" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 8px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #f87171;" title="Cancelar Cita">
+                  ✕ Cancelar
+                </button>
+              </form>
+            ` : '')}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="card" style="background: linear-gradient(145deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 32, 0.98) 100%); border: 1.5px solid rgba(56, 189, 248, 0.4); border-radius: 20px; padding: 24px 26px; box-shadow: 0 15px 40px rgba(0,0,0,0.6); position: relative; overflow: hidden; margin-top: 18px;">
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #0ea5e9, #6366f1, #10b981);"></div>
+
+      <!-- Resumen Consolidado de Paciente -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 1.4rem;">📋</span>
+            <h3 style="margin: 0; color: #fff; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.3px;">
+              Historial Clínico Unificado del Paciente
+            </h3>
+          </div>
+          <div style="font-size: 0.85rem; color: #cbd5e1; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+            <span>👤 Paciente: <strong style="color: #fff;">${patientName}</strong></span>
+            <span>🪪 Documento: <strong style="color: #38bdf8; font-family: monospace;">C.C. ${doc}</strong></span>
+            <span>🩺 Profesionales: <span style="color: #a5b4fc;">${specialists || "Ninguno"}</span></span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-size: 0.8rem;">
+            <span>Total: <strong style="color:#fff;">${appointments.length}</strong></span>
+            <span style="color:rgba(255,255,255,0.2);">|</span>
+            <span style="color:#34d399;">Activas: <strong>${confirmedCount + pendingCount}</strong></span>
+            <span style="color:rgba(255,255,255,0.2);">|</span>
+            <span style="color:#f87171;">Canceladas: <strong>${canceledCount}</strong></span>
+          </div>
+          <a href="/citas/reporte-paciente/${encodeURIComponent(doc)}?autoprint=true" target="_blank" class="btn btn-secondary" style="border: 1.5px solid rgba(56,189,248,0.5); color: #38bdf8; padding: 7px 14px; font-size: 0.82rem; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px;" title="Imprimir historial completo en PDF">
+            🖨️ Imprimir Historial Completo (PDF)
+          </a>
+        </div>
+      </div>
+
+      <!-- Tabla Unificada de Todas las Citas (No separadas) -->
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1.5px solid rgba(56,189,248,0.25); color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">
+              <th style="padding: 10px 14px;">Radicado</th>
+              <th style="padding: 10px 14px;">Especialista & Sede</th>
+              <th style="padding: 10px 14px;">Especialidad</th>
+              <th style="padding: 10px 14px;">Horario</th>
+              <th style="padding: 10px 14px;">Motivo</th>
+              <th style="padding: 10px 14px; text-align: center;">Estado</th>
+              <th style="padding: 10px 14px; text-align: right;">Acciones Rápidas</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
       </div>
     </div>
   `;
@@ -3470,7 +3999,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <label for="documentNumber">Documento de Identidad / Cédula (C.C. 10 dígitos)</label>
             <div class="input-wrapper">
               <span class="input-icon">🪪</span>
-              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
+              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" required>
             </div>
           </div>
           <div class="form-group">
@@ -4436,6 +4965,238 @@ portalRouter.get("/citas/comprobante/:id", (req: Request, res: Response) => {
   res.send(html);
 });
 
+// Ruta para visualizar e imprimir en PDF el Historial Clínico Unificado / Consolidado de Citas del Paciente
+portalRouter.get("/citas/reporte-paciente/:doc", (req: Request, res: Response) => {
+  const doc = String(req.params.doc || "").trim();
+  const cleanDoc = doc.replace(/\D/g, "");
+  const appointments = getAllPsyAppointments().filter(a => String(a.documentNumber || "").replace(/\D/g, "") === cleanDoc);
+
+  if (appointments.length === 0) {
+    res.status(404).send(layout(
+      "Historial No Encontrado - MindCare",
+      `<div class="card" style="max-width:600px; margin:40px auto; text-align:center; padding:32px;">
+        <span style="font-size:3rem;">⚠️</span>
+        <h2 style="color:#fff; margin:14px 0 8px 0;">Historial Clínico No Encontrado</h2>
+        <p style="color:var(--text-muted); font-size:0.92rem; margin-bottom:20px;">
+          No se encontraron citas agendadas asociadas al documento <strong>${escapeHtml(doc)}</strong>.
+        </p>
+        <a href="/citas" class="btn btn-primary" style="padding:10px 22px;">Ir a la Agenda de Citas</a>
+      </div>`,
+      "citas"
+    ));
+    return;
+  }
+
+  const patientName = appointments[0]?.patientName || "Paciente";
+  const confirmedCount = appointments.filter(a => a.status === "Confirmada").length;
+  const pendingCount = appointments.filter(a => a.status === "Pendiente").length;
+  const canceledCount = appointments.filter(a => a.status === "Cancelada").length;
+
+  const nowStr = new Date().toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  const autoPrint = req.query.autoprint === "true";
+
+  const rows = appointments.map(a => {
+    const isConf = a.status === "Confirmada";
+    const isPend = a.status === "Pendiente";
+    const statusBg = isConf ? "#dcfce7" : isPend ? "#fef3c7" : "#fee2e2";
+    const statusColor = isConf ? "#15803d" : isPend ? "#b45309" : "#b91c1c";
+    const office = getOfficeForTherapist(a.therapist);
+
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0; font-size: 13px;">
+        <td style="padding: 10px 12px; font-weight: 700; color: #0284c7; font-family: monospace;">#${escapeHtml(a.id.toUpperCase())}</td>
+        <td style="padding: 10px 12px;">
+          <div style="font-weight: 700; color: #0f172a;">${escapeHtml(a.therapist)}</div>
+          <div style="font-size: 11px; color: #64748b;">${escapeHtml(office)}</div>
+        </td>
+        <td style="padding: 10px 12px; color: #334155;">${escapeHtml(a.specialty)}</td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #0f172a;">${escapeHtml(a.dateTime)}</td>
+        <td style="padding: 10px 12px; color: #475569; max-width: 200px;">${escapeHtml(a.motive || "Consulta general")}</td>
+        <td style="padding: 10px 12px; text-align: center;">
+          <span style="background: ${statusBg}; color: ${statusColor}; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 999px;">
+            ${escapeHtml(a.status)}
+          </span>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historial Clínico Consolidado - C.C. ${escapeHtml(doc)} - MindCare</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0b1120;
+      color: #0f172a;
+      line-height: 1.5;
+      padding: 24px 16px;
+    }
+    .no-print-bar {
+      max-width: 900px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: #0f172a;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #fff;
+      padding: 14px 22px;
+      border-radius: 14px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    }
+    .btn {
+      padding: 9px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: none;
+    }
+    .btn-print { background: #0284c7; color: #fff; }
+    .btn-print:hover { background: #0369a1; }
+    .btn-back { background: rgba(255,255,255,0.08); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.15); }
+    .btn-back:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .report-sheet {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 44px 50px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border: 1px solid #cbd5e1;
+    }
+    @media print {
+      body { background: #fff !important; padding: 0 !important; }
+      .no-print-bar { display: none !important; }
+      .report-sheet { box-shadow: none !important; border: none !important; padding: 20px !important; width: 100% !important; max-width: 100% !important; }
+      @page { size: A4 landscape; margin: 12mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print-bar">
+    <div>
+      <span style="font-size: 1.2rem;">📋</span> <strong>Historial Clínico Unificado del Paciente</strong> — C.C. ${escapeHtml(doc)}
+    </div>
+    <div style="display:flex; gap:10px;">
+      <a href="/admin" class="btn btn-back">← Volver al Panel</a>
+      <button onclick="window.print()" class="btn btn-print">🖨️ Imprimir / Guardar en PDF</button>
+    </div>
+  </div>
+
+  <div class="report-sheet">
+    <!-- Header Oficial -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 18px; border-bottom: 2px solid #0284c7; margin-bottom: 22px;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 52px; height: 52px; background: linear-gradient(135deg, #0ea5e9, #6366f1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff;">
+          🧠
+        </div>
+        <div>
+          <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px;">MindCare Centro Clínico</h1>
+          <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">Instituto de Salud Mental Integrada • Habilitación MinSalud Res. 3100</p>
+          <p style="font-size: 10px; color: #94a3b8; margin: 0;">NIT: 901.482.391-4 • Sede Central Bogotá D.C. • PBX: (601) 745-9000</p>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span style="display: inline-block; background: #e0f2fe; color: #0369a1; font-weight: 800; font-size: 11px; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; text-transform: uppercase;">
+          EXPEDIENTE CLÍNICO UNIFICADO
+        </span>
+        <div style="font-size: 11px; color: #64748b; margin-top: 6px;">Fecha de emisión: <strong>${nowStr}</strong></div>
+      </div>
+    </div>
+
+    <!-- Ficha Técnica del Paciente -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin-bottom: 22px;">
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+        <div>
+          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700;">Paciente</div>
+          <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 2px;">${escapeHtml(patientName)}</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700;">Documento de Identidad</div>
+          <div style="font-size: 15px; font-weight: 800; color: #0284c7; font-family: monospace; margin-top: 2px;">C.C. ${escapeHtml(doc)}</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700;">Total Consultas</div>
+          <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 2px;">${appointments.length} cita(s)</div>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700;">Balance Clínico</div>
+          <div style="font-size: 12px; font-weight: 700; margin-top: 4px;">
+            <span style="color:#15803d;">${confirmedCount + pendingCount} Activas</span> | <span style="color:#b91c1c;">${canceledCount} Canceladas</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de Todas las Citas -->
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+        Registro Cronológico de Consultas y Citas Médicas
+      </h3>
+      <table style="width: 100%; border-collapse: collapse; text-align: left; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 11px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px;">
+            <th style="padding: 10px 12px;">Radicado</th>
+            <th style="padding: 10px 12px;">Especialista & Sede</th>
+            <th style="padding: 10px 12px;">Especialidad</th>
+            <th style="padding: 10px 12px;">Fecha y Horario</th>
+            <th style="padding: 10px 12px;">Motivo Clínico</th>
+            <th style="padding: 10px 12px; text-align: center;">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Firma y Validación -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 24px; border-top: 1px dashed #cbd5e1; margin-top: 30px;">
+      <div style="font-size: 10px; color: #64748b; line-height: 1.5; max-width: 500px;">
+        <strong>Certificación de Confidencialidad:</strong> Este documento contiene información confidencial de salud protegida bajo la Ley 1090 de 2006 y el secreto profesional médico en Colombia. Válido para trámites institucionales y seguimiento terapéutico.
+      </div>
+      <div style="text-align: center; width: 220px;">
+        <div style="border-bottom: 1.5px solid #0f172a; padding-bottom: 30px; margin-bottom: 6px;"></div>
+        <div style="font-size: 12px; font-weight: 800; color: #0f172a;">Dirección Médica MindCare</div>
+        <div style="font-size: 10px; color: #64748b;">Registro Clínico y Telepsicología</div>
+      </div>
+    </div>
+  </div>
+
+  ${autoPrint ? `
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() { window.print(); }, 400);
+    });
+  </script>
+  ` : ''}
+</body>
+</html>`;
+
+  res.send(html);
+});
+
 // Endpoint para obtener el catálogo en tiempo real de especialistas activos y especialidades
 portalRouter.get("/api/especialistas/activos", (req: Request, res: Response) => {
   const allActive = getAllTherapists(false);
@@ -4680,7 +5441,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         <form action="/citas#consultar-cita" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
           <div class="input-wrapper" style="flex:1; min-width:240px;">
             <span class="input-icon">🪪</span>
-            <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula (únicamente 10 dígitos, ej: 1020304050)" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
+            <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula (únicamente 10 dígitos, ej: 1020304050)" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" required>
           </div>
           <button type="submit" class="btn btn-primary" style="padding:10px 22px; font-weight:700;">
             Buscar Mi Cita 🔍
@@ -4696,9 +5457,9 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
               </div>
             ` : `
               <div style="color:#6ee7b7; font-weight:700; margin-bottom:14px; font-size:1.05rem;">
-                ✅ Cita(s) encontrada(s) para el documento (${maskDoc(consultarDoc)}):
+                ✅ Historial de cita(s) para el documento (${maskDoc(consultarDoc)}):
               </div>
-              ${searchedAppointments.map(a => renderComprobanteCard(a, false)).join('')}
+              ${renderPatientConsolidatedReport(consultarDoc, searchedAppointments, false)}
             `}
           </div>
         ` : ''}
@@ -4727,7 +5488,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
             <div style="margin-bottom: 16px;">
               <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Documento de Identidad / C.C. (10 dígitos):</label>
-              <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+              <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
             </div>
 
             <div style="margin-bottom: 16px;">
@@ -4944,7 +5705,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <form action="/admin" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
         <div class="input-wrapper" style="flex:1; min-width:240px;">
           <span class="input-icon">🪪</span>
-          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa número de cédula del paciente a auditar (10 dígitos)..." maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
+          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa número de cédula del paciente a auditar (10 dígitos)..." maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" required>
         </div>
         <button type="submit" class="btn btn-primary" style="padding:10px 20px;">
           Consultar Expediente 🔍
@@ -4954,16 +5715,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 
       ${consultarDoc ? `
         <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border-subtle);">
-          ${searchedAppointments.length === 0 ? `
-            <div class="alert alert-warning" style="margin-bottom:0;">
-              ⚠️ No se encontraron citas para el documento <strong>${consultarDoc}</strong>.
-            </div>
-          ` : `
-            <div style="color:#6ee7b7; font-weight:700; margin-bottom:12px; font-size:1.05rem;">
-              ✅ Cita(s) del paciente encontradas en la agenda (${consultarDoc}):
-            </div>
-            ${searchedAppointments.map(a => renderComprobanteCard(a, false)).join('')}
-          `}
+          ${renderPatientConsolidatedReport(consultarDoc, searchedAppointments)}
         </div>
       ` : ''}
     </div>
@@ -5034,7 +5786,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Documento de Identidad / C.C. (10 dígitos):</label>
-            <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+            <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
@@ -5911,7 +6663,7 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
 
           <div>
             <label for="documentNumber" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Cédula de Ciudadanía / Documento *:</label>
-            <input type="text" id="documentNumber" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+            <input type="text" id="documentNumber" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
           </div>
 
           <div>
