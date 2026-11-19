@@ -7246,6 +7246,16 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
             </select>
           </div>
 
+          <div>
+            <label for="staffUsername" style="font-size:0.82rem; color:#38bdf8; text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Usuario de Acceso Clínico (Login):</label>
+            <input type="text" id="staffUsername" name="staffUsername" placeholder="Ej: camila (se autogenera si se deja vacío)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid rgba(56,189,248,0.4); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
+          <div>
+            <label for="staffPassword" style="font-size:0.82rem; color:#38bdf8; text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Contraseña para el Especialista:</label>
+            <input type="text" id="staffPassword" name="staffPassword" placeholder="Ej: Camila#Psi2026! (por defecto Apellido#2026!)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid rgba(56,189,248,0.4); border-radius:10px; color:#fff; font-size:0.92rem;">
+          </div>
+
           <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; margin-top:8px;">
             <button type="submit" class="btn btn-primary" style="padding:12px 28px; font-weight:700; font-size:0.95rem; background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
               ➕ Incorporar al Equipo Médico 🚀
@@ -7358,7 +7368,7 @@ portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
     res.redirect("/login");
     return;
   }
-  const { name, documentNumber, specialty, customSpecialty, office, licenseNumber, icon, phone, email } = req.body;
+  const { name, documentNumber, specialty, customSpecialty, office, licenseNumber, icon, phone, email, staffUsername, staffPassword } = req.body;
   const finalSpecialty = (specialty === "OTRA" && customSpecialty && customSpecialty.trim()) ? customSpecialty.trim() : specialty;
   if (!name || !finalSpecialty || !office) {
     res.redirect("/especialistas?error=" + encodeURIComponent("Por favor diligencia nombre, especialidad y consultorio."));
@@ -7382,7 +7392,9 @@ portalRouter.post("/api/especialistas/nuevo", (req: Request, res: Response) => {
     licenseNumber: licenseNumber ? String(licenseNumber).trim() : undefined,
     icon: icon ? String(icon).trim() : undefined,
     phone: phone ? String(phone).trim() : undefined,
-    email: email ? String(email).trim() : undefined
+    email: email ? String(email).trim() : undefined,
+    username: staffUsername ? String(staffUsername).trim() : undefined,
+    password: staffPassword ? String(staffPassword).trim() : undefined
   });
 
   res.redirect("/especialistas?added=true");

@@ -445,6 +445,8 @@ export function createTherapist(data: {
   phone?: string;
   email?: string;
   licenseNumber?: string;
+  username?: string;
+  password?: string;
 }): PsyTherapist {
   const cleanId = data.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10) + "-" + Math.floor(100 + Math.random() * 900);
   const newTherapist: PsyTherapist = {
@@ -473,6 +475,28 @@ export function createTherapist(data: {
     icon: "🩺",
     description: `Atención profesional especializada con ${data.name.trim()}`
   });
+
+  // Crear y vincular automáticamente su cuenta de acceso al Panel Clínico (/login)
+  const autoUser = data.username?.trim().toLowerCase() || data.name.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/^dr[a]?\.\s*/i, "")
+    .trim().split(" ")[0].replace(/[^a-z0-9]/g, "") || cleanId;
+  const autoPass = data.password?.trim() || `${data.name.split(" ")[1] || "Psi"}#2026!`;
+
+  const existingStaff = CLINICAL_STAFF_ACCOUNTS.find(s => s.username === autoUser || s.therapistId === cleanId);
+  if (!existingStaff) {
+    CLINICAL_STAFF_ACCOUNTS.push({
+      id: `staff-${cleanId}`,
+      username: autoUser,
+      email: newTherapist.email || `${cleanId}@mindcare.clinic`,
+      fullName: newTherapist.name,
+      role: "PSICOLOGO_CLINICO",
+      specialty: newTherapist.specialty,
+      therapistId: newTherapist.id,
+      licenseNumber: newTherapist.licenseNumber,
+      passwordHash: autoPass
+    });
+  }
 
   broadcastRealtime("THERAPIST_CREATED", newTherapist);
   return newTherapist;
