@@ -1622,52 +1622,6 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             }
           }
         });
-
-        (function() {
-          function updateActiveNavState() {
-            const currentPath = window.location.pathname.replace(/\\/+$/, '') || '/';
-            const currentHash = window.location.hash;
-            const links = document.querySelectorAll('.nav-links .nav-link:not(.nav-btn-tg)');
-            
-            links.forEach(function(link) {
-              link.addEventListener('click', function() {
-                const nav = document.getElementById('mainNavLinks');
-                const btn = document.getElementById('mobileMenuBtn');
-                if (nav) nav.classList.remove('mobile-open');
-                if (btn) btn.classList.remove('open');
-              });
-
-              const href = link.getAttribute('href');
-              if (!href) return;
-              try {
-                const target = new URL(href, window.location.origin);
-                const targetPath = target.pathname.replace(/\\/+$/, '') || '/';
-                const targetHash = target.hash;
-
-                let matches = false;
-                if (targetHash && currentHash) {
-                  matches = (targetPath === currentPath && targetHash === currentHash);
-                } else if (!currentHash) {
-                  if (targetPath === '/' && currentPath === '/') {
-                    matches = !targetHash;
-                  } else if (targetPath !== '/' && currentPath === targetPath) {
-                    matches = !targetHash;
-                  }
-                }
-
-                if (matches) {
-                  link.classList.add('active');
-                } else if (targetHash !== currentHash || targetPath !== currentPath) {
-                  link.classList.remove('active');
-                }
-              } catch(e) {}
-            });
-          }
-          window.addEventListener('hashchange', updateActiveNavState);
-          window.addEventListener('popstate', updateActiveNavState);
-          window.addEventListener('DOMContentLoaded', updateActiveNavState);
-          updateActiveNavState();
-        })();
       </script>
     </div>
   </header>
@@ -2824,8 +2778,32 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     // =========================================================================
     // NAVEGACIÓN SPA PROFESIONAL CON SKELETON LOADERS PERSONALIZADOS POR VISTA
     // =========================================================================
+    function sanitizePath(p) {
+      if (!p) return '/';
+      var s = p.split('?')[0].split('#')[0];
+      while (s.length > 1 && s.charAt(s.length - 1) === '/') {
+        s = s.substring(0, s.length - 1);
+      }
+      return s || '/';
+    }
+
     function getSkeletonForPath(path) {
-      var cleanPath = (path || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+      var cleanPath = sanitizePath(path);
+
+      if (cleanPath === '/login') {
+        return '<div class="view-fade-in" style="width:100%; min-height: calc(80vh - 120px); display: flex; align-items: center; justify-content: center; padding: 40px 16px;">' +
+          '<div class="skeleton-box" style="width: 100%; max-width: 480px; border-radius: 24px; padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">' +
+            '<div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 8px;">' +
+              '<div class="skeleton-box" style="width: 56px; height: 56px; border-radius: 16px; margin: 0 auto; background: rgba(56,189,248,0.18);"></div>' +
+              '<div class="skeleton-box" style="width: 220px; height: 26px; border-radius: 8px; margin: 0 auto; background: rgba(255,255,255,0.1);"></div>' +
+              '<div class="skeleton-box" style="width: 300px; height: 16px; border-radius: 6px; margin: 0 auto; background: rgba(255,255,255,0.06);"></div>' +
+            '</div>' +
+            '<div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>' +
+            '<div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>' +
+            '<div class="skeleton-box" style="height: 48px; border-radius: 12px; margin-top: 8px; background: rgba(56,189,248,0.25);"></div>' +
+          '</div>' +
+        '</div>';
+      }
 
       if (cleanPath === '/admin') {
         return '<div class="view-fade-in" style="width:100%;">' +
@@ -2988,7 +2966,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     var spaAbortController = null;
 
     function updateNavLinksActive(targetPath, targetHash) {
-      var cleanTarget = (targetPath || '/').replace(/\/+$/, '') || '/';
+      var cleanTarget = sanitizePath(targetPath);
       var allLinks = document.querySelectorAll('.nav-links .nav-link:not(.nav-btn-tg)');
 
       allLinks.forEach(function(l) {
@@ -2996,7 +2974,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         if (!href) return;
         try {
           var linkUrl = new URL(href, window.location.origin);
-          var linkPath = linkUrl.pathname.replace(/\/+$/, '') || '/';
+          var linkPath = sanitizePath(linkUrl.pathname);
           var linkHash = linkUrl.hash;
 
           var isMatch = false;
@@ -3020,14 +2998,15 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
       try {
         var urlObj = new URL(targetUrl, window.location.origin);
-        var targetPath = urlObj.pathname.replace(/\/+$/, '') || '/';
-        var currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+        var targetPath = sanitizePath(urlObj.pathname);
+        var currentPath = sanitizePath(window.location.pathname);
 
         var nav = document.getElementById('mainNavLinks');
         var btn = document.getElementById('mobileMenuBtn');
         if (nav) nav.classList.remove('mobile-open');
         if (btn) btn.classList.remove('open');
 
+        // Si es exactamente la misma ruta completa con hash, desplazarse si aplica
         if (urlObj.href === window.location.href) {
           if (urlObj.hash) {
             var el = document.querySelector(urlObj.hash);
@@ -3041,18 +3020,24 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         }
         spaAbortController = new AbortController();
 
+        // 1. Activar botón del navbar inmediatamente
         updateNavLinksActive(targetPath, urlObj.hash);
 
+        // 2. Colocar Skeleton Loader visual personalizado en <main>
         var mainEl = document.querySelector('main');
         if (mainEl) {
           mainEl.innerHTML = getSkeletonForPath(targetPath);
           window.scrollTo({ top: 0, behavior: 'instant' });
         }
 
+        // 3. Modificar el historial de navegación SPA sin recargar
         if (addToHistory) {
           window.history.pushState({ path: targetUrl }, '', targetUrl);
         }
 
+        var startTime = Date.now();
+
+        // 4. Solicitar el nuevo contenido HTML por red
         fetch(urlObj.href, {
           signal: spaAbortController.signal,
           headers: { 'X-Requested-With': 'SPA' }
@@ -3075,32 +3060,51 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
           var newMain = doc.querySelector('main');
           if (newMain && mainEl) {
-            mainEl.innerHTML = newMain.innerHTML;
-            mainEl.className = 'view-fade-in';
+            // Aseguramos una transición elegante de al menos 160ms para ver el shimmering skeleton
+            var elapsed = Date.now() - startTime;
+            var renderDelay = Math.max(0, 160 - elapsed);
 
-            var scripts = mainEl.querySelectorAll('script');
-            scripts.forEach(function(oldScript) {
-              var newScript = document.createElement('script');
-              Array.from(oldScript.attributes).forEach(function(attr) {
-                newScript.setAttribute(attr.name, attr.value);
+            setTimeout(function() {
+              var newHeader = doc.querySelector('header');
+              var currentHeader = document.querySelector('header');
+              if (newHeader && currentHeader) {
+                currentHeader.innerHTML = newHeader.innerHTML;
+              }
+
+              mainEl.innerHTML = newMain.innerHTML;
+              mainEl.className = 'view-fade-in';
+
+              // Ejecutar scripts dinámicos incluidos en la vista de manera segura
+              var scripts = mainEl.querySelectorAll('script');
+              scripts.forEach(function(oldScript) {
+                try {
+                  var newScript = document.createElement('script');
+                  Array.from(oldScript.attributes).forEach(function(attr) {
+                    newScript.setAttribute(attr.name, attr.value);
+                  });
+                  newScript.textContent = oldScript.textContent;
+                  oldScript.parentNode.replaceChild(newScript, oldScript);
+                } catch(scErr) {
+                  console.warn('Script execution notice:', scErr);
+                }
               });
-              newScript.textContent = oldScript.textContent;
-              oldScript.parentNode.replaceChild(newScript, oldScript);
-            });
 
-            if (typeof initDocumentValidation === 'function') initDocumentValidation();
-            if (typeof initNameValidation === 'function') initNameValidation();
-            if (typeof initDateValidation === 'function') initDateValidation();
-            if (typeof initTextareaCounters === 'function') initTextareaCounters();
-            if (typeof initLicenseFormatting === 'function') initLicenseFormatting();
-            if (typeof initFormSubmitLock === 'function') initFormSubmitLock();
+              // Reinicializar micro-interacciones interactivas en la nueva vista
+              try { if (typeof initDocumentValidation === 'function') initDocumentValidation(); } catch(e){}
+              try { if (typeof initNameValidation === 'function') initNameValidation(); } catch(e){}
+              try { if (typeof initDateValidation === 'function') initDateValidation(); } catch(e){}
+              try { if (typeof initTextareaCounters === 'function') initTextareaCounters(); } catch(e){}
+              try { if (typeof initLicenseFormatting === 'function') initLicenseFormatting(); } catch(e){}
+              try { if (typeof initFormSubmitLock === 'function') initFormSubmitLock(); } catch(e){}
 
-            if (urlObj.hash) {
-              setTimeout(function() {
-                var hashEl = document.querySelector(urlObj.hash);
-                if (hashEl) hashEl.scrollIntoView({ behavior: 'smooth' });
-              }, 60);
-            }
+              // Desplazar suavemente a hash si venía con ancla (ej: #consultar-cita)
+              if (urlObj.hash) {
+                setTimeout(function() {
+                  var hashEl = document.querySelector(urlObj.hash);
+                  if (hashEl) hashEl.scrollIntoView({ behavior: 'smooth' });
+                }, 80);
+              }
+            }, renderDelay);
           } else {
             window.location.href = urlObj.href;
           }
@@ -3118,25 +3122,44 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     }
     window.navigateSpa = navigateSpa;
 
+    // Interceptor global de clics en encabezado y enlaces internos para navegación SPA instantánea
     document.addEventListener('click', function(e) {
-      var link = (e.target && e.target.closest) ? e.target.closest('a.nav-link:not(.nav-btn-tg), a.brand') : null;
+      var link = (e.target && e.target.closest) ? e.target.closest('a') : null;
       if (!link) return;
 
       var href = link.getAttribute('href');
       if (!href) return;
 
-      if (link.target === '_blank' || href.startsWith('http://') || href.startsWith('https://') || href.startsWith('javascript:') || href === '/logout' || href.startsWith('/logout')) {
+      if (link.classList.contains('nav-btn-tg') || link.getAttribute('target') === '_blank' || link.hasAttribute('download') || link.hasAttribute('data-no-spa')) {
+        return;
+      }
+
+      if (href.startsWith('http://') || href.startsWith('https://')) {
+        try {
+          var testUrl = new URL(href);
+          if (testUrl.origin !== window.location.origin) return;
+        } catch(ex) {
+          return;
+        }
+      }
+
+      if (href.startsWith('javascript:') || href === '#' || href === '/logout' || href.startsWith('/logout') || href.startsWith('/api/') || href.startsWith('/citas/reporte-paciente/')) {
         return;
       }
 
       var targetUrl = new URL(href, window.location.origin);
-      if (targetUrl.pathname === window.location.pathname && targetUrl.hash && !targetUrl.search) {
+      var currentClean = sanitizePath(window.location.pathname);
+      var targetClean = sanitizePath(targetUrl.pathname);
+
+      // Si es un ancla interna dentro de la misma página exacta (ej: /citas#consultar-cita mientras ya estamos en /citas)
+      if (targetClean === currentClean && targetUrl.hash && !targetUrl.search) {
+        e.preventDefault();
         var targetEl = document.querySelector(targetUrl.hash);
         if (targetEl) {
-          e.preventDefault();
           targetEl.scrollIntoView({ behavior: 'smooth' });
-          window.history.pushState(null, '', targetUrl.hash);
         }
+        window.history.pushState(null, '', targetUrl.hash);
+        updateNavLinksActive(targetClean, targetUrl.hash);
         return;
       }
 
@@ -3149,15 +3172,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     });
 
     // Inicializar todos los validadores interactivos al cargar el DOM
-    document.addEventListener('DOMContentLoaded', function() {
-      initDocumentValidation();
-      initNameValidation();
-      initDateValidation();
-      initTextareaCounters();
-      initLicenseFormatting();
-      initFormSubmitLock();
-      initRealtimeSync();
-    });
+    function initAllInteractive() {
+      try { if (typeof initDocumentValidation === 'function') initDocumentValidation(); } catch(e){}
+      try { if (typeof initNameValidation === 'function') initNameValidation(); } catch(e){}
+      try { if (typeof initDateValidation === 'function') initDateValidation(); } catch(e){}
+      try { if (typeof initTextareaCounters === 'function') initTextareaCounters(); } catch(e){}
+      try { if (typeof initLicenseFormatting === 'function') initLicenseFormatting(); } catch(e){}
+      try { if (typeof initFormSubmitLock === 'function') initFormSubmitLock(); } catch(e){}
+      try { if (typeof initRealtimeSync === 'function') initRealtimeSync(); } catch(e){}
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAllInteractive);
+    } else {
+      initAllInteractive();
+    }
   </script>
 </body>
 </html>`;
