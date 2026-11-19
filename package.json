@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx src/modern/index.ts",
     "build": "prisma generate && tsc",
-    "start": "node dist/modern/index.js",
+    "start": "npx prisma db push --skip-generate --accept-data-loss || true && node dist/modern/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

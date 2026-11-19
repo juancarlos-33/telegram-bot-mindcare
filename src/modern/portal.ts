@@ -2434,6 +2434,15 @@ function renderComprobanteCard(a: PsyAppointment, isNewBooking: boolean = false)
         <a href="https://t.me/${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8;">
           💬 Abrir en Dra. PsiBot Telegram
         </a>
+        ${a.status !== 'Cancelada' ? `
+          <form action="/api/citas/estado" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Cancelar Cita Médica?" data-confirm-message="¿Estás seguro de cancelar tu cita #${a.id} del ${a.dateTime}? Tu turno será liberado inmediatamente." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Cita" data-confirm-color="red">
+            <input type="hidden" name="id" value="${a.id}">
+            <input type="hidden" name="status" value="Cancelada">
+            <button type="submit" class="btn btn-danger" style="padding: 11px 18px; font-size: 0.9rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.6); color: #f87171; cursor: pointer;">
+              ✕ Cancelar Cita
+            </button>
+          </form>
+        ` : ''}
       </div>
     </div>
   `;
@@ -5101,8 +5110,8 @@ portalRouter.post("/api/citas/estado", (req: Request, res: Response) => {
     updatePsyAppointmentStatus(String(id), status as any);
   }
   const referer = req.header("Referer") || "";
-  if (referer.includes("/admin")) {
-    res.redirect("/admin?updated=true");
+  if (referer) {
+    res.redirect(referer);
   } else {
     res.redirect("/citas?updated=true");
   }
@@ -7693,13 +7702,14 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
     return;
   }
   const isAdmin = staffSession.isAdmin;
-  const moduloSeleccionado = (req.query.modulo as string) || "usuarios";
+  const moduloSeleccionado = (req.query.modulo as string) || "citas";
   const fechaDesde = (req.query.desde as string) || "";
   const fechaHasta = (req.query.hasta as string) || "";
 
   const reporte = await getModuleData(moduloSeleccionado, fechaDesde, fechaHasta);
 
   const modulosDisponibles = [
+    { key: "citas", name: "🧠 Citas & Consultas Agendadas", desc: "Registro clínico de turnos, pacientes y doctores" },
     { key: "usuarios", name: "👥 Pacientes y Verificación", desc: "Registro, roles y actividad" },
     { key: "comandos", name: "⚡ Comandos Ejecutados", desc: "Historial de comandos y latencias" },
     { key: "integraciones", name: "🔌 Integraciones & Tokens", desc: "Calendar, GitHub y YouTube" },
@@ -7807,6 +7817,72 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
 function renderReportTable(modulo: string, items: any[]): string {
   if (!items || items.length === 0) {
     return `<div style="text-align:center; padding: 40px; color: var(--text-dim);">No se encontraron registros en el período seleccionado.</div>`;
+  }
+
+  if (modulo === "citas") {
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>Radicado</th>
+            <th>Paciente</th>
+            <th>Especialista</th>
+            <th>Fecha & Horario</th>
+            <th>Motivo de Consulta</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(a => `
+            <tr>
+              <td><span style="font-family:monospace; font-weight:700; color:#38bdf8;">#${a.id}</span></td>
+              <td>
+                <div style="font-weight:700; color:#fff;">${a.patientName}</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">🪪 C.C. ${a.documentNumber || 'No registrada'}</div>
+              </td>
+              <td>
+                <div style="color:#e2e8f0; font-weight:600;">${a.therapist}</div>
+                <div style="font-size:0.75rem; color:#a5b4fc;">🩺 ${a.specialty}</div>
+              </td>
+              <td>
+                <div style="color:#38bdf8; font-weight:700;">${a.dateTime}</div>
+                ${a.scheduledAt ? `<div style="font-size:0.72rem; color:var(--text-dim);">${new Date(a.scheduledAt).toLocaleString('es-CO', {timeZone: 'America/Bogota'})}</div>` : ''}
+              </td>
+              <td style="color:var(--text-muted); font-size:0.82rem; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${a.motive || '—'}
+              </td>
+              <td>
+                <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
+                  ● ${a.status}
+                </span>
+              </td>
+              <td>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <button type="button" onclick="imprimirComprobanteCita('${a.id}')" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#38bdf8;" title="Descargar Comprobante PDF">
+                    📥 PDF
+                  </button>
+                  ${a.status !== 'Confirmada' ? `
+                    <form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Cita Médica?" data-confirm-message="¿Deseas confirmar la cita #${a.id} del paciente ${a.patientName}?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar" data-confirm-color="green">
+                      <input type="hidden" name="id" value="${a.id}">
+                      <input type="hidden" name="status" value="Confirmada">
+                      <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;" title="Confirmar turno">✓</button>
+                    </form>
+                  ` : ''}
+                  ${a.status !== 'Cancelada' ? `
+                    <form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Estás seguro de cancelar la cita #${a.id} de ${a.patientName}? El estado pasará a Cancelada." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red">
+                      <input type="hidden" name="id" value="${a.id}">
+                      <input type="hidden" name="status" value="Cancelada">
+                      <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" title="Cancelar turno">✕ Cancelar</button>
+                    </form>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
   }
 
   if (modulo === "usuarios") {

@@ -1967,6 +1967,24 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
 
   if (!prisma) {
     switch (modulo) {
+      case "citas": {
+        let items = getAllPsyAppointments();
+        if (from) {
+          items = items.filter(a => {
+            const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+            return d ? d >= from : true;
+          });
+        }
+        if (to) {
+          const endOfDay = new Date(to);
+          endOfDay.setHours(23, 59, 59, 999);
+          items = items.filter(a => {
+            const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+            return d ? d <= endOfDay : true;
+          });
+        }
+        return { total: items.length, items };
+      }
       case "usuarios": return { total: mockUsers.length, items: mockUsers };
       case "integraciones": return { total: mockIntegrations.length, items: mockIntegrations };
       case "comandos": return { total: 3, items: [
@@ -1988,6 +2006,24 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
 
   try {
     switch (modulo) {
+      case "citas": {
+        let items = getAllPsyAppointments();
+        if (from) {
+          items = items.filter(a => {
+            const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+            return d ? d >= from : true;
+          });
+        }
+        if (to) {
+          const endOfDay = new Date(to);
+          endOfDay.setHours(23, 59, 59, 999);
+          items = items.filter(a => {
+            const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+            return d ? d <= endOfDay : true;
+          });
+        }
+        return { total: items.length, items };
+      }
       case "usuarios": {
         const items = await prisma.user.findMany({
           where: dateFilter("createdAt"),
