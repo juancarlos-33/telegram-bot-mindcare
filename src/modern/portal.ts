@@ -3642,7 +3642,7 @@ portalRouter.get("/api/citas/detalle", (req: Request, res: Response) => {
     return;
   }
   const all = getAllPsyAppointments();
-  const cita = all.find(c => c.id === id);
+  const cita = all.find(c => String(c.id).toLowerCase() === id.toLowerCase() || (c.documentNumber && c.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
   if (!cita) {
     res.status(404).json({ status: "error", message: "Cita no encontrada" });
     return;
@@ -5036,8 +5036,9 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       function openCitaDetailById(id) {
         const modal = document.getElementById('modal-cita-detail');
         if (!modal) return;
+        const targetId = String(id || '').trim().toLowerCase();
         const list = window.ADMIN_CITAS_DATA || [];
-        const found = list.find(function(c) { return String(c.id) === String(id); });
+        const found = list.find(function(c) { return String(c.id || '').toLowerCase() === targetId; });
         if (found) {
           renderCitaModal(found);
           return;
@@ -5053,7 +5054,8 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
               alert('No se pudo encontrar el expediente de la cita #' + id);
             }
           })
-          .catch(function() {
+          .catch(function(err) {
+            console.error('Error cargando cita:', err);
             alert('Error de conexión al cargar la cita #' + id);
           });
       }
@@ -5067,37 +5069,61 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       window.openCitaDetailModal = openCitaDetailModal;
 
       function renderCitaModal(cita) {
-        const modal = document.getElementById('modal-cita-detail');
-        if (!modal || !cita) return;
+        try {
+          const modal = document.getElementById('modal-cita-detail');
+          if (!modal || !cita) return;
 
-        document.getElementById('mcd-id').textContent = 'ID: ' + cita.id;
-        document.getElementById('mcd-patient').textContent = cita.patientName || 'Paciente';
-        document.getElementById('mcd-doc').textContent = cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado';
-        document.getElementById('mcd-specialty').textContent = cita.specialty || 'Psicología';
-        document.getElementById('mcd-therapist').textContent = cita.therapist || 'Especialista';
-        document.getElementById('mcd-date').textContent = cita.dateTime || '';
-        document.getElementById('mcd-scheduled').textContent = cita.scheduledAt ? 'Hora exacta en Colombia: ' + new Date(cita.scheduledAt).toLocaleString('es-CO') : '';
-        document.getElementById('mcd-motive').textContent = cita.motive || 'Sin motivo específico registrado';
-        
-        const badge = document.getElementById('mcd-status-badge');
-        if (badge) {
-          badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
-          badge.textContent = '● ' + cita.status;
-        }
+          const elId = document.getElementById('mcd-id');
+          if (elId) elId.textContent = 'ID: #' + (cita.id || '');
+          const elPat = document.getElementById('mcd-patient');
+          if (elPat) elPat.textContent = cita.patientName || 'Paciente';
+          const elDoc = document.getElementById('mcd-doc');
+          if (elDoc) elDoc.textContent = cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado';
+          const elSpec = document.getElementById('mcd-specialty');
+          if (elSpec) elSpec.textContent = cita.specialty || 'Psicología';
+          const elTher = document.getElementById('mcd-therapist');
+          if (elTher) elTher.textContent = cita.therapist || 'Especialista';
+          const elDate = document.getElementById('mcd-date');
+          if (elDate) elDate.textContent = cita.dateTime || '';
 
-        const actions = document.getElementById('mcd-actions');
-        if (actions) {
-          actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>';
-          if (cita.status !== 'Confirmada') {
-            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Cita Médica?" data-confirm-message="¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar Cita" data-confirm-color="green"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+          let scheduledText = '';
+          if (cita.scheduledAt) {
+            try {
+              const d = new Date(cita.scheduledAt);
+              if (!isNaN(d.getTime())) {
+                scheduledText = 'Hora exacta en Colombia: ' + d.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+              }
+            } catch (_) {}
           }
-          if (cita.status !== 'Cancelada') {
-            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
-          }
-          actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" data-confirm-title="¿Eliminar Cita Definitivamente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
-        }
+          const elSched = document.getElementById('mcd-scheduled');
+          if (elSched) elSched.textContent = scheduledText;
 
-        modal.style.display = 'flex';
+          const elMot = document.getElementById('mcd-motive');
+          if (elMot) elMot.textContent = cita.motive || 'Sin motivo específico registrado';
+          
+          const badge = document.getElementById('mcd-status-badge');
+          if (badge) {
+            badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
+            badge.textContent = '● ' + (cita.status || 'Pendiente');
+          }
+
+          const actions = document.getElementById('mcd-actions');
+          if (actions) {
+            actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>';
+            if (cita.status !== 'Confirmada') {
+              actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Cita Médica?" data-confirm-message="¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar Cita" data-confirm-color="green"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+            }
+            if (cita.status !== 'Cancelada') {
+              actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
+            }
+            actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" data-confirm-title="¿Eliminar Cita Definitivamente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
+          }
+
+          modal.style.display = 'flex';
+        } catch (err) {
+          console.error("Error al renderizar modal de cita:", err);
+          alert("Detalle de Cita #" + (cita.id || "") + " - Paciente: " + (cita.patientName || "") + " (" + (cita.status || "") + ")");
+        }
       }
 
       function closeCitaDetailModal() {

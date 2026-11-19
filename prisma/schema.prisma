@@ -282,3 +282,40 @@ model SesionVerificacion {
 
   @@map("sesiones_verificacion")
 }
+
+model Appointment {
+  id              String    @id
+  patientId       String    @map("patient_id")
+  patientName     String    @map("patient_name")
+  documentNumber  String?   @map("document_number")
+  therapist       String
+  specialty       String
+  dateTime        String    @map("date_time")
+  scheduledAt     DateTime? @map("scheduled_at")
+  canonicalSlot   String?   @map("canonical_slot")
+  durationMinutes Int       @default(50) @map("duration_minutes")
+  status          String    @default("Confirmada")
+  motive          String?
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("citas")
+}
+
+model Therapist {
+  id             String   @id
+  name           String
+  documentNumber String?  @map("document_number")
+  specialty      String
+  office         String
+  icon           String?
+  phone          String?
+  email          String?
+  licenseNumber  String?  @map("license_number")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("terapeutas")
+}
+

@@ -345,6 +345,56 @@ const psyAppointments: PsyAppointment[] = loadJsonFile<any[]>("appointments.json
   createdAt: new Date(a.createdAt)
 }));
 
+if (prisma) {
+  prisma.appointment.findMany({ orderBy: { createdAt: "desc" } })
+    .then(items => {
+      if (items && items.length > 0) {
+        psyAppointments.length = 0;
+        items.forEach(a => {
+          psyAppointments.push({
+            id: a.id,
+            patientId: a.patientId,
+            patientName: a.patientName,
+            documentNumber: a.documentNumber || undefined,
+            therapist: a.therapist,
+            specialty: a.specialty,
+            dateTime: a.dateTime,
+            scheduledAt: a.scheduledAt ? a.scheduledAt.toISOString() : undefined,
+            canonicalSlot: a.canonicalSlot || undefined,
+            durationMinutes: a.durationMinutes,
+            status: a.status as any,
+            motive: a.motive || undefined,
+            notes: a.notes || undefined,
+            createdAt: a.createdAt
+          });
+        });
+        console.log(`[DB-Postgres] ✅ ${items.length} citas cargadas desde PostgreSQL.`);
+      } else {
+        INITIAL_PSY_APPOINTMENTS.forEach(a => {
+          prisma!.appointment.create({
+            data: {
+              id: a.id,
+              patientId: a.patientId,
+              patientName: a.patientName,
+              documentNumber: a.documentNumber || null,
+              therapist: a.therapist,
+              specialty: a.specialty,
+              dateTime: a.dateTime,
+              scheduledAt: a.scheduledAt ? new Date(a.scheduledAt) : null,
+              canonicalSlot: a.canonicalSlot || null,
+              durationMinutes: a.durationMinutes || 50,
+              status: a.status,
+              motive: a.motive || null,
+              notes: a.notes || null,
+              createdAt: a.createdAt
+            }
+          }).catch(() => {});
+        });
+      }
+    })
+    .catch(e => console.warn("[DB-Postgres] Error sincronizando citas con Postgres:", e.message));
+}
+
 export interface PsySpecialty {
   id: string;
   name: string;
@@ -521,6 +571,32 @@ export function createPsyAppointment(appointment: Omit<PsyAppointment, "id" | "c
   psyAppointments.unshift(newApp);
   saveJsonFile("appointments.json", psyAppointments);
 
+  if (prisma) {
+    let parsedScheduledAt: Date | null = null;
+    if (newApp.scheduledAt) {
+      const d = new Date(newApp.scheduledAt);
+      if (!isNaN(d.getTime())) parsedScheduledAt = d;
+    }
+    prisma.appointment.create({
+      data: {
+        id: newApp.id,
+        patientId: newApp.patientId,
+        patientName: newApp.patientName,
+        documentNumber: newApp.documentNumber || null,
+        therapist: newApp.therapist,
+        specialty: newApp.specialty,
+        dateTime: newApp.dateTime,
+        scheduledAt: parsedScheduledAt,
+        canonicalSlot: newApp.canonicalSlot || null,
+        durationMinutes: newApp.durationMinutes || 50,
+        status: newApp.status,
+        motive: newApp.motive || null,
+        notes: newApp.notes || null,
+        createdAt: newApp.createdAt
+      }
+    }).catch(e => console.warn("[DB-Postgres] Error guardando cita en Postgres:", e.message));
+  }
+
   // Garantizar Integridad Referencial con la tabla de Pacientes Clínicos
   try {
     ensurePatientForAppointment({
@@ -568,10 +644,16 @@ export function getPatientPsyAppointments(patientIdOrDoc: string): PsyAppointmen
 }
 
 export function updatePsyAppointmentStatus(id: string, status: "Confirmada" | "Pendiente" | "Completada" | "Cancelada"): boolean {
-  const app = psyAppointments.find(a => a.id === id);
+  const app = psyAppointments.find(a => a.id.toLowerCase() === id.toLowerCase());
   if (app) { 
     app.status = status; 
     saveJsonFile("appointments.json", psyAppointments);
+    if (prisma) {
+      prisma.appointment.update({
+        where: { id: app.id },
+        data: { status }
+      }).catch(e => console.warn("[DB-Postgres] Error actualizando estado en Postgres:", e.message));
+    }
     broadcastRealtime("APPOINTMENT_UPDATED", app);
     return true; 
   }
@@ -583,10 +665,15 @@ export function cancelPsyAppointment(id: string): boolean {
 }
 
 export function deletePsyAppointment(id: string): boolean {
-  const index = psyAppointments.findIndex(a => a.id === id);
+  const index = psyAppointments.findIndex(a => a.id.toLowerCase() === id.toLowerCase());
   if (index === -1) return false;
   const removed = psyAppointments.splice(index, 1)[0];
   saveJsonFile("appointments.json", psyAppointments);
+  if (prisma) {
+    prisma.appointment.delete({
+      where: { id: removed.id }
+    }).catch(e => console.warn("[DB-Postgres] Error eliminando cita en Postgres:", e.message));
+  }
   broadcastRealtime("APPOINTMENT_DELETED", removed);
   return true;
 }
