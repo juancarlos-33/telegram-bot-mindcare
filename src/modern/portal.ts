@@ -338,6 +338,326 @@ function renderQuickSlotsHtml(therapistName: string): string {
 }
 
 // =============================================================================
+// SKELETON LOADERS PERSONALIZADOS POR BLOQUES REALES DE CADA VISTA
+// =============================================================================
+function getSkeletonHtml(targetPathOrTab: string): string {
+  const norm = (targetPathOrTab || 'home').toLowerCase().replace(/^\/+|\/+$/g, '').split('?')[0].split('#')[0];
+  
+  if (norm === 'login') {
+    return `
+      <div style="width:100%; min-height: calc(75vh - 120px); display: flex; align-items: center; justify-content: center; padding: 40px 16px;">
+        <div class="skeleton-box" style="width: 100%; max-width: 480px; border-radius: 24px; padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <div class="skeleton-box" style="width: 56px; height: 56px; border-radius: 16px; margin: 0 auto; background: rgba(56,189,248,0.18);"></div>
+            <div class="skeleton-box" style="width: 220px; height: 26px; border-radius: 8px; margin: 0 auto; background: rgba(255,255,255,0.1);"></div>
+            <div class="skeleton-box" style="width: 300px; height: 16px; border-radius: 6px; margin: 0 auto; background: rgba(255,255,255,0.06);"></div>
+          </div>
+          <div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 48px; border-radius: 12px; margin-top: 8px; background: rgba(56,189,248,0.25);"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (norm === 'consultar' || norm === 'consultar-cita') {
+    return `
+      <div style="width:100%;">
+        <!-- Skeleton Buscador Cita de Primero -->
+        <div class="skeleton-box" style="height: 190px; margin-bottom: 26px; border-radius: 22px; padding: 32px 30px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="skeleton-box" style="width: 280px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.09);"></div>
+            <div class="skeleton-box" style="width: 140px; height: 22px; border-radius: 999px; background: rgba(56,189,248,0.15);"></div>
+          </div>
+          <div class="skeleton-box" style="width: 480px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+          <div style="display: flex; gap: 12px; margin-top: 10px;">
+            <div class="skeleton-box" style="flex: 1; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="width: 170px; height: 48px; border-radius: 12px; background: rgba(56,189,248,0.25);"></div>
+          </div>
+        </div>
+        <!-- Skeleton 3 Tarjetas Rápidas -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+          <div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div>
+          <div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(99,102,241,0.15);"></div></div>
+          <div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (norm === 'admin') {
+    return `
+      <div style="width:100%;">
+        <!-- Skeleton Hero Banner Admin -->
+        <div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px 36px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="skeleton-box" style="width: 280px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>
+            <div class="skeleton-box" style="width: 120px; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>
+          </div>
+          <div class="skeleton-box" style="width: 440px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <!-- Skeleton Búsqueda Forense -->
+        <div class="skeleton-box" style="height: 110px; margin-bottom: 24px; border-radius: 18px; padding: 22px;">
+          <div class="skeleton-box" style="width: 320px; height: 20px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>
+          <div style="display: flex; gap: 12px;">
+            <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="width: 170px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.15);"></div>
+          </div>
+        </div>
+        <!-- Skeleton 6 Tarjetas Métricas KPI -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 26px;">
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>
+        </div>
+        <!-- Skeleton Tabla Auditoría Médica -->
+        <div class="skeleton-box" style="height: 420px; border-radius: 20px; padding: 26px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="skeleton-box" style="width: 250px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>
+            <div class="skeleton-box" style="width: 140px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+            <div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>
+            <div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>
+            <div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>
+          </div>
+          <div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>
+          <div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>
+          <div style="display: flex; gap: 14px; align-items: center; padding: 14px 0;"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (norm === 'especialistas') {
+    return `
+      <div style="width:100%;">
+        <!-- Skeleton Cabecera Especialistas -->
+        <div class="skeleton-box" style="height: 140px; margin-bottom: 28px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div class="skeleton-box" style="width: 290px; height: 30px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.09);"></div>
+            <div class="skeleton-box" style="width: 380px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+          </div>
+          <div class="skeleton-box" style="width: 180px; height: 44px; border-radius: 12px; background: rgba(56,189,248,0.2);"></div>
+        </div>
+        <!-- Skeleton Grid Tarjetas de Médicos -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">
+          <div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>
+          <div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>
+          <div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (norm === 'reportes') {
+    return `
+      <div style="width:100%;">
+        <!-- Skeleton Cabecera Reportes -->
+        <div class="skeleton-box" style="height: 150px; margin-bottom: 24px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.1);"></div>
+            <div class="skeleton-box" style="width: 420px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(16,185,129,0.18);"></div>
+            <div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>
+          </div>
+        </div>
+        <!-- Skeleton Filtros de Auditoría -->
+        <div class="skeleton-box" style="height: 80px; margin-bottom: 24px; border-radius: 16px; padding: 18px 24px; display: flex; gap: 16px; align-items: center;">
+          <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>
+          <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>
+          <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>
+          <div class="skeleton-box" style="width: 140px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>
+        </div>
+        <!-- Skeleton 4 Métricas de Facturación -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 26px;">
+          <div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>
+          <div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>
+        </div>
+        <!-- Skeleton 2 Gráficas Analíticas -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 22px;">
+          <div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:200px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>
+          <div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:220px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (norm === 'citas') {
+    return `
+      <div style="width:100%;">
+        <!-- Skeleton Hero Banner Citas -->
+        <div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px; display: flex; flex-direction: column; justify-content: space-between;">
+          <div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 480px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <!-- Skeleton Consulta Mi Cita -->
+        <div class="skeleton-box" style="height: 120px; margin-bottom: 28px; border-radius: 18px; padding: 22px;">
+          <div class="skeleton-box" style="width: 300px; height: 18px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>
+          <div style="display: flex; gap: 12px;">
+            <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="width: 160px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>
+          </div>
+        </div>
+        <!-- Skeleton 2 Columnas: Formulario & Directorio -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 26px;">
+          <div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 18px;">
+            <div class="skeleton-box" style="width: 240px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>
+            <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+            <div class="skeleton-box" style="height: 50px; border-radius: 12px; margin-top: auto; background: rgba(56,189,248,0.25);"></div>
+          </div>
+          <div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 16px;">
+            <div class="skeleton-box" style="width: 260px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>
+            <div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+            <div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+            <div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+            <div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // DEFAULT: PÁGINA DE INICIO (HOME) - FIEL A TODOS SUS BLOQUES REALES
+  return `
+    <div style="width:100%;">
+      <!-- 1. Skeleton Hero Banner Institucional -->
+      <div class="skeleton-box" style="margin-bottom: 30px; padding: 44px 38px; border-radius: 26px; border: 1px solid rgba(14, 165, 233, 0.3); display: flex; flex-direction: column; gap: 18px;">
+        <div class="skeleton-box" style="width: 310px; height: 26px; border-radius: 999px; background: rgba(56,189,248,0.2);"></div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="skeleton-box" style="width: 86%; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.12);"></div>
+          <div class="skeleton-box" style="width: 62%; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.1);"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="skeleton-box" style="width: 92%; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="width: 74%; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;">
+          <div class="skeleton-box" style="width: 170px; height: 46px; border-radius: 12px; background: rgba(56,189,248,0.28);"></div>
+          <div class="skeleton-box" style="width: 200px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.08);"></div>
+          <div class="skeleton-box" style="width: 230px; height: 46px; border-radius: 12px; background: rgba(99,102,241,0.2);"></div>
+        </div>
+      </div>
+
+      <!-- 2. Skeleton Franja de Confianza & Social Proof (4 KPIs) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 34px;">
+        <div class="skeleton-box" style="height: 120px; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+          <div class="skeleton-box" style="width: 95px; height: 34px; border-radius: 8px; background: rgba(56,189,248,0.25);"></div>
+          <div class="skeleton-box" style="width: 140px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 170px; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <div class="skeleton-box" style="height: 120px; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+          <div class="skeleton-box" style="width: 75px; height: 34px; border-radius: 8px; background: rgba(16,185,129,0.25);"></div>
+          <div class="skeleton-box" style="width: 140px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 170px; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <div class="skeleton-box" style="height: 120px; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+          <div class="skeleton-box" style="width: 50px; height: 34px; border-radius: 8px; background: rgba(168,85,247,0.25);"></div>
+          <div class="skeleton-box" style="width: 140px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 170px; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <div class="skeleton-box" style="height: 120px; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+          <div class="skeleton-box" style="width: 75px; height: 34px; border-radius: 8px; background: rgba(245,158,11,0.25);"></div>
+          <div class="skeleton-box" style="width: 140px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 170px; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+      </div>
+
+      <!-- 3. Skeleton Grid 2 Columnas (Agendamiento + Ecosistema Terapéutico) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; margin-bottom: 30px;">
+        <!-- Columna 1: Formulario Agendamiento -->
+        <div class="skeleton-box" style="border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <div class="skeleton-box" style="width: 250px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>
+            <div class="skeleton-box" style="width: 115px; height: 22px; border-radius: 999px; background: rgba(16,185,129,0.18);"></div>
+          </div>
+          <div class="skeleton-box" style="width: 85%; height: 14px; border-radius: 4px; margin-bottom: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 60px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>
+          <div class="skeleton-box" style="height: 42px; border-radius: 10px; background: rgba(56,189,248,0.1);"></div>
+          <div class="skeleton-box" style="height: 50px; border-radius: 12px; margin-top: 6px; background: rgba(56,189,248,0.28);"></div>
+        </div>
+        <!-- Columna 2: Ecosistema Terapéutico -->
+        <div class="skeleton-box" style="border-radius: 20px; padding: 28px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <div class="skeleton-box" style="width: 240px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>
+              <div class="skeleton-box" style="width: 100px; height: 22px; border-radius: 999px; background: rgba(168,85,247,0.2);"></div>
+            </div>
+            <div class="skeleton-box" style="width: 80%; height: 14px; border-radius: 4px; margin-bottom: 18px; background: rgba(255,255,255,0.06);"></div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="skeleton-box" style="height: 58px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+              <div class="skeleton-box" style="height: 58px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+              <div class="skeleton-box" style="height: 58px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+              <div class="skeleton-box" style="height: 58px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+            <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.08);"></div>
+            <div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Skeleton Directorio de Especialistas y Consultorios (6 Médicos) -->
+      <div class="skeleton-box" style="border-radius: 22px; padding: 28px; margin-bottom: 28px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div class="skeleton-box" style="width: 320px; height: 28px; border-radius: 8px; margin-bottom: 8px; background: rgba(255,255,255,0.1);"></div>
+            <div class="skeleton-box" style="width: 380px; height: 14px; border-radius: 4px; background: rgba(255,255,255,0.06);"></div>
+          </div>
+          <div class="skeleton-box" style="width: 190px; height: 40px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 200px; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:12px;"><div class="skeleton-box" style="width:44px;height:44px;border-radius:12px;background:rgba(56,189,248,0.15);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:18px;border-radius:6px;margin-bottom:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:13px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div class="skeleton-box" style="height:26px;border-radius:8px;background:rgba(255,255,255,0.05);"></div><div class="skeleton-box" style="height:36px;border-radius:10px;background:rgba(255,255,255,0.08);"></div></div>
+        </div>
+      </div>
+
+      <!-- 5. Skeleton Consultorios en Tiempo Real -->
+      <div class="skeleton-box" style="border-radius: 20px; padding: 26px; margin-bottom: 28px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px;">
+          <div class="skeleton-box" style="width: 320px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>
+          <div class="skeleton-box" style="width: 180px; height: 38px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+          <div class="skeleton-box" style="height: 130px; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:16px;border-radius:4px;background:rgba(56,189,248,0.15);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:90px;height:26px;border-radius:6px;margin-left:auto;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 130px; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:16px;border-radius:4px;background:rgba(56,189,248,0.15);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:90px;height:26px;border-radius:6px;margin-left:auto;background:rgba(255,255,255,0.08);"></div></div>
+          <div class="skeleton-box" style="height: 130px; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:16px;border-radius:4px;background:rgba(56,189,248,0.15);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:90px;height:26px;border-radius:6px;margin-left:auto;background:rgba(255,255,255,0.08);"></div></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+const SKELETON_MAP: Record<string, string> = {
+  home: getSkeletonHtml("home"),
+  "consultar-cita": getSkeletonHtml("consultar-cita"),
+  especialistas: getSkeletonHtml("especialistas"),
+  admin: getSkeletonHtml("admin"),
+  reportes: getSkeletonHtml("reportes"),
+  citas: getSkeletonHtml("citas"),
+  login: getSkeletonHtml("login"),
+};
+
+// =============================================================================
 // PLANTILLA MAESTRA ULTRA-MODERNA (DESIGN SYSTEM CON GLASSMORPHISM Y TEMA OSCURO)
 // =============================================================================
 function layout(title: string, content: string, activeTab: string = "home", isAdmin = false, staffSession?: StaffSession): string {
@@ -1626,9 +1946,20 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
     </div>
   </header>
 
-  <main>
-    ${content}
+  <main id="mindcare-main-content">
+    <div id="mindcare-initial-skeleton" class="view-fade-in" style="width: 100%;">
+      ${getSkeletonHtml(activeTab)}
+    </div>
+    <div id="mindcare-real-content" style="display: none; width: 100%;">
+      ${content}
+    </div>
   </main>
+  <noscript>
+    <style>
+      #mindcare-initial-skeleton { display: none !important; }
+      #mindcare-real-content { display: block !important; }
+    </style>
+  </noscript>
 
   <footer>
     <div style="max-width: 1320px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
@@ -2787,203 +3118,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       return s || '/';
     }
 
+    var SKELETON_TEMPLATES = ${JSON.stringify(SKELETON_MAP)};
+
     function getSkeletonForPath(path) {
-      var cleanPath = sanitizePath(path);
-
-      if (cleanPath === '/login') {
-        return '<div class="view-fade-in" style="width:100%; min-height: calc(80vh - 120px); display: flex; align-items: center; justify-content: center; padding: 40px 16px;">' +
-          '<div class="skeleton-box" style="width: 100%; max-width: 480px; border-radius: 24px; padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;">' +
-            '<div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 8px;">' +
-              '<div class="skeleton-box" style="width: 56px; height: 56px; border-radius: 16px; margin: 0 auto; background: rgba(56,189,248,0.18);"></div>' +
-              '<div class="skeleton-box" style="width: 220px; height: 26px; border-radius: 8px; margin: 0 auto; background: rgba(255,255,255,0.1);"></div>' +
-              '<div class="skeleton-box" style="width: 300px; height: 16px; border-radius: 6px; margin: 0 auto; background: rgba(255,255,255,0.06);"></div>' +
-            '</div>' +
-            '<div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>' +
-            '<div class="skeleton-box" style="height: 52px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>' +
-            '<div class="skeleton-box" style="height: 48px; border-radius: 12px; margin-top: 8px; background: rgba(56,189,248,0.25);"></div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      if (cleanPath === '/consultar-cita') {
-        return '<div class="view-fade-in" style="width:100%;">' +
-          '<!-- Skeleton Buscador Cita de Primero -->' +
-          '<div class="skeleton-box" style="height: 190px; margin-bottom: 26px; border-radius: 22px; padding: 32px 30px; display: flex; flex-direction: column; justify-content: space-between;">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center;">' +
-              '<div class="skeleton-box" style="width: 280px; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.09);"></div>' +
-              '<div class="skeleton-box" style="width: 140px; height: 22px; border-radius: 999px; background: rgba(56,189,248,0.15);"></div>' +
-            '</div>' +
-            '<div class="skeleton-box" style="width: 480px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-            '<div style="display: flex; gap: 12px; margin-top: 10px;">' +
-              '<div class="skeleton-box" style="flex: 1; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="width: 170px; height: 48px; border-radius: 12px; background: rgba(56,189,248,0.25);"></div>' +
-            '</div>' +
-          '</div>' +
-          '<!-- Skeleton 3 Tarjetas Rápidas -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">' +
-            '<div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div>' +
-            '<div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(99,102,241,0.15);"></div></div>' +
-            '<div class="skeleton-box" style="height: 180px; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:160px;height:20px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      if (cleanPath === '/admin') {
-        return '<div class="view-fade-in" style="width:100%;">' +
-          '<!-- Skeleton Hero Banner Admin -->' +
-          '<div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px 36px; display: flex; flex-direction: column; justify-content: space-between;">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center;">' +
-              '<div class="skeleton-box" style="width: 280px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>' +
-              '<div class="skeleton-box" style="width: 120px; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
-            '</div>' +
-            '<div class="skeleton-box" style="width: 440px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-          '</div>' +
-          '<!-- Skeleton Búsqueda Forense -->' +
-          '<div class="skeleton-box" style="height: 110px; margin-bottom: 24px; border-radius: 18px; padding: 22px;">' +
-            '<div class="skeleton-box" style="width: 320px; height: 20px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>' +
-            '<div style="display: flex; gap: 12px;">' +
-              '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="width: 170px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.15);"></div>' +
-            '</div>' +
-          '</div>' +
-          '<!-- Skeleton 6 Tarjetas Métricas KPI -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 26px;">' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 110px; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;justify-content:space-between;"><div class="skeleton-box" style="width:70px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.08);"></div></div><div class="skeleton-box" style="width:60px;height:28px;border-radius:6px;background:rgba(255,255,255,0.12);"></div></div>' +
-          '</div>' +
-          '<!-- Skeleton Tabla Auditoría Médica -->' +
-          '<div class="skeleton-box" style="height: 420px; border-radius: 20px; padding: 26px;">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">' +
-              '<div class="skeleton-box" style="width: 250px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
-              '<div class="skeleton-box" style="width: 140px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.08);"></div>' +
-            '</div>' +
-            '<div style="display: flex; gap: 8px; margin-bottom: 20px;">' +
-              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
-              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
-              '<div class="skeleton-box" style="width: 90px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.08);"></div>' +
-            '</div>' +
-            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
-            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
-            '<div style="display: flex; gap: 14px; align-items: center; padding: 14px 0;"><div class="skeleton-box" style="width:80px;height:18px;border-radius:4px;background:rgba(56,189,248,0.1);"></div><div class="skeleton-box" style="flex:1;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:110px;height:18px;border-radius:4px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80px;height:22px;border-radius:999px;background:rgba(16,185,129,0.1);"></div><div class="skeleton-box" style="width:120px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);"></div></div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      if (cleanPath === '/especialistas') {
-        return '<div class="view-fade-in" style="width:100%;">' +
-          '<!-- Skeleton Cabecera Especialistas -->' +
-          '<div class="skeleton-box" style="height: 140px; margin-bottom: 28px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">' +
-            '<div>' +
-              '<div class="skeleton-box" style="width: 290px; height: 30px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.09);"></div>' +
-              '<div class="skeleton-box" style="width: 380px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-            '</div>' +
-            '<div class="skeleton-box" style="width: 180px; height: 44px; border-radius: 12px; background: rgba(56,189,248,0.2);"></div>' +
-          '</div>' +
-          '<!-- Skeleton Grid Tarjetas de Médicos -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">' +
-            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
-            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
-            '<div class="skeleton-box" style="height: 290px; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display:flex;align-items:center;gap:14px;"><div class="skeleton-box" style="width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,0.1);"></div><div style="flex:1;"><div class="skeleton-box" style="width:75%;height:20px;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:50%;height:14px;border-radius:4px;background:rgba(56,189,248,0.12);"></div></div></div><div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;margin-bottom:6px;background:rgba(255,255,255,0.06);"></div><div class="skeleton-box" style="width:80%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div><div style="display:flex;gap:10px;margin-top:14px;"><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="flex:1;height:38px;border-radius:10px;background:rgba(56,189,248,0.15);"></div></div></div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      if (cleanPath === '/reportes') {
-        return '<div class="view-fade-in" style="width:100%;">' +
-          '<!-- Skeleton Cabecera Reportes -->' +
-          '<div class="skeleton-box" style="height: 150px; margin-bottom: 24px; border-radius: 20px; padding: 28px; display: flex; justify-content: space-between; align-items: center;">' +
-            '<div>' +
-              '<div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; margin-bottom: 10px; background: rgba(255,255,255,0.1);"></div>' +
-              '<div class="skeleton-box" style="width: 420px; height: 16px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-            '</div>' +
-            '<div style="display: flex; gap: 10px;">' +
-              '<div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(16,185,129,0.18);"></div>' +
-              '<div class="skeleton-box" style="width: 120px; height: 40px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>' +
-            '</div>' +
-          '</div>' +
-          '<!-- Skeleton Filtros de Auditoría -->' +
-          '<div class="skeleton-box" style="height: 80px; margin-bottom: 24px; border-radius: 16px; padding: 18px 24px; display: flex; gap: 16px; align-items: center;">' +
-            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
-            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
-            '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.07);"></div>' +
-            '<div class="skeleton-box" style="width: 140px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.18);"></div>' +
-          '</div>' +
-          '<!-- Skeleton 4 Métricas de Facturación -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 26px;">' +
-            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
-            '<div class="skeleton-box" style="height: 125px; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:110px;height:14px;border-radius:4px;background:rgba(255,255,255,0.08);"></div><div class="skeleton-box" style="width:90px;height:32px;border-radius:6px;background:rgba(255,255,255,0.14);"></div><div class="skeleton-box" style="width:140px;height:12px;border-radius:4px;background:rgba(16,185,129,0.12);"></div></div>' +
-          '</div>' +
-          '<!-- Skeleton 2 Gráficas Analíticas -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 22px;">' +
-            '<div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:200px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>' +
-            '<div class="skeleton-box" style="height: 340px; border-radius: 20px; padding: 24px;"><div class="skeleton-box" style="width:220px;height:20px;border-radius:6px;margin-bottom:20px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="height:230px;border-radius:14px;background:rgba(255,255,255,0.04);"></div></div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      if (cleanPath === '/citas') {
-        return '<div class="view-fade-in" style="width:100%;">' +
-          '<!-- Skeleton Hero Banner Citas -->' +
-          '<div class="skeleton-box" style="height: 160px; margin-bottom: 26px; border-radius: 22px; padding: 32px; display: flex; flex-direction: column; justify-content: space-between;">' +
-            '<div class="skeleton-box" style="width: 320px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.1);"></div>' +
-            '<div class="skeleton-box" style="width: 480px; height: 18px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-          '</div>' +
-          '<!-- Skeleton Consulta Mi Cita -->' +
-          '<div class="skeleton-box" style="height: 120px; margin-bottom: 28px; border-radius: 18px; padding: 22px;">' +
-            '<div class="skeleton-box" style="width: 300px; height: 18px; border-radius: 6px; margin-bottom: 14px; background: rgba(255,255,255,0.08);"></div>' +
-            '<div style="display: flex; gap: 12px;">' +
-              '<div class="skeleton-box" style="flex: 1; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="width: 160px; height: 42px; border-radius: 10px; background: rgba(56,189,248,0.2);"></div>' +
-            '</div>' +
-          '</div>' +
-          '<!-- Skeleton 2 Columnas: Formulario & Directorio -->' +
-          '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 26px;">' +
-            '<div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 18px;">' +
-              '<div class="skeleton-box" style="width: 240px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
-              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="height: 44px; border-radius: 10px; background: rgba(255,255,255,0.06);"></div>' +
-              '<div class="skeleton-box" style="height: 50px; border-radius: 12px; margin-top: auto; background: rgba(56,189,248,0.25);"></div>' +
-            '</div>' +
-            '<div class="skeleton-box" style="height: 480px; border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 16px;">' +
-              '<div class="skeleton-box" style="width: 260px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.09);"></div>' +
-              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
-              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
-              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
-              '<div class="skeleton-box" style="height: 70px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }
-
-      // Default / Inicio
-      return '<div class="view-fade-in" style="width:100%;">' +
-        '<!-- Skeleton Hero Banner Home -->' +
-        '<div class="skeleton-box" style="height: 280px; margin-bottom: 30px; border-radius: 24px; padding: 40px; display: flex; flex-direction: column; justify-content: space-between;">' +
-          '<div>' +
-            '<div class="skeleton-box" style="width: 140px; height: 24px; border-radius: 999px; margin-bottom: 16px; background: rgba(56,189,248,0.15);"></div>' +
-            '<div class="skeleton-box" style="width: 480px; height: 42px; border-radius: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.1);"></div>' +
-            '<div class="skeleton-box" style="width: 360px; height: 20px; border-radius: 6px; background: rgba(255,255,255,0.06);"></div>' +
-          '</div>' +
-          '<div style="display: flex; gap: 14px;">' +
-            '<div class="skeleton-box" style="width: 160px; height: 46px; border-radius: 12px; background: rgba(56,189,248,0.25);"></div>' +
-            '<div class="skeleton-box" style="width: 160px; height: 46px; border-radius: 12px; background: rgba(255,255,255,0.08);"></div>' +
-          '</div>' +
-        '</div>' +
-        '<!-- Skeleton 3 Tarjetas de Especialidades -->' +
-        '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">' +
-          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
-          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
-          '<div class="skeleton-box" style="height: 190px; border-radius: 18px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between;"><div class="skeleton-box" style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.1);"></div><div class="skeleton-box" style="width:180px;height:22px;border-radius:6px;background:rgba(255,255,255,0.09);"></div><div class="skeleton-box" style="width:100%;height:14px;border-radius:4px;background:rgba(255,255,255,0.06);"></div></div>' +
-        '</div>' +
-      '</div>';
+      var clean = sanitizePath(path).replace(/^\/+|\/+$/g, '') || 'home';
+      if (clean === 'consultar') clean = 'consultar-cita';
+      var skel = SKELETON_TEMPLATES[clean] || SKELETON_TEMPLATES['home'];
+      return '<div class="view-fade-in" style="width:100%;">' + skel + '</div>';
     }
 
     var spaAbortController = null;
@@ -3094,7 +3235,12 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
                 currentHeader.innerHTML = newHeader.innerHTML;
               }
 
-              mainEl.innerHTML = newMain.innerHTML;
+              var realContentInNewMain = newMain.querySelector('#mindcare-real-content');
+              if (realContentInNewMain) {
+                mainEl.innerHTML = realContentInNewMain.innerHTML;
+              } else {
+                mainEl.innerHTML = newMain.innerHTML;
+              }
               mainEl.className = 'view-fade-in';
 
               // Ejecutar scripts dinámicos incluidos en la vista de manera segura
@@ -3205,10 +3351,36 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       try { if (typeof initRealtimeSync === 'function') initRealtimeSync(); } catch(e){}
     }
 
+    function revealInitialContent() {
+      var skel = document.getElementById('mindcare-initial-skeleton');
+      var real = document.getElementById('mindcare-real-content');
+      if (skel && real) {
+        setTimeout(function() {
+          skel.style.transition = 'opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
+          skel.style.opacity = '0';
+          skel.style.transform = 'translateY(-4px)';
+          setTimeout(function() {
+            skel.style.display = 'none';
+            real.style.display = 'block';
+            real.classList.add('view-fade-in');
+            initAllInteractive();
+            try {
+              if (window.location.hash) {
+                var targetEl = document.querySelector(window.location.hash);
+                if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth' });
+              }
+            } catch(e) {}
+          }, 180);
+        }, 240);
+      } else {
+        initAllInteractive();
+      }
+    }
+
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initAllInteractive);
+      document.addEventListener('DOMContentLoaded', revealInitialContent);
     } else {
-      initAllInteractive();
+      revealInitialContent();
     }
   </script>
 </body>
