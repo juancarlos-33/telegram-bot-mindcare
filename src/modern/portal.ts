@@ -1453,9 +1453,6 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           <a href="/especialistas" class="nav-link ${activeTab === 'especialistas' ? 'active' : ''}">
             👨‍⚕️ Especialistas
           </a>
-          <a href="/crm" class="nav-link ${activeTab === 'crm' ? 'active' : ''}">
-            💼 CRM Clínico
-          </a>
           <a href="/reportes" class="nav-link ${activeTab === 'reportes' ? 'active' : ''}">
             📊 Facturación & Métricas
           </a>
@@ -1582,6 +1579,54 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       <div style="display:flex; gap:12px; justify-content:center;">
         <button type="button" id="confirm-modal-cancel" class="btn btn-secondary" style="flex:1; padding:11px 18px; font-weight:700; border:1px solid rgba(255,255,255,0.15); color:#cbd5e1; cursor:pointer;">Cancelar</button>
         <button type="button" id="confirm-modal-ok" class="btn btn-danger" style="flex:1; padding:11px 18px; font-weight:700; cursor:pointer; background:#dc2626; border-color:#ef4444;">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL GLOBAL DETALLE DE CITA CLÍNICA (DISPONIBLE EN TODO EL PORTAL) -->
+  <div id="modal-cita-detail" style="display:none; position:fixed; inset:0; background:rgba(3,7,18,0.88); backdrop-filter:blur(8px); z-index:9999999; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.4); border-radius:18px; max-width:550px; width:100%; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+        <div>
+          <h3 style="color:#fff; font-size:1.25rem; font-weight:700; margin:0;">📋 Detalle de Consulta Médica</h3>
+          <span style="font-size:0.78rem; color:#38bdf8;" id="mcd-id">ID: psi-000</span>
+        </div>
+        <button type="button" onclick="closeCitaDetailModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer; padding:4px;">✕</button>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Paciente</span>
+          <div style="font-weight:700; color:#fff; font-size:0.95rem; margin-top:2px;" id="mcd-patient">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Documento / C.C.</span>
+          <div style="font-weight:700; color:#38bdf8; font-family:'JetBrains Mono',monospace; margin-top:2px;" id="mcd-doc">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialidad</span>
+          <div style="font-weight:600; color:#a5b4fc; margin-top:2px;" id="mcd-specialty">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
+          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialista</span>
+          <div style="font-weight:600; color:#fff; margin-top:2px;" id="mcd-therapist">—</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.25); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+        <span style="font-size:0.72rem; color:#38bdf8; text-transform:uppercase; font-weight:700;">Fecha y Horario</span>
+        <div style="font-size:1.05rem; font-weight:800; color:#fff; margin-top:2px;" id="mcd-date">—</div>
+        <div style="font-size:0.78rem; color:#94a3b8; margin-top:2px;" id="mcd-scheduled">—</div>
+      </div>
+
+      <div style="background:rgba(255,255,255,0.03); padding:12px 14px; border-radius:10px; margin-bottom:18px;">
+        <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Motivo de Consulta (Confidencial)</span>
+        <div style="color:#e2e8f0; font-size:0.88rem; margin-top:4px; line-height:1.4;" id="mcd-motive">—</div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div id="mcd-status-badge">● Pendiente</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;" id="mcd-actions"></div>
       </div>
     </div>
   </div>
@@ -2032,6 +2077,21 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         setAndPulse('kpi-num-canceled', stats.canceledAppointments);
         setAndPulse('kpi-num-moods', stats.totalMoods);
         setAndPulse('kpi-num-tests', stats.totalTests);
+
+        const subTotal = document.getElementById('kpi-sub-total');
+        if (subTotal && stats.allTotalAppointments !== undefined) {
+          subTotal.textContent = stats.allTotalAppointments + ' en historial (' + stats.canceledAppointments + ' canceladas)';
+        }
+        const pTodas = document.getElementById('pill-count-todas');
+        if (pTodas && stats.allTotalAppointments !== undefined) pTodas.textContent = stats.allTotalAppointments;
+        const pConf = document.getElementById('pill-count-confirmadas');
+        if (pConf && stats.confirmedAppointments !== undefined) pConf.textContent = stats.confirmedAppointments;
+        const pPend = document.getElementById('pill-count-pendientes');
+        if (pPend && stats.pendingAppointments !== undefined) pPend.textContent = stats.pendingAppointments;
+        const pCanc = document.getElementById('pill-count-canceladas');
+        if (pCanc && stats.canceledAppointments !== undefined) pCanc.textContent = stats.canceledAppointments;
+        const bTotal = document.getElementById('agenda-total-badge');
+        if (bTotal && stats.allTotalAppointments !== undefined) bTotal.textContent = stats.allTotalAppointments + ' Citas en Total';
       }
 
       function syncRealtimeStats() {
@@ -2040,6 +2100,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           .then(function(res) {
             if (res && res.stats) {
               updateKpisDirectly(res.stats);
+            }
+            if (res && res.recentAppointments) {
+              window.ADMIN_CITAS_DATA = res.recentAppointments;
             }
           })
           .catch(function() {});
@@ -2099,6 +2162,18 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               curAdminKpis.innerHTML = newAdminKpis.innerHTML;
             }
 
+            const newFilterPills = doc.getElementById('table-filter-pills');
+            const curFilterPills = document.getElementById('table-filter-pills');
+            if (newFilterPills && curFilterPills) {
+              curFilterPills.innerHTML = newFilterPills.innerHTML;
+            }
+
+            const newAgendaBadge = doc.getElementById('agenda-total-badge');
+            const curAgendaBadge = document.getElementById('agenda-total-badge');
+            if (newAgendaBadge && curAgendaBadge) {
+              curAgendaBadge.innerHTML = newAgendaBadge.innerHTML;
+            }
+
             const newMetrics = doc.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
             const curMetrics = document.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
             if (newMetrics && curMetrics) {
@@ -2118,6 +2193,9 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         fetch('/api/realtime/summary')
           .then(function(r) { return r.json(); })
           .then(function(res) {
+            if (res && res.stats) {
+              updateKpisDirectly(res.stats);
+            }
             if (res && res.recentAppointments) {
               window.ADMIN_CITAS_DATA = res.recentAppointments;
             }
@@ -2226,6 +2304,98 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         window.location.href = url;
       }
     }
+
+    // Modal Global de Detalle Clínico de Cita
+    function openCitaDetailById(id) {
+      const modal = document.getElementById('modal-cita-detail');
+      if (!modal) return;
+      const targetId = String(id || '').trim().toLowerCase();
+      const list = window.ADMIN_CITAS_DATA || [];
+      const found = list.find(function(c) {
+        return String(c.id || '').toLowerCase() === targetId || 
+               (c.documentNumber && c.documentNumber.replace(/\D/g, '') === targetId.replace(/\D/g, ''));
+      });
+      if (found) {
+        renderCitaModal(found);
+        return;
+      }
+
+      fetch('/api/citas/detalle?id=' + encodeURIComponent(id))
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res && res.cita) {
+            renderCitaModal(res.cita);
+          } else {
+            alert('Cita #' + id + ' no encontrada o ya fue cancelada.');
+          }
+        })
+        .catch(function(err) {
+          console.error('Error cargando cita:', err);
+          alert('Error de conexión al cargar la cita #' + id);
+        });
+    }
+    window.openCitaDetailById = openCitaDetailById;
+    window.openCitaDetailModal = openCitaDetailById;
+
+    function renderCitaModal(cita) {
+      try {
+        const modal = document.getElementById('modal-cita-detail');
+        if (!modal || !cita) return;
+
+        const elId = document.getElementById('mcd-id');
+        if (elId) elId.textContent = 'ID: #' + (cita.id || '');
+        const elPat = document.getElementById('mcd-patient');
+        if (elPat) elPat.textContent = cita.patientName || 'Paciente';
+        const elDoc = document.getElementById('mcd-doc');
+        if (elDoc) elDoc.textContent = cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado';
+        const elSpec = document.getElementById('mcd-specialty');
+        if (elSpec) elSpec.textContent = cita.specialty || 'Psicología';
+        const elTher = document.getElementById('mcd-therapist');
+        if (elTher) elTher.textContent = cita.therapist || 'Especialista';
+        const elDate = document.getElementById('mcd-date');
+        if (elDate) elDate.textContent = cita.dateTime || '';
+
+        let scheduledText = '';
+        if (cita.scheduledAt) {
+          try {
+            const d = new Date(cita.scheduledAt);
+            if (!isNaN(d.getTime())) {
+              scheduledText = 'Hora exacta en Colombia: ' + d.toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+            }
+          } catch (_) {}
+        }
+        const elSched = document.getElementById('mcd-scheduled');
+        if (elSched) elSched.textContent = scheduledText;
+
+        const elMot = document.getElementById('mcd-motive');
+        if (elMot) elMot.textContent = cita.motive || 'Sin motivo específico registrado';
+        
+        const badge = document.getElementById('mcd-status-badge');
+        if (badge) {
+          badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
+          badge.textContent = '● ' + (cita.status || 'Pendiente');
+        }
+
+        const actions = document.getElementById('mcd-actions');
+        if (actions) {
+          actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>' +
+            '<form action="/api/citas/estado" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Cancelar Cita Médica?" data-confirm-message="¿Deseas cancelar la cita #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '? El horario será liberado completamente." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">✕ Cancelar Cita</button></form>' +
+            '<form action="/api/citas/eliminar" method="POST" style="margin:0; display:inline;" data-confirm-title="¿Eliminar Cita Permanentemente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar</button></form>';
+        }
+
+        modal.style.display = 'flex';
+      } catch (err) {
+        console.error("Error al renderizar modal de cita:", err);
+      }
+    }
+    window.renderCitaModal = renderCitaModal;
+
+    function closeCitaDetailModal() {
+      const modal = document.getElementById('modal-cita-detail');
+      if (modal) modal.style.display = 'none';
+    }
+    window.closeCitaDetailModal = closeCitaDetailModal;
+
     // 9. Sistema de Confirmaciones con Estilo Moderno MindCare (sin confirms feos del navegador)
     function showStyledConfirm(options) {
       return new Promise(function(resolve) {
@@ -2284,7 +2454,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
 
     // Interceptor global de formularios con data-confirm-title
     document.addEventListener('submit', function(e) {
-      const form = e.target;
+      const form = (e.target && e.target.tagName === 'FORM') ? e.target : (e.target && e.target.closest ? e.target.closest('form') : null);
       if (!form || !form.dataset.confirmTitle) return;
       if (form.dataset.confirmed === 'true') return;
 
@@ -2297,7 +2467,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         confirmColor: form.dataset.confirmColor || 'red',
         onConfirm: function() {
           form.dataset.confirmed = 'true';
-          form.submit();
+          HTMLFormElement.prototype.submit.call(form);
         }
       });
     });
@@ -4541,7 +4711,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <div class="card metric-interactive-card" onclick="filterCitasByStatus('TODAS')" style="padding: 18px 16px; text-align: center; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.12); position:relative; background:linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15,23,42,0.8) 100%);" title="Haz clic para ver todas las citas registradas">
         <span style="font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Citas Activas</span>
         <div id="kpi-num-total" style="font-size: 2.1rem; font-weight: 800; color: #fff; margin: 6px 0;">${confirmed + pending}</div>
-        <span style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">${appointments.length} en historial (${canceled} canceladas)</span>
+        <span id="kpi-sub-total" style="font-size: 0.72rem; color: #a5b4fc; display:block; margin-bottom:8px;">${appointments.length} en historial (${canceled} canceladas)</span>
         <span class="badge" style="font-size:0.68rem; background:rgba(255,255,255,0.08); color:#cbd5e1; border:1px solid rgba(255,255,255,0.15);">Ver detalle 👁️</span>
       </div>
 
@@ -4753,10 +4923,10 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
       <!-- Filtros Rápidos por Estado -->
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:12px; border:1px solid var(--border-subtle);">
         <div style="display:flex; gap:6px; flex-wrap:wrap;" id="table-filter-pills">
-          <button type="button" class="btn btn-secondary filter-pill active" onclick="filterCitasByStatus('TODAS')" data-filter="TODAS" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; background:rgba(255,255,255,0.15);">Todas (${appointments.length})</button>
-          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Confirmada')" data-filter="Confirmada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#34d399;">Confirmadas (${confirmed})</button>
-          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Pendiente')" data-filter="Pendiente" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#fbbf24;">Pendientes (${pending})</button>
-          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Cancelada')" data-filter="Cancelada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#f87171;">Canceladas (${canceled})</button>
+          <button type="button" class="btn btn-secondary filter-pill active" onclick="filterCitasByStatus('TODAS')" data-filter="TODAS" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; background:rgba(255,255,255,0.15);">Todas (<span id="pill-count-todas">${appointments.length}</span>)</button>
+          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Confirmada')" data-filter="Confirmada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#34d399;">Confirmadas (<span id="pill-count-confirmadas">${confirmed}</span>)</button>
+          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Pendiente')" data-filter="Pendiente" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#fbbf24;">Pendientes (<span id="pill-count-pendientes">${pending}</span>)</button>
+          <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Cancelada')" data-filter="Cancelada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#f87171;">Canceladas (<span id="pill-count-canceladas">${canceled}</span>)</button>
         </div>
         <div style="color:var(--text-dim); font-size:0.75rem;">
           💡 Haz clic en cualquier botón de estado o fila para ver el detalle
@@ -4879,54 +5049,6 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
               <div style="font-size:0.78rem; color:var(--text-muted);">${t.recommendation}</div>
             </div>
           `).join('')}
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL DETALLE DE CITA CLÍNICA -->
-    <div id="modal-cita-detail" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(8px); z-index:999999; align-items:center; justify-content:center; padding:16px;">
-      <div style="background:#0f172a; border:1px solid rgba(56,189,248,0.4); border-radius:18px; max-width:550px; width:100%; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.7); position:relative;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
-          <div>
-            <h3 style="color:#fff; font-size:1.25rem; font-weight:700; margin:0;">📋 Detalle de Consulta Médica</h3>
-            <span style="font-size:0.78rem; color:#38bdf8;" id="mcd-id">ID: psi-000</span>
-          </div>
-          <button type="button" onclick="closeCitaDetailModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer; padding:4px;">✕</button>
-        </div>
-        
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
-          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
-            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Paciente</span>
-            <div style="font-weight:700; color:#fff; font-size:0.95rem; margin-top:2px;" id="mcd-patient">—</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
-            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Documento / C.C.</span>
-            <div style="font-weight:700; color:#38bdf8; font-family:'JetBrains Mono',monospace; margin-top:2px;" id="mcd-doc">—</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
-            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialidad</span>
-            <div style="font-weight:600; color:#a5b4fc; margin-top:2px;" id="mcd-specialty">—</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px;">
-            <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Especialista</span>
-            <div style="font-weight:600; color:#fff; margin-top:2px;" id="mcd-therapist">—</div>
-          </div>
-        </div>
-
-        <div style="background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.25); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-          <span style="font-size:0.72rem; color:#38bdf8; text-transform:uppercase; font-weight:700;">Fecha y Horario</span>
-          <div style="font-size:1.05rem; font-weight:800; color:#fff; margin-top:2px;" id="mcd-date">—</div>
-          <div style="font-size:0.78rem; color:#94a3b8; margin-top:2px;" id="mcd-scheduled">—</div>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.03); padding:12px 14px; border-radius:10px; margin-bottom:18px;">
-          <span style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Motivo de Consulta (Confidencial)</span>
-          <div style="color:#e2e8f0; font-size:0.88rem; margin-top:4px; line-height:1.4;" id="mcd-motive">—</div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div id="mcd-status-badge">● Pendiente</div>
-          <div style="display:flex; gap:8px;" id="mcd-actions"></div>
         </div>
       </div>
     </div>

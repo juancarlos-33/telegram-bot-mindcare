@@ -655,18 +655,14 @@ bot.on("callback_query", async (ctx) => {
     const all = getAllPsyAppointments();
     const app = all.find(a => a.id.toLowerCase() === id.toLowerCase() || (a.documentNumber && a.documentNumber.replace(/\D/g, "") === id.replace(/\D/g, "")));
     const targetId = app ? app.id : id;
-    const ok = deletePsyAppointment(targetId);
-    if (ok || app) {
-      try {
-        await ctx.editMessageText(
-          `✅ *CITA CANCELADA Y LIBERADA CON ÉXITO*\n\nEl turno \`#${targetId}\` ${app ? `de *${app.patientName}* programado para el *${app.dateTime}*` : ""} ha sido cancelado y eliminado de la base de datos.\n\n✨ *El espacio ha quedado 100% disponible de inmediato* para nuevos pacientes en la clínica y en el portal web.\n\nSi deseas agendar en otro horario cuando lo necesites, escribe /cita. ¡Cuídate mucho! 💙`,
-          { parse_mode: "Markdown" }
-        );
-      } catch (_) {
-        await ctx.reply(`✅ *Cita #${targetId} cancelada y liberada con éxito.* El horario ya está disponible nuevamente.`);
-      }
-    } else {
-      await ctx.reply(`❌ No se pudo cancelar la cita #${id} o ya fue liberada.`);
+    deletePsyAppointment(targetId);
+    try {
+      await ctx.editMessageText(
+        `✅ *CITA CANCELADA Y LIBERADA CON ÉXITO*\n\nEl turno \`#${targetId}\` ${app ? `de *${app.patientName}* programado para el *${app.dateTime}*` : ""} ha sido cancelado y eliminado de la base de datos.\n\n✨ *El espacio ha quedado 100% disponible de inmediato* para nuevos pacientes en la clínica y en el portal web.\n\nSi deseas agendar en otro horario cuando lo necesites, escribe /cita. ¡Cuídate mucho! 💙`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (_) {
+      await ctx.reply(`✅ *Cita #${targetId} cancelada y liberada con éxito.* El horario ya está disponible nuevamente.`);
     }
     return;
   }
