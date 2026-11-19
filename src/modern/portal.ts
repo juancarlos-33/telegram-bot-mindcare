@@ -71,6 +71,178 @@ import {
 
 export const portalRouter = Router();
 
+// =============================================================================
+// MIDDLEWARE DE BLOQUEO GLOBAL POR RATE LIMIT (OWASP / NIST)
+// Si la IP del cliente excedió los intentos fallidos de login al Panel Admin,
+// el acceso se restringe en TODA la plataforma mostrando el temporizador regresivo.
+// =============================================================================
+portalRouter.use((req: Request, res: Response, next) => {
+  const clientIp = getClientIp(req);
+  const rateStatus = getLoginRateLimitStatus(clientIp);
+
+  if (rateStatus.isLocked) {
+    res.setHeader("X-RateLimit-Limit", String(rateStatus.maxAttempts));
+    res.setHeader("X-RateLimit-Remaining", "0");
+    res.setHeader("Retry-After", String(rateStatus.retryAfterSeconds));
+    res.status(429);
+
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      res.json({
+        status: "error",
+        error: "IP_BLOCKED",
+        message: "Acceso temporalmente restringido por exceso de intentos fallidos en el Panel Admin.",
+        retryAfterSeconds: rateStatus.retryAfterSeconds
+      });
+      return;
+    }
+
+    const minutes = Math.floor(rateStatus.retryAfterSeconds / 60);
+    const seconds = rateStatus.retryAfterSeconds % 60;
+    const timeDisplay = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+
+    const lockoutHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso Bloqueado por Protocolo de Seguridad - MindCare</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .lock-box {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1.5px solid rgba(239, 68, 68, 0.5);
+      border-radius: 24px;
+      max-width: 540px;
+      width: 100%;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 40px rgba(239, 68, 68, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+    .lock-top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #ef4444);
+    }
+    .timer-circle {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.12);
+      border: 2px solid rgba(239, 68, 68, 0.6);
+      margin: 20px 0;
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.2);
+    }
+    .timer-val {
+      font-size: 2.1rem;
+      font-weight: 800;
+      font-family: monospace;
+      color: #f87171;
+      letter-spacing: 1px;
+    }
+    .timer-sub {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .info-strip {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 14px;
+      margin: 20px 0;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .badge-ip {
+      display: inline-block;
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-family: monospace;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="lock-box">
+    <div class="lock-top-bar"></div>
+    <div style="font-size: 3.5rem; margin-bottom: 10px;">🔒</div>
+    <span class="badge-ip">IP: ${clientIp}</span>
+    <h1 style="font-size: 1.6rem; font-weight: 800; color: #fff; margin-bottom: 8px;">
+      Acceso Temporalmente Bloqueado
+    </h1>
+    <p style="color: #94a3b8; font-size: 0.92rem; line-height: 1.5; margin: 0 0 10px 0;">
+      Has superado el límite de intentos fallidos al ingresar al <strong>Panel Admin</strong>. Por seguridad clínica de los expedientes, el portal está bloqueado para tu conexión.
+    </p>
+
+    <div class="timer-circle">
+      <span class="timer-val" id="countdown">${timeDisplay}</span>
+      <span class="timer-sub">Tiempo Restante</span>
+    </div>
+
+    <div class="info-strip">
+      🛡️ <strong>Protocolo OWASP ASVS v4.0 & NIST SP 800-63B:</strong><br>
+      Por favor aguarda a que finalice el contador para reintentar la navegación. Al expirar el tiempo, la página se reactivará automáticamente.
+    </div>
+
+    <div style="font-size: 0.78rem; color: #64748b;">
+      MindCare Health Technologies • Centro Clínico & CRM de Psicología
+    </div>
+  </div>
+
+  <script>
+    let remaining = ${rateStatus.retryAfterSeconds};
+    const display = document.getElementById('countdown');
+
+    const interval = setInterval(function() {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(interval);
+        display.textContent = '00:00';
+        window.location.reload();
+        return;
+      }
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      display.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+  </script>
+</body>
+</html>`;
+
+    res.send(lockoutHtml);
+    return;
+  }
+
+  next();
+});
+
 const BOT_USERNAME = process.env.BOT_USERNAME ?? "juancarlos_project_bot";
 const APP_BASE_URL =
   process.env.APP_BASE_URL ||
@@ -1549,7 +1721,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             🔎 Consultar Mi Cita
           </a>
           <a href="/login" class="nav-link ${activeTab === 'login' ? 'active' : ''}" style="border: none !important; background: transparent !important; box-shadow: none !important;">
-            🔐 Acceso Profesional
+            👑 Panel Admin
           </a>
         `}
         <a href="https://web.telegram.org/k/#@${BOT_USERNAME}" target="_blank" class="nav-link nav-btn-tg">
@@ -1643,6 +1815,20 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       </div>
     </div>
   </footer>
+
+  <!-- MODAL DE CONFIRMACIÓN ESTILIZADO MINDCARE (ESTILO DARK-GLASS ELEGANTE) -->
+  <div id="mindcare-styled-confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(3, 7, 18, 0.88); backdrop-filter:blur(10px); z-index:9999999; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:linear-gradient(145deg, #0f172a 0%, #1e293b 100%); border:1.5px solid rgba(56, 189, 248, 0.4); border-radius:24px; max-width:460px; width:100%; padding:32px 26px; box-shadow:0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(14, 165, 233, 0.2); text-align:center; position:relative;">
+      <div style="position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg, #ef4444, #f59e0b, #0ea5e9); border-radius:24px 24px 0 0;"></div>
+      <div id="confirm-modal-icon" style="font-size:3.2rem; margin-bottom:12px; line-height:1;">⚠️</div>
+      <h3 id="confirm-modal-title" style="color:#fff; font-size:1.3rem; font-weight:800; margin:0 0 10px 0; letter-spacing:-0.3px;">¿Estás seguro?</h3>
+      <p id="confirm-modal-msg" style="color:#cbd5e1; font-size:0.92rem; line-height:1.55; margin:0 0 24px 0;">Mensaje de confirmación</p>
+      <div style="display:flex; gap:12px; justify-content:center;">
+        <button type="button" id="confirm-modal-cancel" class="btn btn-secondary" style="flex:1; padding:11px 18px; font-weight:700; border:1px solid rgba(255,255,255,0.15); color:#cbd5e1; cursor:pointer;">Cancelar</button>
+        <button type="button" id="confirm-modal-ok" class="btn btn-danger" style="flex:1; padding:11px 18px; font-weight:700; cursor:pointer; background:#dc2626; border-color:#ef4444;">Confirmar</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     let globalLoaderTimer = null;
@@ -2286,7 +2472,81 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
         window.location.href = url;
       }
     }
-    window.imprimirComprobanteCita = imprimirComprobanteCita;
+    // 9. Sistema de Confirmaciones con Estilo Moderno MindCare (sin confirms feos del navegador)
+    function showStyledConfirm(options) {
+      return new Promise(function(resolve) {
+        const modal = document.getElementById('mindcare-styled-confirm-modal');
+        if (!modal) {
+          resolve(window.confirm(options.message || '¿Confirmar acción?'));
+          return;
+        }
+
+        const iconEl = document.getElementById('confirm-modal-icon');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const msgEl = document.getElementById('confirm-modal-msg');
+        const okBtn = document.getElementById('confirm-modal-ok');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+        if (iconEl) iconEl.textContent = options.icon || '⚠️';
+        if (titleEl) titleEl.textContent = options.title || 'Confirmación Requerida';
+        if (msgEl) msgEl.textContent = options.message || '¿Deseas continuar con esta acción?';
+
+        if (okBtn) {
+          okBtn.textContent = options.confirmText || 'Confirmar';
+          if (options.confirmColor === 'green') {
+            okBtn.style.background = '#10b981';
+            okBtn.style.borderColor = '#34d399';
+          } else if (options.confirmColor === 'blue') {
+            okBtn.style.background = '#0284c7';
+            okBtn.style.borderColor = '#38bdf8';
+          } else {
+            okBtn.style.background = '#dc2626';
+            okBtn.style.borderColor = '#ef4444';
+          }
+        }
+
+        const close = function() {
+          modal.style.display = 'none';
+          okBtn.onclick = null;
+          cancelBtn.onclick = null;
+        };
+
+        okBtn.onclick = function() {
+          close();
+          if (options.onConfirm) options.onConfirm();
+          resolve(true);
+        };
+
+        cancelBtn.onclick = function() {
+          close();
+          if (options.onCancel) options.onCancel();
+          resolve(false);
+        };
+
+        modal.style.display = 'flex';
+      });
+    }
+    window.showStyledConfirm = showStyledConfirm;
+
+    // Interceptor global de formularios con data-confirm-title
+    document.addEventListener('submit', function(e) {
+      const form = e.target;
+      if (!form || !form.dataset.confirmTitle) return;
+      if (form.dataset.confirmed === 'true') return;
+
+      e.preventDefault();
+      showStyledConfirm({
+        title: form.dataset.confirmTitle,
+        message: form.dataset.confirmMessage || '¿Deseas continuar con esta acción?',
+        icon: form.dataset.confirmIcon || '⚠️',
+        confirmText: form.dataset.confirmBtn || 'Confirmar',
+        confirmColor: form.dataset.confirmColor || 'red',
+        onConfirm: function() {
+          form.dataset.confirmed = 'true';
+          form.submit();
+        }
+      });
+    });
 
     // Inicializar todos los validadores interactivos al cargar el DOM
     document.addEventListener('DOMContentLoaded', function() {
@@ -2462,7 +2722,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           <div style="display: inline-flex; align-items: center; gap: 6px; background: ${isLocked ? 'rgba(239, 68, 68, 0.16)' : 'rgba(99, 102, 241, 0.12)'}; border: 1px solid ${isLocked ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.3)'}; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: ${isLocked ? '#fca5a5' : '#a5b4fc'}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
             ${isLocked ? '⛔ Bloqueo por Fuerza Bruta Activo' : '🔒 Autenticación de Personal Clínico • Ley 1090'}
           </div>
-          <h1 style="font-size: 1.75rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Portal de Acceso Profesional</h1>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: #fff; margin: 0 0 8px 0; letter-spacing: -0.02em;">Panel Admin • Acceso de Personal Clínico</h1>
           <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; margin: 0;">
             Ingreso individual para Director Médico, Psicólogos Clínicos y Equipo de Triage. Auditoría forense de expedientes SOAP.
           </p>
@@ -2776,7 +3036,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
     </script>
   `;
 
-  res.send(layout("Acceso Profesional — MindCare", content, "home", false));
+  res.send(layout("Panel Admin — MindCare", content, "home", false));
 });
 
 portalRouter.post("/login", (req: Request, res: Response) => {
@@ -4660,20 +4920,20 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
                   <div style="display:flex; gap:6px;">
                     <button type="button" class="btn btn-secondary" onclick="openCitaDetailById('${a.id}')" style="padding:4px 8px; font-size:0.75rem; color:#38bdf8;" title="Ver detalle completo">👁️ Detalle</button>
                     ${a.status !== 'Confirmada' ? `
-                      <form action="/api/citas/estado" method="POST" style="margin:0;">
+                      <form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Turno Médico?" data-confirm-message="¿Deseas confirmar la cita #${a.id} del paciente ${a.patientName}?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar Turno" data-confirm-color="green">
                         <input type="hidden" name="id" value="${a.id}">
                         <input type="hidden" name="status" value="Confirmada">
                         <button type="submit" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; color:#34d399;" title="Confirmar turno">✓</button>
                       </form>
                     ` : ''}
                     ${a.status !== 'Cancelada' ? `
-                      <form action="/api/citas/estado" method="POST" style="margin:0;">
+                      <form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Estás seguro de cancelar la cita #${a.id} de ${a.patientName}? El estado pasará a Cancelada." data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red">
                         <input type="hidden" name="id" value="${a.id}">
                         <input type="hidden" name="status" value="Cancelada">
                         <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" title="Cancelar turno">✕</button>
                       </form>
                     ` : ''}
-                    <form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm('¿Seguro que deseas eliminar definitivamente esta cita de la base de datos?');">
+                    <form action="/api/citas/eliminar" method="POST" style="margin:0;" data-confirm-title="¿Eliminar Cita Permanentemente?" data-confirm-message="¿Estás completamente seguro de borrar permanentemente la cita #${a.id} de ${a.patientName} de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red">
                       <input type="hidden" name="id" value="${a.id}">
                       <button type="submit" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem; background:#dc2626; border-color:#ef4444;" title="Eliminar cita definitivamente">🗑️</button>
                     </form>
@@ -4948,12 +5208,12 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         if (actions) {
           actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>';
           if (cita.status !== 'Confirmada') {
-            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Confirmar Cita Médica?" data-confirm-message="¿Deseas confirmar la cita #' + cita.id + ' para ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="✅" data-confirm-btn="Sí, Confirmar Cita" data-confirm-color="green"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
           }
           if (cita.status !== 'Cancelada') {
-            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
+            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;" data-confirm-title="¿Cancelar Turno Médico?" data-confirm-message="¿Deseas cancelar el turno #' + cita.id + ' de ' + (cita.patientName || 'el paciente') + '?" data-confirm-icon="❌" data-confirm-btn="Sí, Cancelar Turno" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
           }
-          actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm(&quot;¿Eliminar definitivamente esta cita de la base de datos?&quot;);"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
+          actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" data-confirm-title="¿Eliminar Cita Definitivamente?" data-confirm-message="¿Estás completamente seguro de borrar la cita #' + cita.id + ' de la base de datos?" data-confirm-icon="🗑️" data-confirm-btn="Sí, Eliminar Cita" data-confirm-color="red"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
         }
 
         modal.style.display = 'flex';
@@ -5391,14 +5651,14 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
 
             <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
               ${isAdmin ? `
-                <form action="/api/especialistas/toggle" method="POST" style="margin:0; flex:1;">
+                <form action="/api/especialistas/toggle" method="POST" style="margin:0; flex:1;" data-confirm-title="${th.active ? '¿Pausar Agenda de Especialista?' : '¿Reactivar Especialista?'}" data-confirm-message="${th.active ? '¿Confirmas pausar a ' + th.name + '? Pasará a estado Inactivo (vacaciones/licencia) y sus horarios se ocultarán en tiempo real.' : '¿Confirmas reactivar la agenda de ' + th.name + '? Volverá a estar disponible para agendamientos.'}" data-confirm-icon="${th.active ? '⏸️' : '▶️'}" data-confirm-btn="${th.active ? 'Sí, Pausar' : 'Sí, Reactivar'}" data-confirm-color="${th.active ? 'red' : 'green'}">
                   <input type="hidden" name="therapistId" value="${th.id}">
                   <button type="submit" class="btn btn-secondary" style="width:100%; padding:6px 10px; font-size:0.78rem;">
                     ${th.active ? '⏸️ Pausar Turno' : '▶️ Reactivar'}
                   </button>
                 </form>
 
-                <form action="/api/especialistas/baja" method="POST" style="margin:0;" onsubmit="return confirm('¿Confirmas dar de baja a ${th.name.replace(/'/g, "\\'")} por renuncia o retiro de la clínica? Ya no aparecerá en el bot ni en agendamientos.');">
+                <form action="/api/especialistas/baja" method="POST" style="margin:0;" data-confirm-title="¿Dar de Baja a Especialista Definitivamente?" data-confirm-message="¿Confirmas retirar a ${th.name} de la clínica por renuncia o retiro? Se eliminará de la base de datos y de la atención por Telegram." data-confirm-icon="🗑️" data-confirm-btn="Sí, Dar de Baja Definitiva" data-confirm-color="red">
                   <input type="hidden" name="therapistId" value="${th.id}">
                   <button type="submit" class="btn btn-secondary" style="padding:6px 12px; font-size:0.78rem; color:#f87171; border:1px solid rgba(239,68,68,0.4);" title="Eliminar médico por renuncia">
                     🗑️ Dar de Baja
