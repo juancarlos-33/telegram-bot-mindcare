@@ -96,9 +96,12 @@ portalRouter.use((req: Request, res: Response, next) => {
       return;
     }
 
-    const minutes = Math.floor(rateStatus.retryAfterSeconds / 60);
+    const hours = Math.floor(rateStatus.retryAfterSeconds / 3600);
+    const minutes = Math.floor((rateStatus.retryAfterSeconds % 3600) / 60);
     const seconds = rateStatus.retryAfterSeconds % 60;
-    const timeDisplay = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    const timeDisplay = hours > 0
+      ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+      : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
     const lockoutHtml = `<!DOCTYPE html>
 <html lang="es">
@@ -231,9 +234,14 @@ portalRouter.use((req: Request, res: Response, next) => {
         window.location.reload();
         return;
       }
-      const m = Math.floor(remaining / 60);
+      const h = Math.floor(remaining / 3600);
+      const m = Math.floor((remaining % 3600) / 60);
       const s = remaining % 60;
-      display.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      if (h > 0) {
+        display.textContent = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      } else {
+        display.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      }
     }, 1000);
   </script>
 </body>
@@ -2821,19 +2829,19 @@ portalRouter.get("/login", (req: Request, res: Response) => {
               <div style="display: flex; align-items: center; gap: 10px;">
                 <span class="spinner-inline" style="margin:0;"></span>
                 <span style="font-size: 0.88rem; color: #e2e8f0; font-weight: 600;">Tiempo de espera para desbloqueo:</span>
-                <strong id="lockoutTimer" style="font-family: monospace; font-size: 1.25rem; color: #fbbf24; letter-spacing: 0.05em;">${Math.floor(rateStatus.retryAfterSeconds / 60)}:${String(rateStatus.retryAfterSeconds % 60).padStart(2, '0')}</strong>
+                <strong id="lockoutTimer" style="font-family: monospace; font-size: 1.25rem; color: #fbbf24; letter-spacing: 0.05em;">${(() => {
+                  const h = Math.floor(rateStatus.retryAfterSeconds / 3600);
+                  const m = Math.floor((rateStatus.retryAfterSeconds % 3600) / 60);
+                  const s = String(rateStatus.retryAfterSeconds % 60).padStart(2, '0');
+                  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+                })()}</strong>
               </div>
             </div>
           </div>
         ` : (error ? `
-          <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; color: #f87171; font-size: 0.88rem; font-weight: 600;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-              <span style="font-size: 1.2rem;">⚠️</span>
-              <span>${error}</span>
-            </div>
-            <div style="font-size: 0.8rem; color: #fca5a5; font-weight: 500; margin-left: 28px; line-height: 1.4;">
-              🛡️ <strong>Control de Fuerza Bruta (OWASP ASVS):</strong> Intento fallido ${rateStatus.totalAttempts} de ${rateStatus.maxAttempts}. Te quedan <strong>${rateStatus.remainingAttempts} ${rateStatus.remainingAttempts === 1 ? 'intento restante' : 'intentos restantes'}</strong> antes del bloqueo temporal del consultorio.
-            </div>
+          <div style="background: rgba(239, 68, 68, 0.14); border: 1.5px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; color: #fca5a5; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">⚠️</span>
+            <span>${rateStatus.totalAttempts > 0 ? `Credenciales incorrectas. Te ${rateStatus.remainingAttempts === 1 ? 'queda 1 intento' : `quedan ${rateStatus.remainingAttempts} intentos`}.` : error}</span>
           </div>
         ` : '')}
 
@@ -3080,9 +3088,10 @@ portalRouter.get("/login", (req: Request, res: Response) => {
                 clearInterval(intv);
                 window.location.href = '/login';
               } else {
-                const m = Math.floor(remaining / 60);
+                const h = Math.floor(remaining / 3600);
+                const m = Math.floor((remaining % 3600) / 60);
                 const s = String(remaining % 60).padStart(2, '0');
-                timerEl.textContent = m + ':' + s;
+                timerEl.textContent = h > 0 ? (h + ':' + String(m).padStart(2, '0') + ':' + s) : (m + ':' + s);
               }
             }, 1000);
           }
@@ -3153,7 +3162,7 @@ portalRouter.post("/login", (req: Request, res: Response) => {
 
   res.setHeader("X-RateLimit-Limit", String(updatedStatus.maxAttempts));
   res.setHeader("X-RateLimit-Remaining", String(updatedStatus.remainingAttempts));
-  res.redirect("/login?error=Credenciales+incorrectas.+Verifica+usuario+o+correo+institucional.");
+  res.redirect("/login?error=Credenciales+incorrectas");
 });
 
 portalRouter.get("/logout", (req: Request, res: Response) => {

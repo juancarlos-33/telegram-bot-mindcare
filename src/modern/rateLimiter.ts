@@ -13,6 +13,7 @@ export interface RateLimitStatus {
   maxAttempts: number;
   retryAfterSeconds: number;
   lockoutExpiresAt: Date | null;
+  lockoutStage?: number;
 }
 
 interface AttemptRecord {
@@ -20,13 +21,30 @@ interface AttemptRecord {
   lockedUntil: number | null;
   lastAttemptAt: number;
   lastCredential?: string;
+  lockoutStage?: number; // 0: 5 min, 1: 30 min, 2: 1h, 3: 6h, 4: 12h, 5+: 24h
 }
+
+// Escala de bloqueo progresivo según política clínica:
+// 1° Bloqueo: 5 minutos
+// 2° Bloqueo: 30 minutos
+// 3° Bloqueo: 1 hora
+// 4° Bloqueo: 6 horas
+// 5° Bloqueo: 12 horas
+// 6°+ Bloqueo: 24 horas
+export const LOCKOUT_STAGES_MS = [
+  5 * 60 * 1000,        // 1°: 5 minutos (300s)
+  30 * 60 * 1000,       // 2°: 30 minutos (1800s)
+  60 * 60 * 1000,       // 3°: 1 hora (3600s)
+  6 * 60 * 60 * 1000,   // 4°: 6 horas (21600s)
+  12 * 60 * 60 * 1000,  // 5°: 12 horas (43200s)
+  24 * 60 * 60 * 1000,  // 6°+: 24 horas (86400s)
+];
 
 // Configuración conforme a estándares OWASP / NIST
 export const RATE_LIMIT_CONFIG = {
   MAX_FAILED_ATTEMPTS: 3,               // Límite máximo de 3 intentos fallidos antes de bloqueo
   ATTEMPT_WINDOW_MS: 15 * 60 * 1000,    // Ventana de evaluación: 15 minutos
-  LOCKOUT_DURATION_MS: 3 * 60 * 1000,   // Duración del bloqueo: 3 minutos (180s) pedagógico / demo
+  LOCKOUT_DURATION_MS: LOCKOUT_STAGES_MS[0], // Duración del primer bloqueo (5 minutos)
 };
 
 // Almacén en memoria de intentos de login indexado por IP del cliente
@@ -50,13 +68,18 @@ export function getClientIp(req: Request): string {
  * Limpia registros obsoletos fuera de la ventana de tiempo
  */
 function cleanExpiredAttempts(record: AttemptRecord, now: number): void {
+  // Si no ha habido actividad en más de 24 horas, restablecer la etapa
+  if (now - record.lastAttemptAt > 24 * 60 * 60 * 1000) {
+    record.lockoutStage = 0;
+  }
+
   // Limpiar intentos que cayeron fuera de la ventana de 15 minutos
   record.timestamps = record.timestamps.filter(ts => (now - ts) < RATE_LIMIT_CONFIG.ATTEMPT_WINDOW_MS);
   
-  // Si el bloqueo expiró, remover el estado de bloqueo
+  // Si el bloqueo expiró, remover el estado de bloqueo activo y reiniciar intentos del ciclo
   if (record.lockedUntil && now >= record.lockedUntil) {
     record.lockedUntil = null;
-    record.timestamps = []; // Se reinicia el conteo al expirar el bloqueo
+    record.timestamps = []; // Se reinicia el conteo para el nuevo ciclo de 3 intentos
   }
 }
 
@@ -75,6 +98,7 @@ export function getLoginRateLimitStatus(ip: string): RateLimitStatus {
       maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
       retryAfterSeconds: 0,
       lockoutExpiresAt: null,
+      lockoutStage: 0,
     };
   }
 
@@ -89,6 +113,7 @@ export function getLoginRateLimitStatus(ip: string): RateLimitStatus {
       maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
       retryAfterSeconds,
       lockoutExpiresAt: new Date(record.lockedUntil),
+      lockoutStage: record.lockoutStage ?? 0,
     };
   }
 
@@ -102,12 +127,13 @@ export function getLoginRateLimitStatus(ip: string): RateLimitStatus {
     maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
     retryAfterSeconds: 0,
     lockoutExpiresAt: null,
+    lockoutStage: record.lockoutStage ?? 0,
   };
 }
 
 /**
  * Registra un intento fallido de autenticación.
- * Si se alcanza el límite, activa el bloqueo temporal.
+ * Si se alcanza el límite, activa el bloqueo temporal escalonado (5m -> 30m -> 1h -> 6h -> 12h -> 24h).
  */
 export function recordFailedLoginAttempt(ip: string, credential?: string): RateLimitStatus {
   const now = Date.now();
@@ -119,6 +145,7 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
       lockedUntil: null,
       lastAttemptAt: now,
       lastCredential: credential,
+      lockoutStage: 0,
     };
     loginAttemptsMap.set(ip, record);
   }
@@ -135,6 +162,7 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
       maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
       retryAfterSeconds,
       lockoutExpiresAt: new Date(record.lockedUntil),
+      lockoutStage: record.lockoutStage ?? 0,
     };
   }
 
@@ -152,8 +180,15 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
 
   // Verificar si supera el umbral
   if (record.timestamps.length >= RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS) {
-    record.lockedUntil = now + RATE_LIMIT_CONFIG.LOCKOUT_DURATION_MS;
-    const retryAfterSeconds = Math.ceil(RATE_LIMIT_CONFIG.LOCKOUT_DURATION_MS / 1000);
+    const currentStage = record.lockoutStage ?? 0;
+    const stageIndex = Math.min(currentStage, LOCKOUT_STAGES_MS.length - 1);
+    const durationMs = LOCKOUT_STAGES_MS[stageIndex];
+
+    record.lockedUntil = now + durationMs;
+    // Avanzar la etapa para el próximo bloqueo si vuelve a agotar intentos
+    record.lockoutStage = stageIndex + 1;
+
+    const retryAfterSeconds = Math.ceil(durationMs / 1000);
     return {
       isLocked: true,
       remainingAttempts: 0,
@@ -161,6 +196,7 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
       maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
       retryAfterSeconds,
       lockoutExpiresAt: new Date(record.lockedUntil),
+      lockoutStage: record.lockoutStage,
     };
   }
 
@@ -173,6 +209,7 @@ export function recordFailedLoginAttempt(ip: string, credential?: string): RateL
     maxAttempts: RATE_LIMIT_CONFIG.MAX_FAILED_ATTEMPTS,
     retryAfterSeconds: 0,
     lockoutExpiresAt: null,
+    lockoutStage: record.lockoutStage ?? 0,
   };
 }
 
