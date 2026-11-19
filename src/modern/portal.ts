@@ -3870,6 +3870,15 @@ portalRouter.get("/citas/comprobante/:id", (req: Request, res: Response) => {
     <div style="display:flex; gap:10px; align-items:center;">
       <a href="/citas" class="btn btn-outline">← Volver al Portal</a>
       <button onclick="window.print()" class="btn btn-primary">🖨️ Imprimir / Guardar como PDF</button>
+      ${appointment.status !== 'Cancelada' ? `
+        <form action="/api/citas/estado" method="POST" style="margin:0; display:inline;" onsubmit="return confirm('¿Estás seguro de que deseas cancelar tu cita #${appointment.id}? El turno será liberado inmediatamente.');">
+          <input type="hidden" name="id" value="${appointment.id}">
+          <input type="hidden" name="status" value="Cancelada">
+          <button type="submit" class="btn" style="background:#dc2626; color:#fff; border:1px solid #ef4444; padding:8px 16px; border-radius:10px; font-weight:700; cursor:pointer;">
+            ✕ Cancelar Cita
+          </button>
+        </form>
+      ` : ''}
     </div>
   </div>
 
@@ -3895,7 +3904,7 @@ portalRouter.get("/citas/comprobante/:id", (req: Request, res: Response) => {
             #${appointment.id.toUpperCase()}
           </div>
           <div style="margin-top:4px;">
-            ${appointment.status === "Confirmada" ? '<span class="badge badge-success">● Cita Confirmada</span>' : '<span class="badge badge-pending">● Cita Pendiente</span>'}
+            ${appointment.status === "Confirmada" ? '<span class="badge badge-success">● Cita Confirmada</span>' : appointment.status === "Pendiente" ? '<span class="badge badge-pending">● Cita Pendiente</span>' : '<span class="badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">● Cita Cancelada</span>'}
           </div>
         </td>
       </tr>

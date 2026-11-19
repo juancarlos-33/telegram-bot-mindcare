@@ -9,6 +9,7 @@ import {
   updateChatInfo, getCustomResponse, recordCommandStat, isUserVerified,
   createPsyAppointment, getAllPsyAppointments, getPatientPsyAppointments, getPsyAppointmentsByDocument,
   cancelPsyAppointment, PSYCHOLOGY_SPECIALTIES, PSYCHOLOGY_THERAPISTS, getAllTherapists, getTherapistsBySpecialty,
+  PsyAppointment,
   getBookingState, setBookingState, clearBookingState,
   saveMoodEntry, getUserMoodEntries, getAllMoodEntries,
   saveTestResult, getUserTestResults, getAllTestResults,
@@ -1725,14 +1726,24 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
       `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}\n  🪪 *Documento:* ${a.documentNumber ?? 'Registrado'}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
     ).join("\n\n");
 
+    const cancelButtons = found
+      .filter(a => a.status !== "Cancelada")
+      .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
+
     await ctx.reply([
       `📋 *CITAS ENCONTRADAS PARA EL DOCUMENTO ${arg} (${found.length}):*`,
       "",
       lines,
       "",
       "🏢 Recuerda presentarte 10 minutos antes en las instalaciones de MindCare con tu documento de identidad original.",
-      `🌐 Consultar también en el portal web: ${APP_BASE_URL}/citas?consultar_doc=${encodeURIComponent(cleanDoc)}`
-    ].join("\n"), { parse_mode: "Markdown" });
+      `🌐 Consultar también en el portal web: ${APP_BASE_URL}/citas?consultar_doc=${encodeURIComponent(cleanDoc)}`,
+      "",
+      "💡 *¿Deseas cancelar alguna cita?* Puedes pulsar el botón abajo o escribir:",
+      `👉 \`/cancelarcita ${cleanDoc}\``
+    ].join("\n"), { 
+      parse_mode: "Markdown",
+      reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
+    });
     return;
   }
 
@@ -1743,14 +1754,21 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
       `• 🎟️ *Código:* \`${a.id}\`\n  📅 *Fecha y Horario:* *${a.dateTime}*\n  🩺 *Especialidad:* ${a.specialty}\n  👤 *Especialista:* ${a.therapist}${a.documentNumber ? `\n  🪪 *Documento:* ${a.documentNumber}` : ""}\n  🏷️ *Estado:* ${a.status}${a.motive ? `\n  📌 *Motivo:* ${a.motive}` : ""}`
     ).join("\n\n");
 
+    const cancelButtons = myApps
+      .filter(a => a.status !== "Cancelada")
+      .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
+
     await ctx.reply([
       `📋 *TUS CITAS PROGRAMADAS (${myApps.length}):*`,
       "",
       lines,
       "",
-      "💡 *¿Consultar por número de documento?*",
-      "Usa: `/consultar <número_documento>` (ej: `/consultar 1020304050`)."
-    ].join("\n"), { parse_mode: "Markdown" });
+      "💡 *¿Consultar o cancelar por número de documento?*",
+      "Usa: `/consultar <número_documento>` o `/cancelarcita <número_documento>`"
+    ].join("\n"), { 
+      parse_mode: "Markdown",
+      reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
+    });
     return;
   }
 
@@ -1763,9 +1781,9 @@ bot.command(["consultar", "consultarcita", "buscarcita", "micita", "recordarcita
     "Por favor escribe tu número de documento para buscarla:",
     "👉 `/consultar <número_documento>`",
     "",
-    "Ejemplo: `/consultar 1020304050`",
+    "Ejemplo: `/consultar 1040359897`",
     "",
-    "O también puedes simplemente escribir tu número de documento aquí en el chat."
+    "O también puedes simplemente escribir tu número de cédula aquí en el chat."
   ].join("\n"), {
     parse_mode: "Markdown",
     reply_markup: {
@@ -1785,11 +1803,14 @@ bot.command(["miscitas", "citas"], async (ctx) => {
 
   if (myApps.length === 0) {
     await ctx.reply([
-      "📋 No encontramos citas de psicología programadas.",
+      "📋 No encontramos citas de psicología registradas con tu cuenta de Telegram.",
       "",
-      "• Si conoces tu número de documento: `/consultar <número>`",
-      "• Para agendar escribe /cita y te guío paso a paso. 💙"
+      "👉 *Si agendaste con tu cédula o en el portal web, consulta con:*",
+      "`/consultar <número_documento>` (ej: `/consultar 1040359897`)",
+      "",
+      "• Para agendar una nueva consulta escribe /cita. 💙"
     ].join("\n"), {
+      parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [[{ text: "📅 Agendar Cita Ahora", callback_data: "book_start" }]]
       }
@@ -1801,27 +1822,161 @@ bot.command(["miscitas", "citas"], async (ctx) => {
     `• [${a.id}] ${a.specialty} con ${a.therapist}\n  ⏰ ${a.dateTime} · Estado: ${a.status}${a.documentNumber ? `\n  🪪 Doc: ${a.documentNumber}` : ""}${a.motive ? `\n  📌 ${a.motive}` : ""}`
   ).join("\n\n");
 
+  const cancelButtons = myApps
+    .filter(a => a.status !== "Cancelada")
+    .map(a => [{ text: `❌ Cancelar Cita #${a.id}`, callback_data: `req_cancel_${a.id}` }]);
+
   await ctx.reply([
     `📋 TUS CITAS DE PSICOLOGÍA (${myApps.length}):`,
     "",
     lines,
     "",
-    "Para cancelar: /cancelarcita <ID>",
-    "Para consultar por documento: /consultar <documento>"
-  ].join("\n"));
+    "Para cancelar escribe: /cancelarcita <cédula o ID>"
+  ].join("\n"), {
+    reply_markup: cancelButtons.length > 0 ? { inline_keyboard: cancelButtons } : undefined
+  });
 });
 
-bot.command("cancelarcita", async (ctx) => {
-  const id = commandArg(ctx).trim();
-  if (!id) {
-    await ctx.reply("Uso: /cancelarcita <ID_CITA>\nEjemplo: /cancelarcita psi-101");
+// COMANDO CANCELARCITA: Admite Cédula, ID (#psi-...) y pide confirmación antes de cancelar
+bot.command(["cancelarcita", "cancelar_cita", "anularcita"], async (ctx) => {
+  const rawArg = commandArg(ctx).trim();
+  const userId = String(ctx.from?.id ?? "");
+
+  let found: PsyAppointment[] = [];
+  if (rawArg) {
+    const cleanDigits = rawArg.replace(/\D/g, "");
+    if (cleanDigits) {
+      found = getPsyAppointmentsByDocument(cleanDigits);
+    }
+    if (found.length === 0) {
+      const byId = getAllPsyAppointments().find(a => a.id.toLowerCase() === rawArg.toLowerCase());
+      if (byId) found = [byId];
+    }
+    if (found.length === 0) {
+      found = getPatientPsyAppointments(rawArg);
+    }
+  } else {
+    found = getPatientPsyAppointments(userId);
+  }
+
+  if (found.length === 0) {
+    if (!rawArg) {
+      await ctx.reply([
+        "ℹ️ *¿CÓMO CANCELAR TU CITA DE PSICOLOGÍA?*",
+        "",
+        "Por favor incluye tu número de documento o el radicado de tu cita:",
+        "",
+        "👉 `/cancelarcita <número_documento o ID>`",
+        "",
+        "Ejemplos:",
+        "• `/cancelarcita 1040359897`",
+        "• `/cancelarcita psi-101`"
+      ].join("\n"), { parse_mode: "Markdown" });
+      return;
+    }
+
+    await ctx.reply(
+      `❌ No se encontraron citas para cancelar asociadas al documento o radicado *${rawArg}*.\n\nVerifica el número o consúltalo primero con: \`/consultar ${rawArg}\``,
+      { parse_mode: "Markdown" }
+    );
     return;
   }
-  const appointment = getPatientPsyAppointments(String(ctx.from?.id ?? "")).find(a => a.id === id);
-  const ok = appointment ? cancelPsyAppointment(id) : false;
-  await ctx.reply(ok
-    ? `✅ Cita ${id} cancelada. Si necesitas reagendar, usa /cita. 💙`
-    : `❌ No encontré la cita ${id}. Revisa con /miscitas.`
+
+  const activeApps = found.filter(a => a.status !== "Cancelada");
+  if (activeApps.length === 0) {
+    await ctx.reply(
+      `ℹ️ La(s) cita(s) encontrada(s) para *${rawArg}* ya se encuentran en estado *Cancelada*. Si necesitas reservar un nuevo turno, escribe /cita. 💙`,
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  // PIDE CONFIRMACIÓN EXPLÍCITA ANTES DE CANCELAR
+  for (const app of activeApps) {
+    const office = getAllTherapists(true).find(t => t.name === app.therapist)?.office || "Consultorio MindCare";
+    await ctx.reply([
+      "⚠️ *CONFIRMACIÓN DE CANCELACIÓN DE TURNO MÉDICO*",
+      "",
+      `¿Estás seguro de que deseas cancelar la siguiente cita?`,
+      "",
+      `🎟️ *Radicado:* \`#${app.id}\``,
+      `👤 *Paciente:* ${app.patientName}`,
+      `🪪 *Documento:* ${app.documentNumber || "No registrado"}`,
+      `🩺 *Especialidad:* ${app.specialty} con ${app.therapist}`,
+      `🏛️ *Consultorio:* ${office}`,
+      `⏰ *Fecha y Horario:* *${app.dateTime}*`,
+      "",
+      "⚠️ *Atención:* Esta acción liberará inmediatamente el espacio reservado para otros pacientes."
+    ].join("\n"), {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "❌ Sí, Cancelar Cita", callback_data: `confirm_cancel_${app.id}` },
+            { text: "💙 No, Mantener Turno", callback_data: `abort_cancel_${app.id}` }
+          ]
+        ]
+      }
+    });
+  }
+});
+
+// Manejadores interactivos de confirmación de cancelación
+bot.action(/^req_cancel_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const id = ctx.match[1];
+  const app = getAllPsyAppointments().find(a => a.id === id);
+  if (!app) {
+    await ctx.reply("❌ Cita médica no encontrada.");
+    return;
+  }
+  if (app.status === "Cancelada") {
+    await ctx.reply(`ℹ️ La cita #${id} ya fue cancelada anteriormente.`);
+    return;
+  }
+  const office = getAllTherapists(true).find(t => t.name === app.therapist)?.office || "Consultorio MindCare";
+  await ctx.reply([
+    "⚠️ *CONFIRMACIÓN DE CANCELACIÓN DE TURNO*",
+    "",
+    `¿Deseas cancelar definitivamente la cita \`#${app.id}\` de *${app.patientName}*?`,
+    `⏰ *Horario:* ${app.dateTime} con ${app.therapist} (${office})`,
+    "",
+    "Al confirmar se liberará el turno para otros pacientes."
+  ].join("\n"), {
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "❌ Sí, Cancelar Cita", callback_data: `confirm_cancel_${app.id}` },
+          { text: "💙 No, Mantener Turno", callback_data: `abort_cancel_${app.id}` }
+        ]
+      ]
+    }
+  });
+});
+
+bot.action(/^confirm_cancel_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const id = ctx.match[1];
+  const app = getAllPsyAppointments().find(a => a.id === id);
+  const ok = cancelPsyAppointment(id);
+  if (ok) {
+    await ctx.editMessageText(
+      `✅ *CITA CANCELADA CON ÉXITO*\n\nEl turno \`#${id}\` ${app ? `de *${app.patientName}* programado para el *${app.dateTime}*` : ""} ha sido cancelado.\n\nEl espacio ha quedado liberado en la clínica y en el portal web en tiempo real.\n\nSi deseas agendar en otro horario cuando lo necesites, escribe /cita. ¡Cuídate mucho! 💙`,
+      { parse_mode: "Markdown" }
+    );
+  } else {
+    await ctx.reply(`❌ No se pudo cancelar la cita #${id}.`);
+  }
+});
+
+bot.action(/^abort_cancel_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const id = ctx.match[1];
+  const app = getAllPsyAppointments().find(a => a.id === id);
+  await ctx.editMessageText(
+    `💙 *Operación Cancelada: Tu cita sigue activa*\n\nEl turno \`#${id}\` ${app ? `con ${app.therapist} para el *${app.dateTime}*` : ""} continúa confirmado.\n\n¡Te esperamos en MindCare! 🧠`,
+    { parse_mode: "Markdown" }
   );
 });
 
