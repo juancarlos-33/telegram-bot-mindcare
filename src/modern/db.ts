@@ -2061,7 +2061,15 @@ export async function isUserVerified(telegramId: string | number): Promise<boole
   return true;
 }
 
-export async function getModuleData(modulo: string, fromDate?: string, toDate?: string, therapist?: string) {
+export async function getModuleData(
+  modulo: string, 
+  fromDate?: string, 
+  toDate?: string, 
+  therapist?: string,
+  patientQuery?: string,
+  status?: string,
+  specialty?: string
+) {
   const parseDate = (d?: string) => d ? new Date(d) : undefined;
   const from = parseDate(fromDate);
   const to = parseDate(toDate);
@@ -2078,6 +2086,20 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
         let items = getAllPsyAppointments();
         if (therapist) {
           items = items.filter(a => a.therapist.toLowerCase().includes(therapist.toLowerCase()));
+        }
+        if (specialty) {
+          items = items.filter(a => a.specialty.toLowerCase().includes(specialty.toLowerCase()));
+        }
+        if (status && status !== "TODAS") {
+          items = items.filter(a => a.status.toLowerCase() === status.toLowerCase());
+        }
+        if (patientQuery) {
+          const q = patientQuery.toLowerCase().trim();
+          items = items.filter(a => 
+            a.patientName.toLowerCase().includes(q) || 
+            (a.documentNumber && a.documentNumber.includes(q)) || 
+            a.id.toLowerCase().includes(q)
+          );
         }
         if (from) {
           items = items.filter(a => {
@@ -2120,6 +2142,20 @@ export async function getModuleData(modulo: string, fromDate?: string, toDate?: 
         let items = getAllPsyAppointments();
         if (therapist) {
           items = items.filter(a => a.therapist.toLowerCase().includes(therapist.toLowerCase()));
+        }
+        if (specialty) {
+          items = items.filter(a => a.specialty.toLowerCase().includes(specialty.toLowerCase()));
+        }
+        if (status && status !== "TODAS") {
+          items = items.filter(a => a.status.toLowerCase() === status.toLowerCase());
+        }
+        if (patientQuery) {
+          const q = patientQuery.toLowerCase().trim();
+          items = items.filter(a => 
+            a.patientName.toLowerCase().includes(q) || 
+            (a.documentNumber && a.documentNumber.includes(q)) || 
+            a.id.toLowerCase().includes(q)
+          );
         }
         if (from) {
           items = items.filter(a => {

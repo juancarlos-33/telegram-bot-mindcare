@@ -2206,6 +2206,12 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               }
             }
 
+            // Preservar búsqueda en vivo de paciente si el input contiene texto
+            const liveSearch = document.getElementById('admin-patient-live-search');
+            if (liveSearch && liveSearch.value && typeof window.filterAdminCitasLive === 'function') {
+              window.filterAdminCitasLive(liveSearch.value);
+            }
+
             // Actualizar grilla de 6 KPIs en tiempo real
             const newAdminKpis = doc.getElementById('admin-kpi-grid');
             const curAdminKpis = document.getElementById('admin-kpi-grid');
@@ -2237,6 +2243,13 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const curMetrics = document.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
             if (newMetrics && curMetrics) {
               curMetrics.innerHTML = newMetrics.innerHTML;
+            }
+
+            // Actualizar contenedor interactivo de reportes ejecutivos si estamos en /reportes
+            const newReportes = doc.getElementById('reportes-live-container');
+            const curReportes = document.getElementById('reportes-live-container');
+            if (newReportes && curReportes) {
+              curReportes.innerHTML = newReportes.innerHTML;
             }
 
             // Actualizar catálogo de médicos si estamos en /especialistas
@@ -4703,6 +4716,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
   }
   const isAdmin = staffSession.isAdmin;
   const filterProfesional = (req.query.profesional as string)?.trim() || "";
+  const filterPaciente = (req.query.paciente as string)?.trim() || "";
   const filterDesde = (req.query.desde as string)?.trim() || "";
   const filterHasta = (req.query.hasta as string)?.trim() || "";
   const filterEstado = (req.query.estado as string)?.trim() || "";
@@ -4712,6 +4726,14 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 
   if (filterProfesional) {
     appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
+  }
+  if (filterPaciente) {
+    const q = filterPaciente.toLowerCase();
+    appointments = appointments.filter(a => 
+      a.patientName.toLowerCase().includes(q) || 
+      (a.documentNumber && a.documentNumber.includes(q)) || 
+      a.id.toLowerCase().includes(q)
+    );
   }
   if (filterDesde) {
     const from = new Date(filterDesde);
@@ -4970,17 +4992,17 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a href="/admin/reportes/imprimir?profesional=${encodeURIComponent(filterProfesional)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" target="_blank" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2); display:inline-flex; align-items:center; gap:6px;" title="Imprimir o exportar en PDF la agenda filtrada">
+          <a href="/admin/reportes/imprimir?profesional=${encodeURIComponent(filterProfesional)}&paciente=${encodeURIComponent(filterPaciente)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" target="_blank" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2); display:inline-flex; align-items:center; gap:6px;" title="Imprimir o exportar en PDF la agenda filtrada">
             🖨️ Imprimir / Exportar Reporte
           </a>
-          <a href="/reportes?modulo=citas&profesional=${encodeURIComponent(filterProfesional)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(56,189,248,0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:6px;" title="Ver auditoría técnica de este especialista">
+          <a href="/reportes?modulo=citas&profesional=${encodeURIComponent(filterProfesional)}&paciente=${encodeURIComponent(filterPaciente)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}" class="btn btn-secondary" style="padding:7px 14px; font-size:0.82rem; border:1px solid rgba(56,189,248,0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:6px;" title="Ver auditoría técnica de este especialista">
             📈 Módulo de Reportes Globales ↗
           </a>
         </div>
       </div>
 
       <form action="/admin#agenda-clinica-card" method="GET" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
-        <div style="flex: 2; min-width: 220px;">
+        <div style="flex: 2; min-width: 200px;">
           <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Especialista / Profesional:</label>
           <select name="profesional" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
             <option value="">Todos los Especialistas Clínicos</option>
@@ -4992,17 +5014,22 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </select>
         </div>
 
-        <div style="flex: 1; min-width: 140px;">
+        <div style="flex: 2; min-width: 180px;">
+          <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Paciente / Cédula / Radicado:</label>
+          <input type="text" name="paciente" value="${filterPaciente}" placeholder="Buscar nombre, cédula..." style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
+        </div>
+
+        <div style="flex: 1; min-width: 130px;">
           <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Fecha Desde:</label>
           <input type="date" name="desde" value="${filterDesde}" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
         </div>
 
-        <div style="flex: 1; min-width: 140px;">
+        <div style="flex: 1; min-width: 130px;">
           <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Fecha Hasta:</label>
           <input type="date" name="hasta" value="${filterHasta}" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
         </div>
 
-        <div style="flex: 1; min-width: 140px;">
+        <div style="flex: 1; min-width: 130px;">
           <label style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:5px; text-transform:uppercase;">Estado:</label>
           <select name="estado" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.88rem;">
             <option value="" ${!filterEstado ? 'selected' : ''}>Todos los Estados</option>
@@ -5016,7 +5043,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           <button type="submit" class="btn btn-primary" style="padding:10px 18px; font-weight:700; font-size:0.88rem;">
             Filtrar Reporte 🔍
           </button>
-          ${(filterProfesional || filterDesde || filterHasta || filterEstado) ? `
+          ${(filterProfesional || filterPaciente || filterDesde || filterHasta || filterEstado) ? `
             <a href="/admin#agenda-clinica-card" class="btn btn-secondary" style="padding:10px 14px; font-size:0.88rem;">
               Limpiar 🔄
             </a>
@@ -5024,11 +5051,12 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         </div>
       </form>
 
-      ${(filterProfesional || filterDesde || filterHasta || filterEstado) ? `
+      ${(filterProfesional || filterPaciente || filterDesde || filterHasta || filterEstado) ? `
         <div id="reporte-filtrado-summary" style="margin-top:14px; padding:10px 14px; background:rgba(14,165,233,0.1); border:1px solid rgba(14,165,233,0.3); border-radius:10px; font-size:0.82rem; color:#bae6fd; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div>
             <strong>Reporte Filtrado:</strong> 
             ${filterProfesional ? `Doctor: <em>${filterProfesional}</em> · ` : ''}
+            ${filterPaciente ? `Paciente: <em>${filterPaciente}</em> · ` : ''}
             ${filterDesde ? `Desde: <em>${filterDesde}</em> · ` : ''}
             ${filterHasta ? `Hasta: <em>${filterHasta}</em> · ` : ''}
             ${filterEstado ? `Estado: <em>${filterEstado}</em> · ` : ''}
@@ -5051,7 +5079,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         <span class="badge badge-info" id="agenda-total-badge" style="font-size:0.8rem;">${appointments.length} Citas en Total</span>
       </div>
 
-      <!-- Filtros Rápidos por Estado -->
+      <!-- Filtros Rápidos por Estado y Búsqueda en Vivo -->
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:12px; border:1px solid var(--border-subtle);">
         <div style="display:flex; gap:6px; flex-wrap:wrap;" id="table-filter-pills">
           <button type="button" class="btn btn-secondary filter-pill active" onclick="filterCitasByStatus('TODAS')" data-filter="TODAS" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; background:rgba(255,255,255,0.15);">Todas (<span id="pill-count-todas">${appointments.length}</span>)</button>
@@ -5059,8 +5087,8 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Pendiente')" data-filter="Pendiente" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#fbbf24;">Pendientes (<span id="pill-count-pendientes">${pending}</span>)</button>
           <button type="button" class="btn btn-secondary filter-pill" onclick="filterCitasByStatus('Cancelada')" data-filter="Cancelada" style="padding:5px 12px; font-size:0.78rem; border-radius:20px; color:#f87171;">Canceladas (<span id="pill-count-canceladas">${canceled}</span>)</button>
         </div>
-        <div style="color:var(--text-dim); font-size:0.75rem;">
-          💡 Haz clic en cualquier botón de estado o fila para ver el detalle
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="text" id="admin-patient-live-search" placeholder="🔍 Filtrar en vivo paciente/cédula..." oninput="filterAdminCitasLive(this.value)" style="padding:5px 12px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.4); border-radius:20px; color:#fff; font-size:0.78rem; width:220px;">
         </div>
       </div>
 
@@ -5289,6 +5317,17 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           }, 1500);
         }
       }
+
+      function filterAdminCitasLive(query) {
+        const q = (query || '').toLowerCase().trim();
+        const rows = document.querySelectorAll('#agenda-clinica-card tbody tr');
+        rows.forEach(function(row) {
+          if (row.id === 'empty-agenda-row') return;
+          const text = row.innerText.toLowerCase();
+          row.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+      }
+      window.filterAdminCitasLive = filterAdminCitasLive;
 
       window.ADMIN_CITAS_DATA = ${JSON.stringify(appointments)};
 
@@ -8151,7 +8190,7 @@ portalRouter.post("/api/conectar", async (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// REPORTE OFICIAL IMPRIMIBLE Y EXPORTABLE EN PDF (FILTRADO POR PROFESIONAL Y FECHAS)
+// REPORTE OFICIAL IMPRIMIBLE Y EXPORTABLE EN PDF (FILTRADO AVANZADO Y AUDITORÍA FINANCIERA)
 // =============================================================================
 portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
   const staffSession = getStaffSession(req);
@@ -8161,6 +8200,8 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
   }
 
   const filterProfesional = (req.query.profesional as string)?.trim() || "";
+  const filterPaciente = (req.query.paciente as string)?.trim() || "";
+  const filterEspecialidad = (req.query.especialidad as string)?.trim() || "";
   const filterDesde = (req.query.desde as string)?.trim() || "";
   const filterHasta = (req.query.hasta as string)?.trim() || "";
   const filterEstado = (req.query.estado as string)?.trim() || "";
@@ -8169,6 +8210,17 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
 
   if (filterProfesional) {
     appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
+  }
+  if (filterPaciente) {
+    const q = filterPaciente.toLowerCase();
+    appointments = appointments.filter(a => 
+      a.patientName.toLowerCase().includes(q) || 
+      (a.documentNumber && a.documentNumber.includes(q)) || 
+      a.id.toLowerCase().includes(q)
+    );
+  }
+  if (filterEspecialidad) {
+    appointments = appointments.filter(a => a.specialty.toLowerCase().includes(filterEspecialidad.toLowerCase()));
   }
   if (filterDesde) {
     const from = new Date(filterDesde);
@@ -8194,23 +8246,46 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
   const canceled = appointments.filter(a => a.status === "Cancelada").length;
   const total = appointments.length;
 
+  const VALOR_CONSULTA = 120000;
+  const facturacionConfirmada = confirmed * VALOR_CONSULTA;
+  const carteraPendiente = pending * VALOR_CONSULTA;
+  const lucroCesante = canceled * VALOR_CONSULTA;
+  const tasaCumplimiento = total > 0 ? Math.round((confirmed / total) * 100) : 0;
+  const uniquePatients = new Set(appointments.map(a => a.documentNumber || a.patientName)).size;
+
+  // Desglose de productividad por especialista
+  const specialistMap: Record<string, { total: number; conf: number; pend: number; canc: number; specialty: string }> = {};
+  for (const a of appointments) {
+    const th = a.therapist || "Sin Asignar";
+    if (!specialistMap[th]) {
+      specialistMap[th] = { total: 0, conf: 0, pend: 0, canc: 0, specialty: a.specialty || "Psicología Clínica" };
+    }
+    specialistMap[th].total++;
+    if (a.status === "Confirmada") specialistMap[th].conf++;
+    else if (a.status === "Pendiente") specialistMap[th].pend++;
+    else if (a.status === "Cancelada") specialistMap[th].canc++;
+  }
+
   const nowBogota = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+
+  const exportCsvUrl = `/reportes/exportar/csv?profesional=${encodeURIComponent(filterProfesional)}&paciente=${encodeURIComponent(filterPaciente)}&especialidad=${encodeURIComponent(filterEspecialidad)}&desde=${encodeURIComponent(filterDesde)}&hasta=${encodeURIComponent(filterHasta)}&estado=${encodeURIComponent(filterEstado)}`;
 
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Reporte Oficial de Agenda Médica - MindCare</title>
+  <title>Informe Oficial de Agenda Médica & Auditoría Clínica - MindCare</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     body { background: #f8fafc; color: #0f172a; padding: 30px 20px; }
     .toolbar {
-      max-width: 960px;
+      max-width: 1040px;
       margin: 0 auto 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
+      flex-wrap: wrap;
     }
     .btn {
       display: inline-flex;
@@ -8227,15 +8302,17 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     }
     .btn-back { background: #e2e8f0; color: #1e293b; }
     .btn-back:hover { background: #cbd5e1; }
+    .btn-excel { background: #10b981; color: #fff; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35); }
+    .btn-excel:hover { background: #059669; }
     .btn-print { background: #0284c7; color: #fff; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35); }
     .btn-print:hover { background: #0369a1; }
     .sheet {
-      max-width: 960px;
+      max-width: 1040px;
       margin: 0 auto;
       background: #ffffff;
       border: 1px solid #cbd5e1;
       border-radius: 12px;
-      padding: 40px;
+      padding: 36px 40px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.05);
     }
     .header {
@@ -8243,8 +8320,8 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 2px solid #0284c7;
-      padding-bottom: 20px;
-      margin-bottom: 24px;
+      padding-bottom: 18px;
+      margin-bottom: 20px;
     }
     .logo-badge {
       font-size: 2.2rem;
@@ -8258,36 +8335,34 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     }
     .meta-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
       background: #f1f5f9;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
-      padding: 16px 20px;
-      margin-bottom: 24px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
     }
     .meta-item span {
       display: block;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
       font-weight: 700;
       color: #64748b;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .meta-item strong {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       color: #0f172a;
     }
     .kpis {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 22px;
     }
     .kpi-chip {
-      flex: 1;
-      min-width: 140px;
-      padding: 12px 16px;
+      padding: 12px 14px;
       background: #ffffff;
       border: 1px solid #cbd5e1;
       border-radius: 8px;
@@ -8297,26 +8372,38 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     .kpi-chip.kpi-conf { border-color: #10b981; background: #ecfdf5; }
     .kpi-chip.kpi-pend { border-color: #f59e0b; background: #fffbeb; }
     .kpi-chip.kpi-canc { border-color: #ef4444; background: #fef2f2; }
-    .kpi-chip span { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #475569; display: block; }
-    .kpi-chip strong { font-size: 1.4rem; font-weight: 800; display: block; margin-top: 2px; }
+    .kpi-chip.kpi-fin { border-color: #6366f1; background: #eef2ff; }
+    .kpi-chip span { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #475569; display: block; }
+    .kpi-chip strong { font-size: 1.25rem; font-weight: 800; display: block; margin-top: 2px; }
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 22px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 30px;
-      font-size: 0.85rem;
+      margin-bottom: 20px;
+      font-size: 0.82rem;
     }
     th {
       background: #0f172a;
       color: #ffffff;
       text-align: left;
-      padding: 10px 12px;
+      padding: 8px 10px;
       font-weight: 700;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     td {
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-bottom: 1px solid #e2e8f0;
       color: #1e293b;
       vertical-align: top;
@@ -8326,7 +8413,7 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
       display: inline-block;
       padding: 3px 8px;
       border-radius: 12px;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 700;
     }
     .badge-success { background: #d1fae5; color: #065f46; }
@@ -8335,23 +8422,23 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 50px;
-      padding-top: 20px;
+      margin-top: 40px;
+      padding-top: 16px;
       border-top: 1px solid #e2e8f0;
     }
     .sign-box { width: 280px; text-align: center; }
-    .sign-line { border-bottom: 1.5px solid #0f172a; margin-bottom: 6px; height: 40px; }
+    .sign-line { border-bottom: 1.5px solid #0f172a; margin-bottom: 6px; height: 35px; }
     .footer-note {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       color: #64748b;
       text-align: center;
-      margin-top: 30px;
+      margin-top: 24px;
       line-height: 1.4;
     }
     @media print {
       body { background: #ffffff !important; padding: 0 !important; }
       .toolbar { display: none !important; }
-      .sheet { border: none !important; box-shadow: none !important; padding: 15px !important; max-width: 100% !important; }
+      .sheet { border: none !important; box-shadow: none !important; padding: 10px !important; max-width: 100% !important; }
       tr { page-break-inside: avoid; }
     }
   </style>
@@ -8359,7 +8446,10 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
 <body>
   <div class="toolbar">
     <a href="/admin" class="btn btn-back">← Volver al Panel de Control</a>
-    <button onclick="window.print()" class="btn btn-print">🖨️ Imprimir / Guardar en PDF</button>
+    <div style="display:flex; gap:10px;">
+      <a href="${exportCsvUrl}" class="btn btn-excel">📥 Descargar en Excel (CSV)</a>
+      <button onclick="window.print()" class="btn btn-print">🖨️ Imprimir / Guardar en PDF</button>
+    </div>
   </div>
 
   <div class="sheet">
@@ -8383,11 +8473,19 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     <div class="meta-grid">
       <div class="meta-item">
         <span>Especialista / Profesional</span>
-        <strong>${filterProfesional ? filterProfesional : 'Todos los Especialistas Clínicos'}</strong>
+        <strong>${filterProfesional ? filterProfesional : 'Todos los Especialistas'}</strong>
+      </div>
+      <div class="meta-item">
+        <span>Paciente / Búsqueda</span>
+        <strong>${filterPaciente ? filterPaciente : 'Todos los Pacientes'}</strong>
+      </div>
+      <div class="meta-item">
+        <span>Especialidad Clínica</span>
+        <strong>${filterEspecialidad ? filterEspecialidad : 'Todas las Especialidades'}</strong>
       </div>
       <div class="meta-item">
         <span>Período Auditado</span>
-        <strong>${filterDesde ? filterDesde : 'Inicio'} &nbsp;hasta&nbsp; ${filterHasta ? filterHasta : 'Hoy'}</strong>
+        <strong>${filterDesde ? filterDesde : 'Inicio'} a ${filterHasta ? filterHasta : 'Hoy'}</strong>
       </div>
       <div class="meta-item">
         <span>Estado Consultado</span>
@@ -8399,10 +8497,10 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
       </div>
     </div>
 
-    <!-- KPIS RESUMEN -->
+    <!-- KPIS EJECUTIVOS & FINANCIEROS (PERSPECTIVA DIRECCIÓN MÉDICA) -->
     <div class="kpis">
       <div class="kpi-chip kpi-total">
-        <span>Total Citas en Reporte</span>
+        <span>Total Citas</span>
         <strong>${total}</strong>
       </div>
       <div class="kpi-chip kpi-conf">
@@ -8414,28 +8512,83 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
         <strong style="color:#d97706;">${pending}</strong>
       </div>
       <div class="kpi-chip kpi-canc">
-        <span style="color:#dc2626;">Canceladas / Liberadas</span>
+        <span style="color:#dc2626;">Canceladas</span>
         <strong style="color:#dc2626;">${canceled}</strong>
+      </div>
+      <div class="kpi-chip kpi-fin">
+        <span style="color:#4f46e5;">Facturación Realizada</span>
+        <strong style="color:#4f46e5;">$${facturacionConfirmada.toLocaleString('es-CO')}</strong>
+      </div>
+      <div class="kpi-chip kpi-canc">
+        <span style="color:#b91c1c;">Lucro Cesante</span>
+        <strong style="color:#b91c1c;">$${lucroCesante.toLocaleString('es-CO')}</strong>
+      </div>
+      <div class="kpi-chip kpi-conf">
+        <span style="color:#0284c7;">Ocupación / Asistencia</span>
+        <strong style="color:#0284c7;">${tasaCumplimiento}%</strong>
+      </div>
+      <div class="kpi-chip kpi-total">
+        <span>Pacientes Únicos</span>
+        <strong>${uniquePatients}</strong>
       </div>
     </div>
 
+    <!-- BALANCE DE RENDIMIENTO POR ESPECIALISTA -->
+    <div class="section-title">👨‍⚕️ Productividad & Desempeño por Especialista</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Especialista Clínico</th>
+          <th>Especialidad Principal</th>
+          <th style="text-align:center;">Citas Asignadas</th>
+          <th style="text-align:center;">Confirmadas</th>
+          <th style="text-align:center;">Canceladas</th>
+          <th style="text-align:center;">Ocupación %</th>
+          <th style="text-align:right;">Facturación Generada (COP)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${Object.keys(specialistMap).length === 0 ? `
+          <tr><td colspan="7" style="text-align:center; color:#64748b;">No hay actividad de especialistas registrada para este criterio.</td></tr>
+        ` : Object.entries(specialistMap).map(([therapistName, s]) => {
+          const occ = s.total > 0 ? Math.round((s.conf / s.total) * 100) : 0;
+          const billing = s.conf * VALOR_CONSULTA;
+          return `
+            <tr>
+              <td><strong>${therapistName}</strong></td>
+              <td>${s.specialty}</td>
+              <td style="text-align:center;"><strong>${s.total}</strong></td>
+              <td style="text-align:center; color:#059669; font-weight:700;">${s.conf}</td>
+              <td style="text-align:center; color:#dc2626; font-weight:700;">${s.canc}</td>
+              <td style="text-align:center;">
+                <span class="badge ${occ >= 70 ? 'badge-success' : occ >= 40 ? 'badge-warning' : 'badge-danger'}">${occ}%</span>
+              </td>
+              <td style="text-align:right; font-weight:700; color:#0284c7;">$${billing.toLocaleString('es-CO')}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+
     <!-- TABLA DE CITAS FILTRADAS -->
+    <div class="section-title">📋 Auditoría Detallada de Turnos y Pacientes</div>
     ${appointments.length === 0 ? `
-      <div style="text-align:center; padding: 40px 20px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; margin-bottom:30px;">
+      <div style="text-align:center; padding: 30px 20px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; margin-bottom:20px;">
         <span style="font-size:1.8rem;">🕊️</span>
-        <p style="font-weight:700; margin-top:8px;">No se encontraron registros de citas para los criterios seleccionados.</p>
-        <p style="font-size:0.82rem; margin-top:4px;">Especialista: ${filterProfesional || 'Todos'} | Rango: ${filterDesde || 'Inicio'} a ${filterHasta || 'Hoy'}</p>
+        <p style="font-weight:700; margin-top:6px;">No se encontraron citas para los criterios seleccionados.</p>
+        <p style="font-size:0.8rem; margin-top:4px;">Especialista: ${filterProfesional || 'Todos'} | Paciente: ${filterPaciente || 'Todos'} | Fechas: ${filterDesde || 'Inicio'} a ${filterHasta || 'Hoy'}</p>
       </div>
     ` : `
       <table>
         <thead>
           <tr>
-            <th style="width:40px;">#</th>
+            <th style="width:30px;">#</th>
             <th>Radicado</th>
             <th>Paciente & Documento</th>
             <th>Especialista Tratante</th>
             <th>Especialidad & Consultorio</th>
             <th>Fecha & Horario</th>
+            <th>Canal</th>
             <th>Motivo Clínico</th>
             <th>Estado</th>
           </tr>
@@ -8447,18 +8600,23 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
               <td><strong style="font-family:monospace; color:#0284c7;">#${a.id}</strong></td>
               <td>
                 <strong>${a.patientName}</strong>
-                <div style="font-size:0.75rem; color:#64748b;">🪪 C.C. ${a.documentNumber || 'Registrado'}</div>
+                <div style="font-size:0.72rem; color:#64748b;">🪪 C.C. ${a.documentNumber || 'Registrado'}</div>
               </td>
               <td><strong>${a.therapist}</strong></td>
               <td>
                 <div>${a.specialty}</div>
-                <div style="font-size:0.72rem; color:#64748b;">${getOfficeForTherapist(a.therapist)}</div>
+                <div style="font-size:0.7rem; color:#64748b;">${getOfficeForTherapist(a.therapist)}</div>
               </td>
               <td>
                 <strong style="color:#0284c7;">${a.dateTime}</strong>
-                ${a.scheduledAt ? `<div style="font-size:0.72rem; color:#64748b;">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
+                ${a.scheduledAt ? `<div style="font-size:0.7rem; color:#64748b;">${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} COT</div>` : ''}
               </td>
-              <td style="max-width:180px; font-size:0.8rem; color:#475569;">${a.motive || 'Consulta diagnóstica'}</td>
+              <td>
+                <span style="font-size:0.72rem; font-weight:700; color:${a.patientId?.startsWith('web-') ? '#0284c7' : '#0088cc'};">
+                  ${a.patientId?.startsWith('web-') ? '🌐 Web' : '💬 Bot'}
+                </span>
+              </td>
+              <td style="max-width:160px; font-size:0.78rem; color:#475569;">${a.motive || 'Consulta diagnóstica'}</td>
               <td>
                 <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">
                   ● ${a.status}
@@ -8473,18 +8631,18 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
     <div class="signatures">
       <div class="sign-box">
         <div class="sign-line"></div>
-        <strong style="font-size:0.85rem; color:#0f172a;">${filterProfesional ? filterProfesional : 'Especialista Tratante'}</strong>
+        <strong style="font-size:0.85rem; color:#0f172a;">${filterProfesional ? filterProfesional : 'Cuerpo Médico Clínico'}</strong>
         <p style="font-size:0.72rem; color:#64748b;">Psicología Clínica • Registro Profesional Colpsic</p>
       </div>
       <div class="sign-box">
         <div class="sign-line"></div>
         <strong style="font-size:0.85rem; color:#0f172a;">${staffSession.fullName}</strong>
-        <p style="font-size:0.72rem; color:#64748b;">Dirección Médica & Auditoría Clínica MindCare</p>
+        <p style="font-size:0.72rem; color:#64748b;">Dirección Médica & Propietario de la Clínica MindCare</p>
       </div>
     </div>
 
     <div class="footer-note">
-      Documento clínico y administrativo reservado y confidencial emitido bajo los estándares de la Ley 1090 de 2006 (Código Deontológico y Bioético del Psicólogo en Colombia) y la Resolución 1995 de 1999.
+      Documento clínico y contable emitido bajo los estándares de la Ley 1090 de 2006 (Código Deontológico del Psicólogo en Colombia), la Resolución 1995 de 1999 y la Ley 1581 de 2012 de Tratamiento de Datos Personales Sensibles.
     </div>
   </div>
 </body>
@@ -8494,7 +8652,107 @@ portalRouter.get("/admin/reportes/imprimir", (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// RUTA 5: MÓDULO DE AUDITORÍA Y REPORTES CLÍNICOS
+// EXPORTACIÓN A EXCEL / CSV DE REPORTES CLÍNICOS
+// =============================================================================
+portalRouter.get(["/reportes/exportar/csv", "/api/reportes/export/csv"], (req: Request, res: Response) => {
+  const staffSession = getStaffSession(req);
+  if (!staffSession.isStaff) {
+    res.status(403).send("No autorizado. Acceso exclusivo para personal médico y directivo de MindCare.");
+    return;
+  }
+
+  const filterProfesional = (req.query.profesional as string)?.trim() || "";
+  const filterPaciente = (req.query.paciente as string)?.trim() || "";
+  const filterEspecialidad = (req.query.especialidad as string)?.trim() || "";
+  const filterDesde = (req.query.desde as string)?.trim() || "";
+  const filterHasta = (req.query.hasta as string)?.trim() || "";
+  const filterEstado = (req.query.estado as string)?.trim() || "";
+
+  let appointments = getAllPsyAppointments();
+
+  if (filterProfesional) {
+    appointments = appointments.filter(a => a.therapist.toLowerCase().includes(filterProfesional.toLowerCase()));
+  }
+  if (filterPaciente) {
+    const q = filterPaciente.toLowerCase();
+    appointments = appointments.filter(a =>
+      a.patientName.toLowerCase().includes(q) ||
+      (a.documentNumber && a.documentNumber.includes(q)) ||
+      a.id.toLowerCase().includes(q)
+    );
+  }
+  if (filterEspecialidad) {
+    appointments = appointments.filter(a => a.specialty.toLowerCase().includes(filterEspecialidad.toLowerCase()));
+  }
+  if (filterDesde) {
+    const from = new Date(filterDesde);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d >= from : true;
+    });
+  }
+  if (filterHasta) {
+    const to = new Date(filterHasta);
+    to.setHours(23, 59, 59, 999);
+    appointments = appointments.filter(a => {
+      const d = a.scheduledAt ? new Date(a.scheduledAt) : a.createdAt ? new Date(a.createdAt) : null;
+      return d ? d <= to : true;
+    });
+  }
+  if (filterEstado && filterEstado !== "TODAS") {
+    appointments = appointments.filter(a => a.status.toLowerCase() === filterEstado.toLowerCase());
+  }
+
+  const headers = [
+    "Radicado_ID",
+    "Paciente",
+    "Documento_CC",
+    "Especialista",
+    "Especialidad",
+    "Consultorio",
+    "Fecha_Horario",
+    "Motivo_Consulta",
+    "Canal_Origen",
+    "Estado_Cita",
+    "Tarifa_Base_COP",
+    "Valor_Facturado_COP",
+    "Fecha_Registro"
+  ];
+
+  const escapeCsv = (str: any) => `"${String(str ?? '').replace(/"/g, '""')}"`;
+
+  const rows = appointments.map(a => {
+    const isWeb = a.patientId?.startsWith("web-");
+    const canal = isWeb ? "Portal Web" : "Telegram Bot";
+    const valorFacturado = a.status === "Confirmada" ? 120000 : 0;
+    const fechaReg = a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 19).replace("T", " ") : "";
+    return [
+      escapeCsv(a.id),
+      escapeCsv(a.patientName),
+      escapeCsv(a.documentNumber || "No registrado"),
+      escapeCsv(a.therapist),
+      escapeCsv(a.specialty),
+      escapeCsv(getOfficeForTherapist(a.therapist)),
+      escapeCsv(a.dateTime),
+      escapeCsv(a.motive || "Consulta diagnóstica"),
+      escapeCsv(canal),
+      escapeCsv(a.status),
+      "120000",
+      String(valorFacturado),
+      escapeCsv(fechaReg)
+    ].join(",");
+  });
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+  const fileName = `Reporte_Clinico_MindCare_${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.status(200).send(csvContent);
+});
+
+// =============================================================================
+// RUTA 5: MÓDULO EJECUTIVO DE REPORTES, AUDITORÍA & INTELIGENCIA CLÍNICA
 // =============================================================================
 portalRouter.get("/reportes", async (req: Request, res: Response) => {
   const staffSession = getStaffSession(req);
@@ -8504,11 +8762,23 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
   }
   const isAdmin = staffSession.isAdmin;
   const moduloSeleccionado = (req.query.modulo as string) || "citas";
+  const activeTab = (req.query.tab as string) || "agenda";
   const fechaDesde = (req.query.desde as string) || "";
   const fechaHasta = (req.query.hasta as string) || "";
   const profesional = (req.query.profesional as string) || "";
+  const paciente = (req.query.paciente as string) || "";
+  const especialidad = (req.query.especialidad as string) || "";
+  const estado = (req.query.estado as string) || "";
 
-  const reporte = await getModuleData(moduloSeleccionado, fechaDesde, fechaHasta, profesional);
+  const reporte = await getModuleData(
+    moduloSeleccionado, 
+    fechaDesde, 
+    fechaHasta, 
+    profesional, 
+    paciente, 
+    estado, 
+    especialidad
+  );
 
   const modulosDisponibles = [
     { key: "citas", name: "🧠 Citas & Consultas Agendadas", desc: "Registro clínico de turnos, pacientes y doctores" },
@@ -8524,34 +8794,140 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
 
   const currentMod = modulosDisponibles.find(m => m.key === moduloSeleccionado);
 
+  // Cálculos ejecutivos para la dirección médica / dueño de la clínica
+  const VALOR_CONSULTA = 120000;
+  const citasItems = moduloSeleccionado === "citas" ? reporte.items : [];
+  const totalCitas = citasItems.length;
+  const confirmadas = citasItems.filter((a: any) => a.status === "Confirmada").length;
+  const pendientes = citasItems.filter((a: any) => a.status === "Pendiente").length;
+  const canceladas = citasItems.filter((a: any) => a.status === "Cancelada").length;
+
+  const facturacionTotal = confirmadas * VALOR_CONSULTA;
+  const carteraPendiente = pendientes * VALOR_CONSULTA;
+  const lucroCesante = canceladas * VALOR_CONSULTA;
+  const tasaOcupacion = totalCitas > 0 ? Math.round((confirmadas / totalCitas) * 100) : 0;
+  const pacientesUnicos = new Set(citasItems.map((a: any) => a.documentNumber || a.patientName)).size;
+  const citasWeb = citasItems.filter((a: any) => a.patientId?.startsWith("web-")).length;
+  const citasTelegram = totalCitas - citasWeb;
+  const pctTelegram = totalCitas > 0 ? Math.round((citasTelegram / totalCitas) * 100) : 50;
+  const pctWeb = totalCitas > 0 ? 100 - pctTelegram : 50;
+
+  // Desglose de productividad por especialista
+  const specialistMap: Record<string, { total: number; conf: number; pend: number; canc: number; specialty: string }> = {};
+  for (const a of citasItems) {
+    const th = a.therapist || "Sin Asignar";
+    if (!specialistMap[th]) {
+      specialistMap[th] = { total: 0, conf: 0, pend: 0, canc: 0, specialty: a.specialty || "Psicología Clínica" };
+    }
+    specialistMap[th].total++;
+    if (a.status === "Confirmada") specialistMap[th].conf++;
+    else if (a.status === "Pendiente") specialistMap[th].pend++;
+    else if (a.status === "Cancelada") specialistMap[th].canc++;
+  }
+
+  // Desglose de motivos clínicos (Epidemiología)
+  const motivosMap: Record<string, number> = {
+    "Ansiedad y Pánico": 0,
+    "Depresión y Estado de Ánimo": 0,
+    "Terapia de Pareja y Familia": 0,
+    "Estrés Laboral / Burnout": 0,
+    "TDAH y Neuropsicología": 0,
+    "Duelo y Gestión Emocional": 0,
+    "Otros Motivos": 0
+  };
+
+  for (const a of citasItems) {
+    const mot = (a.motive || "").toLowerCase();
+    if (mot.includes("ansie") || mot.includes("pánico") || mot.includes("panico")) {
+      motivosMap["Ansiedad y Pánico"]++;
+    } else if (mot.includes("depre") || mot.includes("triste") || mot.includes("desánimo")) {
+      motivosMap["Depresión y Estado de Ánimo"]++;
+    } else if (mot.includes("pareja") || mot.includes("matrimon") || mot.includes("famil")) {
+      motivosMap["Terapia de Pareja y Familia"]++;
+    } else if (mot.includes("estrés") || mot.includes("estres") || mot.includes("burnout") || mot.includes("trabaj")) {
+      motivosMap["Estrés Laboral / Burnout"]++;
+    } else if (mot.includes("tdah") || mot.includes("neuro") || mot.includes("atención") || mot.includes("atencion")) {
+      motivosMap["TDAH y Neuropsicología"]++;
+    } else if (mot.includes("duelo") || mot.includes("pérdida") || mot.includes("emocion")) {
+      motivosMap["Duelo y Gestión Emocional"]++;
+    } else {
+      motivosMap["Otros Motivos"]++;
+    }
+  }
+
+  // Frecuencia y fidelización de pacientes
+  const patientFrequencyMap: Record<string, { name: string; doc: string; count: number; lastDate: string; therapist: string; channel: string }> = {};
+  for (const a of citasItems) {
+    const key = a.documentNumber || a.patientName;
+    if (!patientFrequencyMap[key]) {
+      patientFrequencyMap[key] = {
+        name: a.patientName,
+        doc: a.documentNumber || "No registrada",
+        count: 0,
+        lastDate: a.dateTime,
+        therapist: a.therapist,
+        channel: a.patientId?.startsWith("web-") ? "Portal Web" : "Telegram Bot"
+      };
+    }
+    patientFrequencyMap[key].count++;
+  }
+  const topPatients = Object.values(patientFrequencyMap).sort((a, b) => b.count - a.count);
+
+  // URL helpers para botones de exportar e imprimir
+  const filterParams = `profesional=${encodeURIComponent(profesional)}&paciente=${encodeURIComponent(paciente)}&especialidad=${encodeURIComponent(especialidad)}&desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}&estado=${encodeURIComponent(estado)}`;
+  const printUrl = `/admin/reportes/imprimir?${filterParams}`;
+  const exportCsvUrl = `/reportes/exportar/csv?${filterParams}`;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const weekAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const monthAgoStr = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
   const content = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap:wrap; gap:16px;">
       <div>
-        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(14,165,233,0.12); border:1px solid rgba(14,165,233,0.3); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:var(--primary-light); margin-bottom:8px; text-transform:uppercase;">
-          Auditoría & Analítica • MindCare Insights
+        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(99, 102, 241, 0.15); border:1px solid rgba(99, 102, 241, 0.35); padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:700; color:#a5b4fc; margin-bottom:8px; text-transform:uppercase;">
+          👑 Dirección Médica • Panel Ejecutivo del Propietario
         </div>
-        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Panel Administrativo de Reportes Clínicos</h1>
+        <h1 style="font-size: 2rem; font-weight: 800; color: #fff;">Consola de Inteligencia Clínica & Reportes</h1>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Auditoría técnica de expedientes, actividad de usuarios y reportes relacionales filtrados por módulo, profesional y fechas.
+          Auditoría de citas en tiempo real, balance de facturación, lucro cesante, rendimiento médico y epidemiología de salud mental.
         </p>
       </div>
 
-      <div style="display:flex; gap:10px;">
-        <a href="/admin/reportes/imprimir?profesional=${encodeURIComponent(profesional)}&desde=${encodeURIComponent(fechaDesde)}&hasta=${encodeURIComponent(fechaHasta)}" target="_blank" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
-          Imprimir / Exportar Reporte 🖨️
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="${exportCsvUrl}" class="btn btn-secondary" style="border:1px solid rgba(16,185,129,0.4); color:#34d399; display:inline-flex; align-items:center; gap:6px;" title="Descargar datos en formato Excel / CSV">
+          📥 Exportar a Excel (CSV)
         </a>
-        <a href="/admin" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8;">
-          👑 Ir a Panel Admin
+        <a href="${printUrl}" target="_blank" class="btn btn-secondary" style="border:1px solid rgba(56,189,248,0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:6px;" title="Generar informe oficial imprimible en PDF">
+          🖨️ Imprimir Reporte Oficial (PDF)
+        </a>
+        <a href="/admin" class="btn btn-secondary" style="border:1px solid rgba(255,255,255,0.2); color:#fff;">
+          👑 Panel Admin
         </a>
       </div>
     </div>
 
-    <!-- Barra de Filtros -->
-    <div class="card" style="padding: 22px 28px; margin-bottom: 24px;">
-      <form method="GET" action="/reportes" style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
-        <div style="flex: 2; min-width: 220px;">
-          <label for="modulo">Módulo del Sistema (RF-53):</label>
-          <select id="modulo" name="modulo">
+    <!-- Barra de Filtros Clínicos Completos -->
+    <div class="card" style="padding: 22px 24px; margin-bottom: 24px; border:1px solid rgba(56,189,248,0.3); background:linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(30,41,59,0.7) 100%);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <span style="font-size:0.85rem; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.5px;">
+          🔍 Filtros Multicriterio de Auditoría
+        </span>
+        <!-- Accesos rápidos por fecha -->
+        <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:0.75rem;">
+          <a href="/reportes?modulo=${moduloSeleccionado}&tab=${activeTab}&desde=${todayStr}&hasta=${todayStr}" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem; border-radius:14px;">📅 Hoy</a>
+          <a href="/reportes?modulo=${moduloSeleccionado}&tab=${activeTab}&desde=${weekAgoStr}&hasta=${todayStr}" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem; border-radius:14px;">🗓️ Esta Semana</a>
+          <a href="/reportes?modulo=${moduloSeleccionado}&tab=${activeTab}&desde=${monthAgoStr}&hasta=${todayStr}" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem; border-radius:14px;">📈 Este Mes</a>
+          <a href="/reportes?modulo=${moduloSeleccionado}&tab=${activeTab}" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem; border-radius:14px;">🔄 Histórico Completo</a>
+        </div>
+      </div>
+
+      <form method="GET" action="/reportes" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <input type="hidden" name="tab" value="${activeTab}">
+
+        <div style="flex: 1.5; min-width: 170px;">
+          <label for="modulo" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Módulo:</label>
+          <select id="modulo" name="modulo" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
             ${modulosDisponibles.map(m => `
               <option value="${m.key}" ${moduloSeleccionado === m.key ? 'selected' : ''}>
                 ${m.name}
@@ -8560,34 +8936,61 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
           </select>
         </div>
 
-        <div style="flex: 2; min-width: 220px;">
-          <label for="profesional">Especialista / Profesional:</label>
-          <select id="profesional" name="profesional">
-            <option value="">Todos los Especialistas Clínicos</option>
+        <div style="flex: 2; min-width: 180px;">
+          <label for="profesional" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Especialista Clínico:</label>
+          <select id="profesional" name="profesional" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
+            <option value="">Todos los Especialistas</option>
             ${getAllTherapists(true).map(t => `
               <option value="${t.name}" ${profesional === t.name ? 'selected' : ''}>
-                ${t.icon || '👨‍⚕️'} ${t.name} (${t.specialty})
+                ${t.icon || '👨‍⚕️'} ${t.name}
               </option>
             `).join('')}
           </select>
         </div>
 
-        <div style="flex: 1; min-width: 140px;">
-          <label for="desde">Fecha Desde (RF-55):</label>
-          <input type="date" id="desde" name="desde" value="${fechaDesde}">
+        <div style="flex: 2; min-width: 180px;">
+          <label for="paciente" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Paciente / Cédula / Radicado:</label>
+          <input type="text" id="paciente" name="paciente" value="${paciente}" placeholder="Buscar nombre o cédula..." style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
         </div>
 
-        <div style="flex: 1; min-width: 140px;">
-          <label for="hasta">Fecha Hasta (RF-55):</label>
-          <input type="date" id="hasta" name="hasta" value="${fechaHasta}">
+        <div style="flex: 1.5; min-width: 160px;">
+          <label for="especialidad" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Especialidad:</label>
+          <select id="especialidad" name="especialidad" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
+            <option value="">Todas las Especialidades</option>
+            ${PSYCHOLOGY_SPECIALTIES.map(s => `
+              <option value="${s.name}" ${especialidad === s.name ? 'selected' : ''}>
+                ${s.icon} ${s.name}
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div style="flex: 1; min-width: 120px;">
+          <label for="estado" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Estado:</label>
+          <select id="estado" name="estado" style="width:100%; padding:9px 12px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
+            <option value="" ${!estado ? 'selected' : ''}>Todos</option>
+            <option value="Confirmada" ${estado === 'Confirmada' ? 'selected' : ''}>Confirmadas</option>
+            <option value="Pendiente" ${estado === 'Pendiente' ? 'selected' : ''}>Pendientes</option>
+            <option value="Cancelada" ${estado === 'Cancelada' ? 'selected' : ''}>Canceladas</option>
+          </select>
+        </div>
+
+        <div style="flex: 1; min-width: 125px;">
+          <label for="desde" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Desde:</label>
+          <input type="date" id="desde" name="desde" value="${fechaDesde}" style="width:100%; padding:9px 10px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
+        </div>
+
+        <div style="flex: 1; min-width: 125px;">
+          <label for="hasta" style="display:block; font-size:0.75rem; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Hasta:</label>
+          <input type="date" id="hasta" name="hasta" value="${fechaHasta}" style="width:100%; padding:9px 10px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.85rem;">
         </div>
 
         <div style="display:flex; gap:8px;">
-          <button type="submit" class="btn btn-primary" style="padding: 12px 20px; font-weight:700;">
-            Consultar Datos 🔍
+          <button type="submit" class="btn btn-primary" style="padding: 10px 18px; font-weight:700; font-size:0.88rem;">
+            Filtrar 🔍
           </button>
-          ${(profesional || fechaDesde || fechaHasta) ? `
-            <a href="/reportes?modulo=${moduloSeleccionado}" class="btn btn-secondary" style="padding: 12px 14px;">
+          ${(profesional || paciente || especialidad || estado || fechaDesde || fechaHasta) ? `
+            <a href="/reportes?modulo=${moduloSeleccionado}&tab=${activeTab}" class="btn btn-secondary" style="padding: 10px 12px; font-size:0.88rem;">
               Limpiar 🔄
             </a>
           ` : ''}
@@ -8595,42 +8998,321 @@ portalRouter.get("/reportes", async (req: Request, res: Response) => {
       </form>
     </div>
 
-    <!-- Resumen KPI -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-bottom: 24px;">
-      <div class="card" style="margin-bottom:0; padding:20px;">
-        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">MÓDULO AUDITADO</span>
-        <h3 style="font-size: 1.25rem; color: #fff; margin-top:6px; font-weight:700;">${currentMod?.name}</h3>
-        <span style="font-size:0.8rem; color:var(--text-muted);">${currentMod?.desc}</span>
-      </div>
+    <!-- CONTENEDOR EN TIEMPO REAL (ACTUALIZADO DINÁMICAMENTE POR SSE) -->
+    <div id="reportes-live-container">
+      ${moduloSeleccionado === "citas" ? `
+        <!-- 6 KPIS ESTRATÉGICOS PARA EL DUEÑO DE LA CLÍNICA -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;">
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #10b981; background:rgba(16,185,129,0.06);">
+            <span style="font-size:0.72rem; color:#34d399; font-weight:700; text-transform:uppercase;">FACTURACIÓN CONFIRMADA</span>
+            <h3 style="font-size:1.6rem; color:#fff; margin-top:4px; font-weight:800;">$${facturacionTotal.toLocaleString('es-CO')}</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">${confirmadas} sesiones cobradas ($120.000 COP)</span>
+          </div>
 
-      <div class="card" style="margin-bottom:0; padding:20px;">
-        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">TOTAL REGISTROS</span>
-        <h3 style="font-size: 1.8rem; color: var(--primary-light); margin-top:4px; font-weight:800;">${reporte.total}</h3>
-        <span style="font-size:0.8rem; color:var(--text-muted);">Filas encontradas en el rango</span>
-      </div>
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #f87171; background:rgba(239,68,68,0.06);">
+            <span style="font-size:0.72rem; color:#f87171; font-weight:700; text-transform:uppercase;">LUCRO CESANTE (CANCELADAS)</span>
+            <h3 style="font-size:1.6rem; color:#fca5a5; margin-top:4px; font-weight:800;">$${lucroCesante.toLocaleString('es-CO')}</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">${canceladas} cancelaciones / horas perdidas</span>
+          </div>
 
-      <div class="card" style="margin-bottom:0; padding:20px;">
-        <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">BASE DE DATOS</span>
-        <h3 style="font-size: 1.15rem; color: ${prisma ? 'var(--success)' : '#fbbf24'}; margin-top:8px; font-weight:700;">
-          ${prisma ? '🟢 PostgreSQL Activo' : '🟡 Modo Local Activo'}
-        </h3>
-        <span style="font-size:0.8rem; color:var(--text-muted);">Conexión relacional persistente</span>
-      </div>
-    </div>
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #38bdf8; background:rgba(56,189,248,0.06);">
+            <span style="font-size:0.72rem; color:#38bdf8; font-weight:700; text-transform:uppercase;">TASA DE OCUPACIÓN</span>
+            <h3 style="font-size:1.6rem; color:#38bdf8; margin-top:4px; font-weight:800;">${tasaOcupacion}%</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">${confirmadas} asistidas de ${totalCitas} turnos</span>
+          </div>
 
-    <!-- Tabla Detallada -->
-    <div class="card">
-      <div class="card-header-styled">
-        <div class="card-title">
-          <span>📊</span>
-          Detalle: ${currentMod?.name}
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #f59e0b; background:rgba(245,158,11,0.06);">
+            <span style="font-size:0.72rem; color:#fbbf24; font-weight:700; text-transform:uppercase;">CARTERA PENDIENTE</span>
+            <h3 style="font-size:1.6rem; color:#fde68a; margin-top:4px; font-weight:800;">$${carteraPendiente.toLocaleString('es-CO')}</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">${pendientes} turnos por validar</span>
+          </div>
+
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #a855f7; background:rgba(168,85,247,0.06);">
+            <span style="font-size:0.72rem; color:#c084fc; font-weight:700; text-transform:uppercase;">PACIENTES ATENDIDOS</span>
+            <h3 style="font-size:1.6rem; color:#fff; margin-top:4px; font-weight:800;">${pacientesUnicos}</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">Pacientes únicos en la muestra</span>
+          </div>
+
+          <div class="card" style="margin-bottom:0; padding:18px; border-left:4px solid #6366f1; background:rgba(99,102,241,0.06);">
+            <span style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase;">ORIGEN DE TURNOS</span>
+            <h3 style="font-size:1.25rem; color:#fff; margin-top:6px; font-weight:800;">${pctTelegram}% Bot · ${pctWeb}% Web</h3>
+            <span style="font-size:0.75rem; color:var(--text-muted);">${citasTelegram} vía Telegram, ${citasWeb} vía Portal</span>
+          </div>
         </div>
-        <span style="color: var(--text-dim); font-size: 0.85rem;">Mostrando ${reporte.items.length} registros</span>
-      </div>
 
-      <div class="table-responsive">
-        ${renderReportTable(moduloSeleccionado, reporte.items)}
-      </div>
+        <!-- PESTAÑAS DE VISTA EJECUTIVA PARA EL DUEÑO DE LA CLÍNICA -->
+        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto; padding-bottom:6px;">
+          <a href="/reportes?modulo=citas&tab=agenda&${filterParams}" class="btn btn-secondary ${activeTab === 'agenda' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'agenda' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            📋 Auditoría de Turnos (${totalCitas})
+          </a>
+          <a href="/reportes?modulo=citas&tab=rendimiento&${filterParams}" class="btn btn-secondary ${activeTab === 'rendimiento' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'rendimiento' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            👨‍⚕️ Rendimiento de Especialistas
+          </a>
+          <a href="/reportes?modulo=citas&tab=financiero&${filterParams}" class="btn btn-secondary ${activeTab === 'financiero' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'financiero' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            💰 Balance Financiero & Lucro Cesante
+          </a>
+          <a href="/reportes?modulo=citas&tab=pacientes&${filterParams}" class="btn btn-secondary ${activeTab === 'pacientes' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'pacientes' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            👥 Pacientes & Fidelización
+          </a>
+          <a href="/reportes?modulo=citas&tab=epidemiologia&${filterParams}" class="btn btn-secondary ${activeTab === 'epidemiologia' ? 'active' : ''}" style="border-radius:10px; font-size:0.85rem; padding:8px 16px; ${activeTab === 'epidemiologia' ? 'background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#fff; font-weight:700;' : ''}">
+            🧠 Epidemiología de Salud Mental
+          </a>
+        </div>
+
+        <!-- CONTENIDO SEGÚN LA PESTAÑA ACTIVA -->
+        ${activeTab === "agenda" ? `
+          <!-- TAB 1: AUDITORÍA DE TURNOS -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>📋</span>
+                Registro de Turnos Clínicos Auditados
+              </div>
+              <span class="badge badge-info">${totalCitas} Turnos en pantalla</span>
+            </div>
+            <div class="table-responsive">
+              ${renderReportTable("citas", citasItems)}
+            </div>
+          </div>
+        ` : activeTab === "rendimiento" ? `
+          <!-- TAB 2: PRODUCTIVIDAD DE ESPECIALISTAS -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>👨‍⚕️</span>
+                Desempeño & Capacidad Instalada por Especialista
+              </div>
+              <span class="badge badge-info">Auditoría Operativa</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Especialista Clínico</th>
+                    <th>Especialidad & Consultorio</th>
+                    <th style="text-align:center;">Citas Asignadas</th>
+                    <th style="text-align:center;">Confirmadas</th>
+                    <th style="text-align:center;">Canceladas</th>
+                    <th style="text-align:center;">Tasa Ocupación</th>
+                    <th style="text-align:right;">Facturación Generada (COP)</th>
+                    <th style="text-align:right;">Lucro Cesante (COP)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${Object.keys(specialistMap).length === 0 ? `
+                    <tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-dim);">No hay registros de citas para los filtros seleccionados.</td></tr>
+                  ` : Object.entries(specialistMap).map(([therapistName, s]) => {
+                    const occ = s.total > 0 ? Math.round((s.conf / s.total) * 100) : 0;
+                    const billing = s.conf * VALOR_CONSULTA;
+                    const loss = s.canc * VALOR_CONSULTA;
+                    return `
+                      <tr>
+                        <td>
+                          <div style="font-weight:700; color:#fff; font-size:0.92rem;">${therapistName}</div>
+                          <div style="font-size:0.75rem; color:#94a3b8;">Registro Médico Activo</div>
+                        </td>
+                        <td>
+                          <div style="color:#a5b4fc; font-weight:600;">${s.specialty}</div>
+                          <div style="font-size:0.72rem; color:var(--text-dim);">${getOfficeForTherapist(therapistName)}</div>
+                        </td>
+                        <td style="text-align:center;"><strong style="font-size:1.05rem; color:#fff;">${s.total}</strong></td>
+                        <td style="text-align:center; color:#34d399; font-weight:700;">${s.conf}</td>
+                        <td style="text-align:center; color:#f87171; font-weight:700;">${s.canc}</td>
+                        <td style="text-align:center;">
+                          <span class="badge ${occ >= 70 ? 'badge-success' : occ >= 40 ? 'badge-warning' : 'badge-danger'}">
+                            ${occ}%
+                          </span>
+                        </td>
+                        <td style="text-align:right; font-weight:700; color:#38bdf8;">$${billing.toLocaleString('es-CO')}</td>
+                        <td style="text-align:right; font-weight:700; color:#fca5a5;">$${loss.toLocaleString('es-CO')}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : activeTab === "financiero" ? `
+          <!-- TAB 3: BALANCE FINANCIERO -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>💰</span> Estado de Resultados Estimado
+                </div>
+                <span class="badge badge-success">Tarifa Base: $120.000 COP</span>
+              </div>
+              <div style="padding:10px 0;">
+                <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border-subtle);">
+                  <span style="color:var(--text-muted);">Ingresos Facturados (Citas Confirmadas):</span>
+                  <strong style="color:#34d399; font-size:1.1rem;">+$${facturacionTotal.toLocaleString('es-CO')} COP</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border-subtle);">
+                  <span style="color:var(--text-muted);">Cartera en Tránsito (Citas Pendientes):</span>
+                  <strong style="color:#fbbf24; font-size:1.1rem;">$${carteraPendiente.toLocaleString('es-CO')} COP</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border-subtle);">
+                  <span style="color:var(--text-muted);">Lucro Cesante (Cancelaciones e Inasistencias):</span>
+                  <strong style="color:#f87171; font-size:1.1rem;">-$${lucroCesante.toLocaleString('es-CO')} COP</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:14px 0; margin-top:8px; border-top:2px solid var(--border-subtle);">
+                  <span style="font-weight:700; color:#fff;">Potencial Total de la Agenda:</span>
+                  <strong style="color:#38bdf8; font-size:1.2rem;">$${((facturacionTotal + carteraPendiente + lucroCesante)).toLocaleString('es-CO')} COP</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-styled">
+                <div class="card-title">
+                  <span>📊</span> Facturación por Especialidad Clínica
+                </div>
+                <span class="badge badge-info">Distribución</span>
+              </div>
+              <div style="padding:10px 0;">
+                ${PSYCHOLOGY_SPECIALTIES.map(s => {
+                  const specApps = citasItems.filter((a: any) => a.specialty?.toLowerCase().includes(s.name.toLowerCase()));
+                  const specConf = specApps.filter((a: any) => a.status === 'Confirmada').length;
+                  const specBill = specConf * VALOR_CONSULTA;
+                  const pct = facturacionTotal > 0 ? Math.round((specBill / facturacionTotal) * 100) : 0;
+                  return `
+                    <div style="margin-bottom:14px;">
+                      <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
+                        <span>${s.icon} <strong>${s.name}</strong> (${specConf} citas)</span>
+                        <strong style="color:#38bdf8;">$${specBill.toLocaleString('es-CO')} COP (${pct}%)</strong>
+                      </div>
+                      <div style="width:100%; height:7px; background:rgba(255,255,255,0.1); border-radius:10px; overflow:hidden;">
+                        <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, #0284c7, #38bdf8); border-radius:10px;"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+        ` : activeTab === "pacientes" ? `
+          <!-- TAB 4: RETENCIÓN Y FIDELIZACIÓN DE PACIENTES -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>👥</span>
+                Pacientes Frecuentes & Nivel de Adherencia al Tratamiento
+              </div>
+              <span class="badge badge-info">${topPatients.length} Pacientes Únicos</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Paciente</th>
+                    <th>Cédula / Documento</th>
+                    <th style="text-align:center;">Sesiones Registradas</th>
+                    <th>Especialista Habitual</th>
+                    <th>Canal Habitual</th>
+                    <th>Último Turno</th>
+                    <th>Nivel de Fidelización</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${topPatients.length === 0 ? `
+                    <tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-dim);">No hay pacientes registrados con los filtros activos.</td></tr>
+                  ` : topPatients.map((p, idx) => `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td><strong style="color:#fff;">${p.name}</strong></td>
+                      <td><code style="color:#94a3b8;">${p.doc}</code></td>
+                      <td style="text-align:center;">
+                        <span class="badge ${p.count > 1 ? 'badge-success' : 'badge-info'}" style="font-size:0.82rem;">
+                          ${p.count} ${p.count === 1 ? 'sesión' : 'sesiones'}
+                        </span>
+                      </td>
+                      <td>${p.therapist}</td>
+                      <td><span style="font-size:0.78rem; color:${p.channel === 'Portal Web' ? '#38bdf8' : '#60a5fa'}; font-weight:600;">${p.channel}</span></td>
+                      <td style="color:var(--text-dim); font-size:0.82rem;">${p.lastDate}</td>
+                      <td>
+                        <span style="font-size:0.75rem; font-weight:700; color:${p.count >= 3 ? '#34d399' : p.count === 2 ? '#fbbf24' : '#94a3b8'};">
+                          ${p.count >= 3 ? '🟢 Tratamiento Continuo' : p.count === 2 ? '🟡 Seguimiento Activo' : '⚪ Primera Consulta'}
+                        </span>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ` : `
+          <!-- TAB 5: EPIDEMIOLOGÍA & SALUD MENTAL -->
+          <div class="card">
+            <div class="card-header-styled">
+              <div class="card-title">
+                <span>🧠</span>
+                Prevalencia de Motivos de Consulta & Salud Mental
+              </div>
+              <span class="badge badge-info">Epidemiología Clínica MindCare</span>
+            </div>
+            <div style="padding:16px 20px;">
+              <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:20px;">
+                Distribución porcentual de los principales motivos de consulta identificados en la anamnesis inicial:
+              </p>
+              ${Object.entries(motivosMap).map(([motiveName, count]) => {
+                const pct = totalCitas > 0 ? Math.round((count / totalCitas) * 100) : 0;
+                return `
+                  <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                      <div>
+                        <strong style="color:#fff; font-size:0.92rem;">${motiveName}</strong>
+                        <span style="color:var(--text-dim); font-size:0.78rem; margin-left:8px;">(${count} pacientes)</span>
+                      </div>
+                      <strong style="color:#38bdf8; font-size:0.95rem;">${pct}%</strong>
+                    </div>
+                    <div style="width:100%; height:9px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden;">
+                      <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, #6366f1, #38bdf8); border-radius:10px;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `}
+      ` : `
+        <!-- VISTA DE OTROS MÓDULOS DEL SISTEMA -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-bottom: 24px;">
+          <div class="card" style="margin-bottom:0; padding:20px;">
+            <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">MÓDULO AUDITADO</span>
+            <h3 style="font-size: 1.25rem; color: #fff; margin-top:6px; font-weight:700;">${currentMod?.name}</h3>
+            <span style="font-size:0.8rem; color:var(--text-muted);">${currentMod?.desc}</span>
+          </div>
+
+          <div class="card" style="margin-bottom:0; padding:20px;">
+            <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">TOTAL REGISTROS</span>
+            <h3 style="font-size: 1.8rem; color: var(--primary-light); margin-top:4px; font-weight:800;">${reporte.total}</h3>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Filas encontradas en el rango</span>
+          </div>
+
+          <div class="card" style="margin-bottom:0; padding:20px;">
+            <span style="font-size: 0.78rem; color: var(--text-dim); font-weight:700; text-transform:uppercase;">BASE DE DATOS</span>
+            <h3 style="font-size: 1.15rem; color: ${prisma ? 'var(--success)' : '#fbbf24'}; margin-top:8px; font-weight:700;">
+              ${prisma ? '🟢 PostgreSQL Activo' : '🟡 Modo Local Activo'}
+            </h3>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Conexión relacional persistente</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header-styled">
+            <div class="card-title">
+              <span>📊</span>
+              Detalle: ${currentMod?.name}
+            </div>
+            <span style="color: var(--text-dim); font-size: 0.85rem;">Mostrando ${reporte.items.length} registros</span>
+          </div>
+
+          <div class="table-responsive">
+            ${renderReportTable(moduloSeleccionado, reporte.items)}
+          </div>
+        </div>
+      `}
     </div>
   `;
 
