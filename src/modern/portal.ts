@@ -22,6 +22,7 @@ import {
   deletePsyAppointment,
   getAvailableSlotsForTherapist,
   ClinicalSlotOption,
+  PsyAppointment,
   PSYCHOLOGY_SPECIALTIES,
   PSYCHOLOGY_THERAPISTS,
   getAllTherapists,
@@ -1709,6 +1710,22 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       inputs.forEach(function(input) {
         input.setAttribute('inputmode', 'numeric');
         input.setAttribute('maxlength', '10');
+        input.setAttribute('pattern', '[0-9]{10}');
+        input.setAttribute('autocomplete', 'off');
+
+        // Intercepción estricta a nivel teclado: no permitir que letras o símbolos entren al input
+        input.addEventListener('keydown', function(e) {
+          if (['Backspace', 'Tab', 'Enter', 'Escape', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+            return;
+          }
+          if (e.ctrlKey || e.metaKey) {
+            return;
+          }
+          if (!/^[0-9]$/.test(e.key)) {
+            e.preventDefault();
+            return false;
+          }
+        });
 
         let feedback = input.parentElement.querySelector('.doc-feedback-badge');
         if (!feedback) {
@@ -1721,28 +1738,56 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           input.parentElement.appendChild(feedback);
         }
 
-        input.addEventListener('input', function() {
-          const val = this.value.replace(/\D/g, '');
-          this.value = val;
+        const handleValidation = function() {
+          const raw = input.value;
+          const clean = raw.replace(/\D/g, '').slice(0, 10);
+          if (raw !== clean) {
+            input.value = clean;
+          }
 
-          if (!val) {
+          if (!clean) {
             feedback.innerHTML = '';
             input.style.borderColor = '';
             return;
           }
 
-          if (val.length < 10) {
-            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ La cédula debe tener exactamente 10 números (' + val.length + '/10)</span>';
+          if (clean.length < 10) {
+            const missing = 10 - clean.length;
+            feedback.innerHTML = '<span style="color:#fbbf24;">⚠️ Solo números permitidos (faltan ' + missing + ' dígito' + (missing === 1 ? '' : 's') + ' para completar 10)</span>';
             input.style.borderColor = 'rgba(245, 158, 11, 0.6)';
-          } else if (val.length === 10 && val.split('').every(function(c){ return c === val[0]; })) {
-            feedback.innerHTML = '<span style="color:#f87171;">❌ No se permiten dígitos idénticos repetidos (' + val + ')</span>';
+          } else if (clean.length === 10 && clean.split('').every(function(c){ return c === clean[0]; })) {
+            feedback.innerHTML = '<span style="color:#f87171;">❌ No se permiten dígitos idénticos repetidos (' + clean + ')</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (['1234567890', '0123456789', '9876543210'].includes(val)) {
+          } else if (['1234567890', '0123456789', '9876543210'].includes(clean)) {
             feedback.innerHTML = '<span style="color:#f87171;">❌ Secuencia de prueba inválida</span>';
             input.style.borderColor = 'rgba(239, 68, 68, 0.7)';
-          } else if (val.length === 10) {
+          } else {
             feedback.innerHTML = '<span style="color:#34d399;">✅ Cédula válida (10 dígitos exactos)</span>';
             input.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+          }
+        };
+
+        input.addEventListener('input', handleValidation);
+        input.addEventListener('paste', function() {
+          setTimeout(handleValidation, 0);
+        });
+      });
+
+      // Validar formularios de búsqueda por cédula para que no se envíen con menos de 10 dígitos o vacíos
+      const searchDocForms = document.querySelectorAll('form[action*="consultar-cita"], form[action="/citas"]');
+      searchDocForms.forEach(function(sf) {
+        if (sf.dataset.docSearchAttached) return;
+        sf.dataset.docSearchAttached = 'true';
+        sf.addEventListener('submit', function(e) {
+          const doc = sf.querySelector('input[name="consultar_doc"]');
+          if (doc) {
+            const clean = doc.value.replace(/\D/g, '');
+            if (clean.length !== 10) {
+              e.preventDefault();
+              alert('⚠️ Para consultar tus citas, ingresa los 10 dígitos completos de tu cédula (ej: 1020304050).');
+              doc.focus();
+              return false;
+            }
           }
         });
       });
@@ -2230,6 +2275,19 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
       connect();
     }
 
+    // 8. Función para imprimir / descargar comprobante oficial de cita médica
+    function imprimirComprobanteCita(id) {
+      if (!id) return;
+      const url = '/citas/comprobante/' + encodeURIComponent(id) + '?autoprint=true';
+      const win = window.open(url, '_blank', 'width=880,height=960');
+      if (win) {
+        win.focus();
+      } else {
+        window.location.href = url;
+      }
+    }
+    window.imprimirComprobanteCita = imprimirComprobanteCita;
+
     // Inicializar todos los validadores interactivos al cargar el DOM
     document.addEventListener('DOMContentLoaded', function() {
       initDocumentValidation();
@@ -2250,6 +2308,121 @@ function getInitials(name: string): string {
   const parts = name.trim().split(" ");
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
+}
+
+function getOfficeForTherapist(therapistName?: string): string {
+  if (!therapistName) return "Consultorio 201 (Piso 2)";
+  const all = getAllTherapists();
+  const th = all.find(t => t.name.toLowerCase().trim() === therapistName.toLowerCase().trim());
+  if (th && th.office) return th.office;
+  const spec = PSYCHOLOGY_SPECIALTIES.find(s => getTherapistNameForSpecialty(s.name).toLowerCase() === therapistName.toLowerCase());
+  if (spec && spec.office) return spec.office;
+  return "Consultorio 201 (Piso 2)";
+}
+
+function renderComprobanteCard(a: PsyAppointment, isNewBooking: boolean = false): string {
+  const office = getOfficeForTherapist(a.therapist);
+  const formattedScheduledAt = a.scheduledAt
+    ? new Date(a.scheduledAt).toLocaleString("es-CO", {
+        timeZone: "America/Bogota",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      })
+    : a.dateTime;
+
+  const isConfirmed = a.status === "Confirmada";
+  const isPending = a.status === "Pendiente";
+  const statusBadge = isConfirmed
+    ? `<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5); padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">● CITA CONFIRMADA</span>`
+    : isPending
+    ? `<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">● RESERVA PENDIENTE</span>`
+    : `<span style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">● ${a.status.toUpperCase()}</span>`;
+
+  return `
+    <div class="comprobante-clinico-card" style="background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 32, 0.98) 100%); border: 1.5px solid rgba(56, 189, 248, 0.35); border-radius: 20px; padding: 26px 24px; margin-bottom: 20px; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.6), 0 0 25px rgba(14, 165, 233, 0.1); position: relative; overflow: hidden;">
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #0ea5e9, #6366f1, #10b981);"></div>
+
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="font-size: 1.3rem;">📄</span>
+            <h4 style="margin: 0; color: #fff; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.3px;">
+              ${isNewBooking ? "🎉 Comprobante Oficial de Reserva Médica" : "Comprobante Oficial de Cita Médica"}
+            </h4>
+          </div>
+          <div style="font-size: 0.78rem; color: #94a3b8; font-weight: 600;">
+            MindCare Health Technologies • Centro Clínico & CRM de Psicología • Radicado No. <span style="color: #38bdf8; font-family: monospace; font-size: 0.85rem;">#${a.id.toUpperCase()}</span>
+          </div>
+        </div>
+        <div>
+          ${statusBadge}
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px;">
+          <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px;">👤 Datos del Paciente</div>
+          <div style="font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 4px;">${a.patientName}</div>
+          <div style="font-size: 0.85rem; color: #38bdf8; font-weight: 600;">
+            🪪 C.C. ${a.documentNumber || "No registrada"}
+          </div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px;">
+          <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px;">👨‍⚕️ Profesional Asignado</div>
+          <div style="font-size: 1.02rem; font-weight: 700; color: #fff; margin-bottom: 4px;">${a.therapist}</div>
+          <div style="font-size: 0.85rem; color: #a5b4fc; font-weight: 600;">
+            🩺 ${a.specialty}
+          </div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 14px;">
+          <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px;">🏛️ Ubicación & Consultorio</div>
+          <div style="font-size: 1.02rem; font-weight: 700; color: #34d399; margin-bottom: 4px;">🏛️ ${office}</div>
+          <div style="font-size: 0.82rem; color: #cbd5e1;">
+            📍 Sede Principal MindCare / Telepsicología Segura
+          </div>
+        </div>
+
+        <div style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 12px; padding: 14px;">
+          <div style="font-size: 0.72rem; color: #38bdf8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px;">⏰ Fecha & Horario Reservado</div>
+          <div style="font-size: 1.08rem; font-weight: 800; color: #38bdf8; margin-bottom: 4px;">
+            ${a.dateTime}
+          </div>
+          <div style="font-size: 0.8rem; color: #cbd5e1;">
+            🗓️ ${formattedScheduledAt}
+          </div>
+        </div>
+      </div>
+
+      ${a.motive ? `
+        <div style="background: rgba(255, 255, 255, 0.02); border-left: 3px solid #6366f1; padding: 10px 14px; border-radius: 0 10px 10px 0; margin-bottom: 18px; font-size: 0.86rem; color: #cbd5e1;">
+          <strong style="color: #a5b4fc;">📝 Motivo Registrado:</strong> ${a.motive}
+        </div>
+      ` : ''}
+
+      <div style="background: rgba(0, 0, 0, 0.25); border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; font-size: 0.78rem; color: #94a3b8; line-height: 1.5;">
+        <span style="color: #e2e8f0; font-weight: 600;">🔒 Garantía Legal & Secreto Profesional:</span> Cita protegida bajo el Código Deontológico y Bioético de Psicología (<strong>Ley 1090 de 2006</strong>) y Régimen de Protección de Datos Personales de Salud (<strong>Ley 1581 de 2012</strong>). Por favor presentarse con 10 minutos de anticipación en recepción o ingresar al enlace seguro de videoconsulta.
+      </div>
+
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+        <button type="button" onclick="imprimirComprobanteCita('${a.id}')" class="btn btn-primary" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); border: 1px solid rgba(56, 189, 248, 0.6); padding: 11px 22px; font-weight: 700; font-size: 0.92rem; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4); cursor: pointer;">
+          📥 Descargar / Imprimir Comprobante (PDF)
+        </button>
+        <a href="/citas/comprobante/${a.id}" target="_blank" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, 0.15); color: #e2e8f0;">
+          📄 Ver Comprobante Completo ↗
+        </a>
+        <a href="https://t.me/${BOT_USERNAME}" target="_blank" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8;">
+          💬 Abrir en Dra. PsiBot Telegram
+        </a>
+      </div>
+    </div>
+  `;
 }
 
 // =============================================================================
@@ -2851,7 +3024,7 @@ portalRouter.get("/", async (req: Request, res: Response) => {
             <label for="documentNumber">Documento de Identidad / Cédula (C.C. 10 dígitos)</label>
             <div class="input-wrapper">
               <span class="input-icon">🪪</span>
-              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" maxlength="10" required>
+              <input type="text" id="documentNumber" name="documentNumber" class="input-with-icon" placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
             </div>
           </div>
           <div class="form-group">
@@ -3454,6 +3627,359 @@ portalRouter.get("/api/citas/detalle", (req: Request, res: Response) => {
   res.json({ status: "ok", cita });
 });
 
+// Ruta para visualizar e imprimir / descargar en PDF el Comprobante Oficial de Cita Médica
+portalRouter.get("/citas/comprobante/:id", (req: Request, res: Response) => {
+  const id = String(req.params.id || "").trim();
+  const appointment = getAllPsyAppointments().find(a => a.id.toLowerCase() === id.toLowerCase());
+
+  if (!appointment) {
+    res.status(404).send(layout(
+      "Comprobante No Encontrado - MindCare",
+      `<div class="card" style="max-width:600px; margin:40px auto; text-align:center; padding:32px;">
+        <span style="font-size:3rem;">⚠️</span>
+        <h2 style="color:#fff; margin:14px 0 8px 0;">Comprobante No Encontrado</h2>
+        <p style="color:var(--text-muted); font-size:0.92rem; margin-bottom:20px;">
+          No existe una cita registrada con el radicado <strong>#${id}</strong>. Verifica el número o consulta por cédula en la agenda.
+        </p>
+        <a href="/citas" class="btn btn-primary" style="padding:10px 22px;">Ir a la Agenda de Citas</a>
+      </div>`,
+      "citas"
+    ));
+    return;
+  }
+
+  const office = getOfficeForTherapist(appointment.therapist);
+  const nowStr = new Date().toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  const formattedScheduledAt = appointment.scheduledAt
+    ? new Date(appointment.scheduledAt).toLocaleString("es-CO", {
+        timeZone: "America/Bogota",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      })
+    : appointment.dateTime;
+
+  const autoPrint = req.query.autoprint === "true";
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comprobante Oficial #${appointment.id.toUpperCase()} - MindCare</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0b1120;
+      color: #0f172a;
+      line-height: 1.5;
+      padding: 24px 16px;
+    }
+    .no-print-bar {
+      max-width: 820px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: #0f172a;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #fff;
+      padding: 14px 22px;
+      border-radius: 14px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #0284c7;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: #0369a1;
+    }
+    .btn-outline {
+      background: transparent;
+      color: #cbd5e1;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-outline:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+    .voucher-sheet {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.3);
+      border: 1px solid #cbd5e1;
+      padding: 44px;
+      position: relative;
+    }
+    .header-table {
+      width: 100%;
+      border-bottom: 2.5px solid #0284c7;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .info-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 18px;
+    }
+    .info-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .info-sub {
+      font-size: 0.82rem;
+      color: #475569;
+      margin-top: 3px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .badge-success {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+    .badge-pending {
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+    .legal-box {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 0.78rem;
+      color: #475569;
+      line-height: 1.55;
+      margin-top: 24px;
+    }
+    .signature-area {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .sig-line {
+      width: 250px;
+      border-top: 1.5px solid #0f172a;
+      text-align: center;
+      padding-top: 8px;
+      font-size: 0.78rem;
+      color: #334155;
+      line-height: 1.4;
+    }
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+      .no-print-bar {
+        display: none !important;
+      }
+      .voucher-sheet {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 24px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print-bar">
+    <div>
+      <strong style="color:#38bdf8; font-size:1rem;">MindCare Salud Mental</strong> • Comprobante Oficial de Cita Médica
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <a href="/citas" class="btn btn-outline">← Volver al Portal</a>
+      <button onclick="window.print()" class="btn btn-primary">🖨️ Imprimir / Guardar como PDF</button>
+    </div>
+  </div>
+
+  <div class="voucher-sheet">
+    <table class="header-table">
+      <tr>
+        <td style="vertical-align:middle;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg, #0284c7, #6366f1); display:flex; align-items:center; justify-content:center; color:#fff; font-size:26px; font-weight:800;">
+              Ψ
+            </div>
+            <div>
+              <h1 style="font-size:1.45rem; font-weight:900; color:#0f172a; margin:0; letter-spacing:-0.5px;">MindCare Health Technologies</h1>
+              <div style="font-size:0.82rem; color:#64748b; font-weight:600;">
+                Centro Clínico de Psicología & Psicoterapia Científica • Nit: 901.482.119-4
+              </div>
+            </div>
+          </div>
+        </td>
+        <td style="text-align:right; vertical-align:middle;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#64748b; font-weight:800; letter-spacing:0.5px;">Radicado Oficial</div>
+          <div style="font-size:1.35rem; font-weight:900; color:#0284c7; font-family:monospace; margin:2px 0;">
+            #${appointment.id.toUpperCase()}
+          </div>
+          <div style="margin-top:4px;">
+            ${appointment.status === "Confirmada" ? '<span class="badge badge-success">● Cita Confirmada</span>' : '<span class="badge badge-pending">● Cita Pendiente</span>'}
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <div style="text-align:center; margin-bottom:26px;">
+      <h2 style="font-size:1.25rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.5px;">
+        Certificado de Asignación y Reserva de Consulta Médica
+      </h2>
+      <div style="font-size:0.84rem; color:#64748b; margin-top:4px;">
+        Expedido el ${nowStr} • Habilitación Seccional de Salud Código 11001-2026-MC
+      </div>
+    </div>
+
+    <!-- DATOS DEL PACIENTE -->
+    <div style="font-size:0.82rem; font-weight:900; text-transform:uppercase; color:#0284c7; margin-bottom:10px; border-bottom:1.5px solid #e2e8f0; padding-bottom:4px; letter-spacing:0.5px;">
+      1. Información del Paciente
+    </div>
+    <div class="grid-2">
+      <div class="info-card">
+        <div class="info-label">Nombre Completo del Paciente</div>
+        <div class="info-value">${appointment.patientName}</div>
+        <div class="info-sub">Expediente Clínico Digital MindCare</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Documento de Identidad (C.C.)</div>
+        <div class="info-value">C.C. ${appointment.documentNumber || "Registrado"}</div>
+        <div class="info-sub">Validado bajo Ley 1581 de 2012</div>
+      </div>
+    </div>
+
+    <!-- DATOS DE LA CITA -->
+    <div style="font-size:0.82rem; font-weight:900; text-transform:uppercase; color:#0284c7; margin-bottom:10px; border-bottom:1.5px solid #e2e8f0; padding-bottom:4px; letter-spacing:0.5px;">
+      2. Asignación Médica y Horario
+    </div>
+    <div class="grid-2">
+      <div class="info-card">
+        <div class="info-label">Especialista Tratante</div>
+        <div class="info-value">${appointment.therapist}</div>
+        <div class="info-sub">${appointment.specialty} • Matrícula Colpsic Vigente</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Consultorio & Sede</div>
+        <div class="info-value">${office}</div>
+        <div class="info-sub">Sede Central MindCare / Modalidad Telepsicología Segura</div>
+      </div>
+      <div class="info-card" style="grid-column: span 2; background:#f0f9ff; border-color:#bae6fd;">
+        <div class="info-label" style="color:#0284c7;">Fecha y Horario Exacto de Consulta</div>
+        <div class="info-value" style="color:#0369a1; font-size:1.2rem;">
+          ⏰ ${appointment.dateTime}
+        </div>
+        <div class="info-sub" style="color:#0284c7;">
+          🗓️ ${formattedScheduledAt} • Duración estimada: ${appointment.durationMinutes || 50} minutos
+        </div>
+      </div>
+    </div>
+
+    ${appointment.motive ? `
+      <div class="info-card" style="margin-bottom:20px;">
+        <div class="info-label">Motivo Registrado de Consulta (Confidencial)</div>
+        <div style="font-size:0.95rem; color:#1e293b; margin-top:2px; font-weight:600;">${appointment.motive}</div>
+      </div>
+    ` : ''}
+
+    <!-- NORMAS Y RECOMENDACIONES -->
+    <div class="legal-box">
+      <strong>Instrucciones y Recomendaciones Clínicas:</strong><br>
+      • Presentarse con 10 minutos de anticipación en la recepción del consultorio asignado o conectarse a la sesión virtual privada.<br>
+      • Presentar documento original de identidad en físico ante la recepción médica.<br>
+      • Para cancelación o reasignación, notificar con al menos 24 horas de anticipación a través del bot de Telegram <strong>@${BOT_USERNAME}</strong> o vía telefónica.<br>
+      • Documento médico confidencial amparado bajo el secreto profesional de la <strong>Ley 1090 de 2006</strong> y el régimen de protección de datos de la <strong>Ley 1581 de 2012</strong>.
+    </div>
+
+    <!-- FIRMA DIGITAL Y SELLO -->
+    <div class="signature-area">
+      <div class="sig-line">
+        <strong>${appointment.therapist}</strong><br>
+        Especialista Clínico Asignado<br>
+        Colegio Colombiano de Psicólogos (Colpsic)
+      </div>
+      <div style="text-align:center;">
+        <div style="border:2.5px solid #0284c7; border-radius:50%; width:74px; height:74px; display:inline-flex; align-items:center; justify-content:center; color:#0284c7; font-weight:900; font-size:0.65rem; text-transform:uppercase; text-align:center; transform:rotate(-12deg); margin-bottom:4px;">
+          SELLO OFICIAL<br>MINDCARE
+        </div>
+        <div style="font-size:0.68rem; color:#64748b; font-weight:600;">Firma Digital Validada</div>
+      </div>
+      <div class="sig-line">
+        <strong>Dirección Médica MindCare</strong><br>
+        Coordinación Asistencial y Telepsicología<br>
+        Sistema Integrado de Salud Mental
+      </div>
+    </div>
+  </div>
+
+  ${autoPrint ? `
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() { window.print(); }, 400);
+    });
+  </script>
+  ` : ''}
+</body>
+</html>`;
+
+  res.send(html);
+});
+
 // Endpoint para obtener el catálogo en tiempo real de especialistas activos y especialidades
 portalRouter.get("/api/especialistas/activos", (req: Request, res: Response) => {
   const allActive = getAllTherapists(false);
@@ -3510,9 +4036,29 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
       </div>
     `;
   } else if (req.query.created === "true") {
+    const newId = req.query.new_id as string;
+    const latestCita = (newId ? getAllPsyAppointments().find(a => a.id === newId) : null) || (searchedAppointments.length > 0 ? searchedAppointments[0] : null);
     alertBanner = `
-      <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; color: #34d399; font-weight: 600;">
-        ✅ Cita de psicología reservada con éxito. Código registrado y sincronizado con Telegram Bot y CRM clínico. 💙
+      <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid rgba(16, 185, 129, 0.5); border-radius: 20px; padding: 24px; margin-bottom: 28px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.15);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: ${latestCita ? '20px' : '0'};">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 2rem;">🎉</span>
+            <div>
+              <h3 style="margin: 0; color: #34d399; font-size: 1.25rem; font-weight: 800;">
+                ¡Tu Consulta Médica ha sido Reservada Exitosamente!
+              </h3>
+              <div style="color: #cbd5e1; font-size: 0.88rem; margin-top: 3px;">
+                Turno asegurado y sincronizado con Telegram Bot y el CRM clínico. Descarga o imprime tu comprobante oficial a continuación:
+              </div>
+            </div>
+          </div>
+          ${latestCita ? `
+            <button type="button" onclick="imprimirComprobanteCita('${latestCita.id}')" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 11px 22px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+              📥 Descargar / Imprimir Comprobante (PDF)
+            </button>
+          ` : ''}
+        </div>
+        ${latestCita ? renderComprobanteCard(latestCita, true) : ''}
       </div>
     `;
   } else if (req.query.updated === "true") {
@@ -3561,7 +4107,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         </p>
 
         <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-          <a href="#agendar-paciente" onclick="const el=document.getElementById('agendar-paciente'); if(el){ el.scrollIntoView({behavior:'smooth'}); const inp=el.querySelector('input[name=\'patientName\']'); if(inp) setTimeout(function(){ inp.focus(); }, 300); return false; }" class="btn btn-primary" style="padding: 11px 22px; font-size: 0.92rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">
+          <a href="#agendar-paciente" onclick="const el=document.getElementById('agendar-paciente'); if(el){ el.scrollIntoView({behavior:'smooth'}); const inp=el.querySelector('input[name=\\'patientName\\']'); if(inp) setTimeout(function(){ inp.focus(); }, 300); return false; }" class="btn btn-primary" style="padding: 11px 22px; font-size: 0.92rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);">
             📅 Agendar Mi Cita Ahora
           </a>
           <a href="#consultar-cita" class="btn btn-secondary" style="padding: 11px 18px; font-size: 0.92rem; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
@@ -3678,7 +4224,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
         <form action="/citas#consultar-cita" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
           <div class="input-wrapper" style="flex:1; min-width:240px;">
             <span class="input-icon">🪪</span>
-            <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula (únicamente 10 dígitos, ej: 1020304050)" maxlength="10" required>
+            <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa tu número de cédula (únicamente 10 dígitos, ej: 1020304050)" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
           </div>
           <button type="submit" class="btn btn-primary" style="padding:10px 22px; font-weight:700;">
             Buscar Mi Cita 🔍
@@ -3696,22 +4242,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
               <div style="color:#6ee7b7; font-weight:700; margin-bottom:14px; font-size:1.05rem;">
                 ✅ Cita(s) encontrada(s) para el documento (${maskDoc(consultarDoc)}):
               </div>
-              ${searchedAppointments.map(a => `
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:20px; margin-bottom:12px;">
-                  <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                    <strong style="color:#fff; font-size:1.15rem;">👤 ${a.patientName} (Doc: ${maskDoc(a.documentNumber)})</strong>
-                    <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">● ${a.status}</span>
-                  </div>
-                  <div style="color:#cbd5e1; font-size:0.95rem; margin-bottom:8px;">
-                    👨‍⚕️ <strong>Especialista:</strong> ${a.therapist} · <span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span>
-                  </div>
-                  <div style="color:#38bdf8; font-size:1.15rem; font-weight:700; margin-bottom:8px;">
-                    ⏰ <strong>Fecha y Horario:</strong> ${a.dateTime}
-                    ${a.scheduledAt ? `<span style="font-size:0.8rem; color:var(--text-dim); font-weight:400;">(Hora exacta: ${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})})</span>` : ''}
-                  </div>
-                  ${a.motive ? `<div style="color:var(--text-muted); font-size:0.88rem;">📝 <strong>Motivo Registrado:</strong> ${a.motive}</div>` : ''}
-                </div>
-              `).join('')}
+              ${searchedAppointments.map(a => renderComprobanteCard(a, false)).join('')}
             `}
           </div>
         ` : ''}
@@ -3740,7 +4271,7 @@ portalRouter.get("/citas", async (req: Request, res: Response) => {
 
             <div style="margin-bottom: 16px;">
               <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Documento de Identidad / C.C. (10 dígitos):</label>
-              <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+              <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:11px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
             </div>
 
             <div style="margin-bottom: 16px;">
@@ -3916,15 +4447,15 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         </div>
         <span class="badge badge-info">Auditoría Clínica • Ley 1090</span>
       </div>
-      <form action="/citas" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
+      <form action="/admin" method="GET" style="display:flex; gap:12px; flex-wrap:wrap;">
         <div class="input-wrapper" style="flex:1; min-width:240px;">
           <span class="input-icon">🪪</span>
-          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa número de cédula del paciente a auditar..." maxlength="10" required>
+          <input type="text" name="consultar_doc" value="${consultarDoc}" class="input-with-icon" placeholder="Ingresa número de cédula del paciente a auditar (10 dígitos)..." maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" required>
         </div>
         <button type="submit" class="btn btn-primary" style="padding:10px 20px;">
           Consultar Expediente 🔍
         </button>
-        ${consultarDoc ? `<a href="/citas" class="btn btn-secondary">Limpiar Filtro</a>` : ''}
+        ${consultarDoc ? `<a href="/admin" class="btn btn-secondary">Limpiar Filtro</a>` : ''}
       </form>
 
       ${consultarDoc ? `
@@ -3937,22 +4468,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
             <div style="color:#6ee7b7; font-weight:700; margin-bottom:12px; font-size:1.05rem;">
               ✅ Cita(s) del paciente encontradas en la agenda (${consultarDoc}):
             </div>
-            ${searchedAppointments.map(a => `
-              <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(16,185,129,0.35); border-radius:12px; padding:18px; margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-                  <strong style="color:#fff; font-size:1.1rem;">👤 ${a.patientName} (Doc: ${a.documentNumber})</strong>
-                  <span class="badge ${a.status === 'Confirmada' ? 'badge-success' : a.status === 'Pendiente' ? 'badge-warning' : 'badge-danger'}">● ${a.status}</span>
-                </div>
-                <div style="color:#cbd5e1; font-size:0.95rem; margin-bottom:6px;">
-                  👨‍⚕️ <strong>Especialista:</strong> ${a.therapist} · <span style="color:#a5b4fc; font-weight:600;">${a.specialty}</span>
-                </div>
-                <div style="color:#38bdf8; font-size:1.15rem; font-weight:700; margin-bottom:6px;">
-                  ⏰ <strong>Fecha y Horario:</strong> ${a.dateTime}
-                  ${a.scheduledAt ? `<span style="font-size:0.8rem; color:var(--text-dim); font-weight:400;">(Hora exacta: ${new Date(a.scheduledAt).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})})</span>` : ''}
-                </div>
-                ${a.motive ? `<div style="color:var(--text-muted); font-size:0.88rem;">📝 <strong>Motivo Registrado:</strong> ${a.motive}</div>` : ''}
-              </div>
-            `).join('')}
+            ${searchedAppointments.map(a => renderComprobanteCard(a, false)).join('')}
           `}
         </div>
       ` : ''}
@@ -4024,7 +4540,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Documento de Identidad / C.C. (10 dígitos):</label>
-            <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
+            <input type="text" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.7); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.9rem;">
           </div>
           <div style="margin-bottom: 14px;">
             <label style="display:block; font-size:0.8rem; color:var(--text-dim); font-weight:700; margin-bottom:6px; text-transform:uppercase;">Especialidad:</label>
@@ -4430,7 +4946,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
 
         const actions = document.getElementById('mcd-actions');
         if (actions) {
-          actions.innerHTML = '';
+          actions.innerHTML = '<button type="button" onclick="imprimirComprobanteCita(\'' + cita.id + '\')" class="btn btn-primary" style="background:#0284c7; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">📥 Imprimir Comprobante (PDF)</button>';
           if (cita.status !== 'Confirmada') {
             actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
           }
@@ -4558,9 +5074,9 @@ portalRouter.post("/api/citas", async (req: Request, res: Response) => {
   await saveLog("citas_psi", "INFO", `Cita ${newApp.id} agendada para ${cleanName} (Doc: ${cleanDoc}) con ${assignedTherapistName}`);
   const referer = req.header("Referer") || "";
   if (referer.includes("/admin")) {
-    res.redirect(`/admin?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
+    res.redirect(`/admin?created=true&new_id=${encodeURIComponent(newApp.id)}&consultar_doc=${encodeURIComponent(cleanDoc)}`);
   } else {
-    res.redirect(`/citas?created=true&consultar_doc=${encodeURIComponent(cleanDoc)}`);
+    res.redirect(`/citas?created=true&new_id=${encodeURIComponent(newApp.id)}&consultar_doc=${encodeURIComponent(cleanDoc)}`);
   }
 });
 
@@ -4765,7 +5281,7 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
 
           <div>
             <label for="documentNumber" style="font-size:0.82rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; display:block; margin-bottom:6px;">Cédula de Ciudadanía / Documento *:</label>
-            <input type="text" id="documentNumber" name="documentNumber" required placeholder="Ej: 1020304050" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
+            <input type="text" id="documentNumber" name="documentNumber" required placeholder="Ej: 1020304050" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)" onkeypress="return (event.charCode >= 48 && event.charCode <= 57)" style="width:100%; padding:10px 14px; background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:10px; color:#fff; font-size:0.92rem;">
           </div>
 
           <div>
