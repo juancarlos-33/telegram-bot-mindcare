@@ -24,7 +24,7 @@ interface AttemptRecord {
 
 // Configuración conforme a estándares OWASP / NIST
 export const RATE_LIMIT_CONFIG = {
-  MAX_FAILED_ATTEMPTS: 5,               // Límite máximo de intentos fallidos antes de bloqueo
+  MAX_FAILED_ATTEMPTS: 3,               // Límite máximo de 3 intentos fallidos antes de bloqueo
   ATTEMPT_WINDOW_MS: 15 * 60 * 1000,    // Ventana de evaluación: 15 minutos
   LOCKOUT_DURATION_MS: 3 * 60 * 1000,   // Duración del bloqueo: 3 minutos (180s) pedagógico / demo
 };

@@ -209,6 +209,9 @@ portalRouter.use((req: Request, res: Response, next) => {
     <div class="info-strip">
       🛡️ <strong>Protocolo OWASP ASVS v4.0 & NIST SP 800-63B:</strong><br>
       Por favor aguarda a que finalice el contador para reintentar la navegación. Al expirar el tiempo, la página se reactivará automáticamente.
+      <div style="margin-top: 8px; font-weight: 700; color: #fca5a5; font-size: 0.8rem;">
+        Inyección ejecutada para ${clientIp}
+      </div>
     </div>
 
     <div style="font-size: 0.78rem; color: #64748b;">
@@ -2837,7 +2840,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
         <form action="/login" method="POST" style="margin-bottom: 18px;" id="loginForm" ${isLocked ? '' : 'onsubmit="handleLoginSubmit(event)"'}>
           <div style="margin-bottom: 16px;">
             <label for="credentialInput" style="display: block; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
-              Usuario o Correo Institucional:
+              Usuario:
             </label>
             <div style="position: relative; display: flex; align-items: center;">
               <span style="position: absolute; left: 14px; font-size: 1.1rem; color: #818cf8; pointer-events: none; z-index: 2;">👤</span>
@@ -2846,7 +2849,7 @@ portalRouter.get("/login", (req: Request, res: Response) => {
                 id="credentialInput" 
                 name="credential" 
                 style="width: 100%; padding: 12px 14px 12px 42px; background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 12px; color: #fff; font-size: 0.92rem; outline: none; ${isLocked ? 'opacity: 0.5; cursor: not-allowed;' : ''}" 
-                placeholder="ej: admin o valentina@mindcare.clinic" 
+                placeholder="ej: admin" 
                 value="admin"
                 ${isLocked ? 'disabled' : 'required'}
               >
@@ -2907,35 +2910,11 @@ portalRouter.get("/login", (req: Request, res: Response) => {
           </div>
         </form>
 
-        <!-- SELECTOR DE ACCESO RÁPIDO PARA EVALUACIÓN DOCENTE / DEMO -->
-        <div style="margin: 20px 0; background: rgba(15, 23, 42, 0.6); border: 1px dashed rgba(99,102,241,0.35); border-radius: 14px; padding: 14px;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-            <span>⚡</span> Cuentas Institucionales para Sustentación (1-Click):
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            ${staffAccounts.map(s => `
-              <form action="/login" method="POST" style="margin:0;" ${isLocked ? '' : `onsubmit="handleQuickLogin(this, '${s.fullName}')"`}>
-                <input type="hidden" name="staffQuickLogin" value="${s.id}">
-                <button type="submit" ${isLocked ? 'disabled' : ''} style="width: 100%; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 7px 10px; color: #e2e8f0; font-size: 0.76rem; cursor: ${isLocked ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease; ${isLocked ? 'opacity: 0.4;' : ''}" onmouseover="${isLocked ? '' : "this.style.background='rgba(99,102,241,0.2)'; this.style.borderColor='rgba(99,102,241,0.4)';"}" onmouseout="${isLocked ? '' : "this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.08)';"}}">
-                  <span class="quick-icon">${s.role === 'DIRECTOR_ADMIN' ? '👑' : s.role === 'RECEPCION_TRIAGE' ? '📋' : '🩺'}</span>
-                  <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <strong>${s.fullName.split(' ')[0]} ${s.fullName.split(' ')[1] || ''}</strong>
-                    <div style="font-size: 0.68rem; color: #94a3b8;">${s.role === 'DIRECTOR_ADMIN' ? 'Director' : (s.specialty ? s.specialty.split(' ')[0] : 'Triage')}</div>
-                  </div>
-                </button>
-              </form>
-            `).join('')}
-          </div>
-        </div>
-
         <!-- Footer de Seguridad -->
         <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;">
           <span style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 5px;">
             <span>🔒</span> Sesión clínica protegida por Rate Limit (OWASP ASVS) y cookies HTTP-Only (Ley 1090).
           </span>
-          <a href="/" style="color: #818cf8; text-decoration: none; font-size: 0.82rem; font-weight: 600;">
-            ⬅️ Volver al Portal de Pacientes
-          </a>
         </div>
       </div>
     </div>
