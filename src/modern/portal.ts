@@ -2060,8 +2060,40 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
           .catch(function() {});
       }
 
+      function syncTherapistDropdowns() {
+        fetch('/api/especialistas/activos')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data || !data.specialties) return;
+            const selects = document.querySelectorAll('select[name="specialty"]');
+            selects.forEach(function(select) {
+              const curVal = select.value;
+              const availableSpecialties = data.specialties.filter(function(s) { return s.active; });
+              
+              let optionsHtml = '';
+              availableSpecialties.forEach(function(s) {
+                optionsHtml += '<option value="' + s.name + '">' + (s.icon || '🧠') + ' ' + s.name + ' — ' + s.therapist + ' (' + (s.office || 'Consultorio') + ')</option>';
+              });
+              select.innerHTML = optionsHtml;
+
+              const stillActive = availableSpecialties.some(function(s) { return s.name === curVal; });
+              if (stillActive) {
+                select.value = curVal;
+              } else if (availableSpecialties.length > 0) {
+                select.value = availableSpecialties[0].name;
+                showLiveToast('⚠️ Especialista pausado o no disponible. Se asignó automáticamente: ' + availableSpecialties[0].therapist, '👨‍⚕️');
+              }
+              if (typeof refreshAvailableSlotsForForm === 'function') {
+                refreshAvailableSlotsForForm(select);
+              }
+            });
+          })
+          .catch(function() {});
+      }
+
       function refreshPageSection() {
         syncRealtimeStats();
+        syncTherapistDropdowns();
         const url = window.location.href;
         fetch(url, { headers: { 'X-Requested-With': 'RealtimeUpdate' } })
           .then(function(r) { return r.text(); })
@@ -2086,6 +2118,23 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
             const curMetrics = document.querySelector('div[style*="repeat(auto-fit, minmax(210px, 1fr))"]');
             if (newMetrics && curMetrics) {
               curMetrics.innerHTML = newMetrics.innerHTML;
+            }
+
+            // Actualizar catálogo de médicos si estamos en /especialistas
+            const newEspec = doc.getElementById('therapists-grid-container');
+            const curEspec = document.getElementById('therapists-grid-container');
+            if (newEspec && curEspec) {
+              curEspec.innerHTML = newEspec.innerHTML;
+            }
+          })
+          .catch(function() {});
+
+        // Actualizar caché de citas para que el ojito 👁️ siempre tenga la info más reciente
+        fetch('/api/realtime/summary')
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res && res.recentAppointments) {
+              window.ADMIN_CITAS_DATA = res.recentAppointments;
             }
           })
           .catch(function() {});
@@ -2113,6 +2162,7 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
               indicator.style.borderColor = 'rgba(16,185,129,0.3)';
             }
             syncRealtimeStats();
+            syncTherapistDropdowns();
           };
 
           eventSource.onmessage = function(e) {
@@ -2131,8 +2181,25 @@ function layout(title: string, content: string, activeTab: string = "home", isAd
                 const st = data.payload && data.payload.status ? data.payload.status : '';
                 showLiveToast('Cita <strong>' + id + '</strong> actualizada a estado: <strong>' + st + '</strong>.', '🔄');
                 refreshPageSection();
-              } else if (data.type === 'THERAPIST_UPDATED' || data.type === 'THERAPIST_CREATED' || data.type === 'THERAPIST_DELETED') {
-                showLiveToast('Turnos y directorio de especialistas sincronizado en tiempo real.', '👨‍⚕️');
+              } else if (data.type === 'APPOINTMENT_DELETED') {
+                const id = data.payload && data.payload.id ? data.payload.id : 'Cita';
+                showLiveToast('Cita <strong>' + id + '</strong> eliminada de la agenda en tiempo real.', '🗑️');
+                refreshPageSection();
+              } else if (data.type === 'THERAPIST_UPDATED') {
+                const thName = data.payload && data.payload.name ? data.payload.name : 'Especialista';
+                const isAct = data.payload && data.payload.active;
+                showLiveToast('Turnos actualizados en vivo: <strong>' + thName + '</strong> está ' + (isAct ? 'activo ✅' : 'en descanso/vacaciones ⏸️') + '.', '👨‍⚕️');
+                syncTherapistDropdowns();
+                refreshPageSection();
+              } else if (data.type === 'THERAPIST_DELETED') {
+                const thName = data.payload && data.payload.name ? data.payload.name : 'Especialista';
+                showLiveToast('Especialista retirado de la clínica: <strong>' + thName + '</strong>.', 'ℹ️');
+                syncTherapistDropdowns();
+                refreshPageSection();
+              } else if (data.type === 'THERAPIST_CREATED') {
+                const thName = data.payload && data.payload.name ? data.payload.name : 'Especialista';
+                showLiveToast('Nuevo especialista incorporado al cuerpo médico: <strong>' + thName + '</strong>.', '🎉');
+                syncTherapistDropdowns();
                 refreshPageSection();
               } else if (data.type === 'MOOD_CREATED') {
                 showLiveToast('Nuevo chequeo de ánimo registrado desde el bot: ' + (data.payload && data.payload.mood ? data.payload.mood : ''), '🧠');
@@ -3371,6 +3438,52 @@ portalRouter.get("/api/citas/disponibilidad", (req: Request, res: Response) => {
   });
 });
 
+// Endpoint para obtener el detalle clínico de una cita por ID (para el modal del ojito 👁️)
+portalRouter.get("/api/citas/detalle", (req: Request, res: Response) => {
+  const id = String(req.query.id || "").trim();
+  if (!id) {
+    res.status(400).json({ status: "error", message: "Falta el ID de la cita" });
+    return;
+  }
+  const all = getAllPsyAppointments();
+  const cita = all.find(c => c.id === id);
+  if (!cita) {
+    res.status(404).json({ status: "error", message: "Cita no encontrada" });
+    return;
+  }
+  res.json({ status: "ok", cita });
+});
+
+// Endpoint para obtener el catálogo en tiempo real de especialistas activos y especialidades
+portalRouter.get("/api/especialistas/activos", (req: Request, res: Response) => {
+  const allActive = getAllTherapists(false);
+  const allSpecs = getAllSpecialties();
+  
+  res.json({
+    status: "ok",
+    therapists: allActive.map(t => ({
+      id: t.id,
+      name: t.name,
+      specialty: t.specialty,
+      office: t.office,
+      icon: t.icon,
+      active: t.active
+    })),
+    specialties: allSpecs.map(s => {
+      const thName = getTherapistNameForSpecialty(s.name);
+      const th = allActive.find(t => t.name.toLowerCase() === thName.toLowerCase());
+      return {
+        id: s.id,
+        name: s.name,
+        therapist: thName,
+        office: s.office,
+        icon: s.icon,
+        active: !!th
+      };
+    })
+  });
+});
+
 // =============================================================================
 // RUTA 3.5: GESTIÓN DE CITAS DE PSICOLOGÍA — MINDCARE
 // =============================================================================
@@ -4007,21 +4120,9 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
               <th>Acciones</th>
             </tr>
           </thead>
-          <tbody>
-            ${appointments.map(a => {
-              const serialized = JSON.stringify({
-                id: a.id,
-                patientName: a.patientName,
-                documentNumber: a.documentNumber,
-                specialty: a.specialty,
-                therapist: a.therapist,
-                dateTime: a.dateTime,
-                scheduledAt: a.scheduledAt,
-                motive: a.motive,
-                status: a.status
-              }).replace(/'/g, "&apos;");
-              return `
-              <tr data-status="${a.status}" style="cursor:pointer;" onclick='openCitaDetailModal(${serialized})' title="Haz clic para ver el detalle de esta cita">
+          <tbody id="tabla-citas-tbody">
+            ${appointments.map(a => `
+              <tr data-status="${a.status}" data-cita-id="${a.id}" style="cursor:pointer;" onclick="openCitaDetailById('${a.id}')" title="Haz clic para ver el detalle de esta cita">
                 <td><code style="color:var(--primary-light); font-weight:700;">${a.id}</code></td>
                 <td>
                   <strong style="color:#fff;">${a.patientName}</strong>
@@ -4041,7 +4142,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
                 </td>
                 <td onclick="event.stopPropagation();">
                   <div style="display:flex; gap:6px;">
-                    <button type="button" class="btn btn-secondary" onclick='openCitaDetailModal(${serialized})' style="padding:4px 8px; font-size:0.75rem; color:#38bdf8;" title="Ver detalle completo">👁️ Detalle</button>
+                    <button type="button" class="btn btn-secondary" onclick="openCitaDetailById('${a.id}')" style="padding:4px 8px; font-size:0.75rem; color:#38bdf8;" title="Ver detalle completo">👁️ Detalle</button>
                     ${a.status !== 'Confirmada' ? `
                       <form action="/api/citas/estado" method="POST" style="margin:0;">
                         <input type="hidden" name="id" value="${a.id}">
@@ -4063,7 +4164,7 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
                   </div>
                 </td>
               </tr>
-            `;}).join('')}
+            `).join('')}
           </tbody>
         </table>
       </div>
@@ -4273,9 +4374,45 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         }
       }
 
-      function openCitaDetailModal(cita) {
+      window.ADMIN_CITAS_DATA = ${JSON.stringify(appointments)};
+
+      function openCitaDetailById(id) {
+        const modal = document.getElementById('modal-cita-detail');
+        if (!modal) return;
+        const list = window.ADMIN_CITAS_DATA || [];
+        const found = list.find(function(c) { return String(c.id) === String(id); });
+        if (found) {
+          renderCitaModal(found);
+          return;
+        }
+
+        // Respaldo de alta disponibilidad: consultar API si la cita es reciente o no estaba en cache inicial
+        fetch('/api/citas/detalle?id=' + encodeURIComponent(id))
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res && res.cita) {
+              renderCitaModal(res.cita);
+            } else {
+              alert('No se pudo encontrar el expediente de la cita #' + id);
+            }
+          })
+          .catch(function() {
+            alert('Error de conexión al cargar la cita #' + id);
+          });
+      }
+      window.openCitaDetailById = openCitaDetailById;
+
+      function openCitaDetailModal(citaOrId) {
+        if (typeof citaOrId === 'string') return openCitaDetailById(citaOrId);
+        if (citaOrId && citaOrId.id) return openCitaDetailById(citaOrId.id);
+        renderCitaModal(citaOrId);
+      }
+      window.openCitaDetailModal = openCitaDetailModal;
+
+      function renderCitaModal(cita) {
         const modal = document.getElementById('modal-cita-detail');
         if (!modal || !cita) return;
+
         document.getElementById('mcd-id').textContent = 'ID: ' + cita.id;
         document.getElementById('mcd-patient').textContent = cita.patientName || 'Paciente';
         document.getElementById('mcd-doc').textContent = cita.documentNumber ? 'C.C. ' + cita.documentNumber : 'No registrado';
@@ -4286,18 +4423,23 @@ portalRouter.get("/admin", async (req: Request, res: Response) => {
         document.getElementById('mcd-motive').textContent = cita.motive || 'Sin motivo específico registrado';
         
         const badge = document.getElementById('mcd-status-badge');
-        badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
-        badge.textContent = '● ' + cita.status;
+        if (badge) {
+          badge.className = 'badge ' + (cita.status === 'Confirmada' ? 'badge-success' : cita.status === 'Pendiente' ? 'badge-warning' : 'badge-danger');
+          badge.textContent = '● ' + cita.status;
+        }
 
         const actions = document.getElementById('mcd-actions');
-        actions.innerHTML = '';
-        if (cita.status !== 'Confirmada') {
-          actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+        if (actions) {
+          actions.innerHTML = '';
+          if (cita.status !== 'Confirmada') {
+            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Confirmada"><button type="submit" class="btn btn-secondary" style="color:#34d399; padding:6px 12px; font-size:0.8rem;">Confirmar Cita ✓</button></form>';
+          }
+          if (cita.status !== 'Cancelada') {
+            actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
+          }
+          actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm(&quot;¿Eliminar definitivamente esta cita de la base de datos?&quot;);"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
         }
-        if (cita.status !== 'Cancelada') {
-          actions.innerHTML += '<form action="/api/citas/estado" method="POST" style="margin:0;"><input type="hidden" name="id" value="' + cita.id + '"><input type="hidden" name="status" value="Cancelada"><button type="submit" class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;">Cancelar Cita ✕</button></form>';
-        }
-        actions.innerHTML += '<form action="/api/citas/eliminar" method="POST" style="margin:0;" onsubmit="return confirm(\'¿Seguro que deseas eliminar definitivamente esta cita de la base de datos?\');"><input type="hidden" name="id" value="' + cita.id + '"><button type="submit" class="btn btn-danger" style="background:#dc2626; padding:6px 14px; font-size:0.8rem;">🗑️ Eliminar Cita</button></form>';
+
         modal.style.display = 'flex';
       }
 
@@ -4696,7 +4838,7 @@ portalRouter.get("/especialistas", async (req: Request, res: Response) => {
         <span class="badge badge-success">● Sincronizado con Telegram</span>
       </div>
 
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+      <div id="therapists-grid-container" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
         ${therapists.map(th => `
           <div style="background:rgba(255,255,255,0.025); border:1px solid ${th.active ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.3)'}; border-radius:16px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; opacity:${th.active ? '1' : '0.65'}; transition:all 0.2s ease;">
             <div>
